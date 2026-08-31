@@ -94,6 +94,10 @@ public class MainActivity extends Activity {
     private String role = "hall";
     private String roleLabel = "Zal";
     private boolean adminDebtOnly = false;
+    private String sessionPassword = "";
+    private boolean canHall = false;
+    private boolean canKitchen = false;
+    private boolean canAdmin = false;
     private Runnable currentBackAction = null;
     private PopupWindow activeNavigationPopup = null;
     private static final String[] DEBT_CATEGORIES = {"İşçi", "Müştəri", "Firma"};
@@ -360,28 +364,22 @@ public class MainActivity extends Activity {
         spacer(panel, 8);
 
         final PopupWindow[] holder = new PopupWindow[1];
-        if (role.equals("admin")) {
+        if (canHall) {
             addDrawerItem(panel, "Terminallar / Zal", () -> {
                 holder[0].dismiss();
-                showTerminals();
+                switchMobileRole("hall", false, this::showTerminals);
             });
+        }
+        if (canKitchen) {
+            addDrawerItem(panel, "Mətbəx", () -> {
+                holder[0].dismiss();
+                switchMobileRole("kitchen", false, this::showKitchen);
+            });
+        }
+        if (canAdmin) {
             addDrawerItem(panel, "Borc Dəftəri", () -> {
                 holder[0].dismiss();
-                showDebt("İşçi");
-            });
-            addDrawerItem(panel, "Mətbəx", () -> {
-                holder[0].dismiss();
-                showKitchen();
-            });
-        } else if (role.equals("kitchen")) {
-            addDrawerItem(panel, "Mətbəx", () -> {
-                holder[0].dismiss();
-                showKitchen();
-            });
-        } else {
-            addDrawerItem(panel, "Terminallar / Zal", () -> {
-                holder[0].dismiss();
-                showTerminals();
+                switchMobileRole("admin", true, () -> showDebt("İşçi"));
             });
         }
 
@@ -514,6 +512,8 @@ public class MainActivity extends Activity {
                 role = result.optString("role", selectedRole);
                 roleLabel = result.optString("role_label", role);
                 adminDebtOnly = role.equals("admin") && debtOnly;
+                sessionPassword = p;
+                refreshAllowedMobileRoles(username, p, role);
                 SharedPreferences.Editor editor = prefs.edit()
                         .putString(KEY_USERNAME, username)
                         .putString(KEY_ROLE, role)
@@ -536,6 +536,86 @@ public class MainActivity extends Activity {
                 } else {
                     showError(ex);
                 }
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    private void refreshAllowedMobileRoles(String loginUser, String password, String activeRole) {
+        canHall = "hall".equals(activeRole);
+        canKitchen = "kitchen".equals(activeRole);
+        canAdmin = "admin".equals(activeRole);
+        String[] candidates = {"hall", "kitchen", "admin"};
+        for (String candidate : candidates) {
+            if (candidate.equals(activeRole)) continue;
+            String probeToken = "";
+            try {
+                JSONObject probePayload = new JSONObject();
+                probePayload.put("username", loginUser);
+                probePayload.put("password", password);
+                probePayload.put("role", candidate);
+                JSONObject probeResult = request(serverBase, "/api/mobile/login", "POST", probePayload, "");
+                probeToken = probeResult.optString("token", "");
+                if ("hall".equals(candidate)) canHall = true;
+                else if ("kitchen".equals(candidate)) canKitchen = true;
+                else if ("admin".equals(candidate)) canAdmin = true;
+            } catch (Exception ignored) {
+                if ("hall".equals(candidate)) canHall = false;
+                else if ("kitchen".equals(candidate)) canKitchen = false;
+                else if ("admin".equals(candidate)) canAdmin = false;
+            } finally {
+                if (!probeToken.isEmpty()) {
+                    try { request(serverBase, "/api/mobile/logout", "POST", new JSONObject(), probeToken); }
+                    catch (Exception ignored) {}
+                }
+            }
+        }
+    }
+
+    private void switchMobileRole(String targetRole, boolean debtOnly, Runnable openTarget) {
+        String normalizedTarget = targetRole == null ? "hall" : targetRole.trim().toLowerCase(Locale.ROOT);
+        if (normalizedTarget.isEmpty()) normalizedTarget = "hall";
+        if (normalizedTarget.equals(role)) {
+            adminDebtOnly = "admin".equals(normalizedTarget) && debtOnly;
+            if (openTarget != null) openTarget.run();
+            return;
+        }
+
+        String password = sessionPassword;
+        if (password.isEmpty()) password = loadSavedPassword();
+        if (password.isEmpty()) {
+            toast("Bu bölməyə keçid üçün sessiya şifrəsi tapılmadı. Yenidən daxil olun.");
+            return;
+        }
+
+        final String roleToUse = normalizedTarget;
+        final String passwordToUse = password;
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("username", username);
+                payload.put("password", passwordToUse);
+                payload.put("role", roleToUse);
+                JSONObject result = request(serverBase, "/api/mobile/login", "POST", payload, "");
+                String newToken = result.optString("token", "");
+                if (newToken.isEmpty()) throw new RuntimeException("Yeni mobil sessiya yaradılmadı.");
+                String oldToken = sessionToken;
+                sessionToken = newToken;
+                role = result.optString("role", roleToUse);
+                roleLabel = result.optString("role_label", role);
+                adminDebtOnly = "admin".equals(role) && debtOnly;
+                prefs.edit().putString(KEY_ROLE, role).putBoolean(KEY_ADMIN_DEBT_ONLY, adminDebtOnly).apply();
+                if (!oldToken.isEmpty() && !oldToken.equals(newToken)) {
+                    try { request(serverBase, "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
+                    catch (Exception ignored) {}
+                }
+                runOnUiThread(() -> {
+                    if (openTarget != null) openTarget.run();
+                });
+            } catch (Exception ex) {
+                showError(ex);
             } finally {
                 setBusy(false);
             }
@@ -589,6 +669,10 @@ public class MainActivity extends Activity {
 
     private void showLogin() {
         sessionToken = "";
+        sessionPassword = "";
+        canHall = false;
+        canKitchen = false;
+        canAdmin = false;
         ScrollView sv = screenWithBody("Marakana Mobile", false, null);
         LinearLayout body = scrollBody(sv);
         body.setGravity(Gravity.CENTER_HORIZONTAL);
@@ -1166,6 +1250,10 @@ public class MainActivity extends Activity {
 
     private void logout() {
         currentBackAction = null;
+        sessionPassword = "";
+        canHall = false;
+        canKitchen = false;
+        canAdmin = false;
         prefs.edit().putBoolean(KEY_AUTO_LOGIN, false).apply();
         if (sessionToken.isEmpty()) { showLogin(); return; }
         String old=sessionToken; sessionToken=""; io.execute(()->{try{request(serverBase,"/api/mobile/logout","POST",new JSONObject(),old);}catch(Exception ignored){}runOnUiThread(this::showLogin);});

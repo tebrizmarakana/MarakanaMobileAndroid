@@ -91,3 +91,11 @@ Android köhnə APK-nın üstünə yeni APK quraşdırmaq üçün həm `applicat
 - `Hazırlanır` bölməsində sifariş `Hazırdır` ediləndə tətbiq avtomatik `Hazırdır` tabına keçmir; istifadəçi eyni kateqoriyada qalır.
 - `Geri al` ediləndə də mövcud kateqoriya qorunur və siyahı həmin tab üzrə yenilənir.
 - Android versiyası `versionCode 10`, `versionName 2.5.1-native-v10` oldu.
+
+
+## v11 dəyişiklikləri
+- Sol menyu artıq yalnız cari giriş roluna görə yox, həmin istifadəçinin bütün mobil panel səlahiyyətlərinə görə qurulur.
+- Məsələn, Mətbəx istifadəçisi eyni zamanda Zal icazəsinə sahibdirsə, sol menyuda `Terminallar / Zal` keçidi də görünür.
+- Zal, Mətbəx və Admin/Borc icazələri giriş zamanı eyni istifadəçi şifrəsi ilə arxa planda yoxlanılır; ayrıca admin şifrəsi tələb olunmur.
+- Bölmələr arasında keçiddə tətbiq həmin istifadəçinin eyni şifrəsi ilə uyğun mobil rola səssiz keçid edir və yeni sessiya yaradır.
+- Android versiyası `versionCode 11`, `versionName 2.6.0-native-v11` oldu.
