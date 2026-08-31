@@ -130,3 +130,11 @@ Android köhnə APK-nın üstünə yeni APK quraşdırmaq üçün həm `applicat
 - `Bildiriş göndər` WhatsApp-da həmin borclunun nömrəsini açır və ikonlu borc bildiriş mətnini hazır yazır: ad, cari borc, son dəyişiklik və tezliklə ödəniş xatırlatması.
 - WhatsApp və WhatsApp Business üçün açılış dəstəyi əlavə edildi.
 - Android versiyası `versionCode 15`, `versionName 2.9.0-native-v15` oldu.
+
+
+## v16 dəyişiklikləri
+- Firma kateqoriyasındakı borc Marakana-nın firmaya olan borcu kimi qəbul edilir və WhatsApp bildirişi buna uyğun mətnlə göndərilir.
+- Standart WhatsApp və WhatsApp Business birlikdə quraşdırılıbsa seçim pəncərəsində hər ikisi görünür.
+- İstifadəçi `Seçimi default olaraq yadda saxla` seçərsə növbəti bildirişlər həmin WhatsApp tətbiqi ilə açılır.
+- Android 11+ paket görünürlüğü üçün WhatsApp və WhatsApp Business `<queries>` əlavə edildi.
+- `versionCode 16`, `versionName 3.0.0-native-v16`.

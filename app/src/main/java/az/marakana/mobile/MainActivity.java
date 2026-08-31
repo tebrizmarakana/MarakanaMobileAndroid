@@ -72,6 +72,7 @@ public class MainActivity extends Activity {
     private static final String KEY_AUTO_LOGIN = "auto_login";
     private static final String KEY_PASSWORD_ENC = "password_enc";
     private static final String KEY_PASSWORD_IV = "password_iv";
+    private static final String KEY_WHATSAPP_PACKAGE = "whatsapp_default_package";
     private static final String KEYSTORE_ALIAS = "marakana_mobile_login_key";
 
     private static final int BG = Color.rgb(240, 245, 250);
@@ -1157,51 +1158,127 @@ public class MainActivity extends Activity {
         });
         notify.setOnClickListener(v -> {
             dialog.dismiss();
-            sendDebtNotificationWhatsApp(record);
+            sendDebtNotificationWhatsApp(category, record);
         });
         dialog.show();
     }
 
-    private void sendDebtNotificationWhatsApp(JSONObject record) {
+    private void sendDebtNotificationWhatsApp(String category, JSONObject record) {
         String phone = normalizeWhatsAppPhone(record.optString("phone", ""));
         if (phone.isEmpty()) {
             toast("Bu borclunun telefon nömrəsi yoxdur.");
             return;
         }
 
-        String name = record.optString("full_name", "Müştəri").trim();
+        String name = record.optString("full_name", category.equals("Firma") ? "Firma" : "Müştəri").trim();
         double debt = record.optDouble("total_debt", 0);
         String lastChange = record.optString("last_change", "").trim();
 
         StringBuilder message = new StringBuilder();
-        message.append("🔔 *BORC BİLDİRİŞİ*\n\n");
-        message.append("👤 *Ad Soyad:* ").append(name.isEmpty() ? "Müştəri" : name).append("\n");
-        message.append("💰 *Cari borc:* ").append(money(debt)).append("\n");
-        if (!lastChange.isEmpty()) message.append("🕒 *Son dəyişiklik:* ").append(lastChange).append("\n");
-        message.append("\n⚠️ *Xatırlatma:* Borcunuzu mümkün qədər tez ödəməyinizi xahiş edirik.\n");
-        message.append("🙏 Ödəniş etdikdən sonra məlumat verməyiniz kifayətdir.\n\n");
-        message.append("🎮 *Marakana Game Center*");
+        if (category.equals("Firma")) {
+            message.append("📣 *ÖDƏNİŞ MƏLUMATI*\n\n");
+            message.append("🏢 *Firma:* ").append(name.isEmpty() ? "Firma" : name).append("\n");
+            message.append("💳 *Sizə olan cari borcumuz:* ").append(money(debt)).append("\n");
+            if (!lastChange.isEmpty()) message.append("🕒 *Son dəyişiklik:* ").append(lastChange).append("\n");
+            message.append("\n🤝 *Məlumat:* Borcumuzu mümkün qədər tez ödəməyə çalışacağıq.\n");
+            message.append("🙏 Ödəniş etdikdə sizə məlumat veriləcək.\n\n");
+            message.append("🎮 *Marakana Game Center*");
+        } else {
+            message.append("🔔 *BORC BİLDİRİŞİ*\n\n");
+            message.append("👤 *Ad Soyad:* ").append(name.isEmpty() ? "Müştəri" : name).append("\n");
+            message.append("💰 *Cari borc:* ").append(money(debt)).append("\n");
+            if (!lastChange.isEmpty()) message.append("🕒 *Son dəyişiklik:* ").append(lastChange).append("\n");
+            message.append("\n⚠️ *Xatırlatma:* Borcunuzu mümkün qədər tez ödəməyinizi xahiş edirik.\n");
+            message.append("🙏 Ödəniş etdikdən sonra məlumat verməyiniz kifayətdir.\n\n");
+            message.append("🎮 *Marakana Game Center*");
+        }
 
-        String url = "https://wa.me/" + phone + "?text=" + urlEncode(message.toString());
+        openWhatsAppChooser(phone, message.toString());
+    }
+
+    private void openWhatsAppChooser(String phone, String message) {
+        final String standardPackage = "com.whatsapp";
+        final String businessPackage = "com.whatsapp.w4b";
+        boolean hasStandard = isPackageInstalled(standardPackage);
+        boolean hasBusiness = isPackageInstalled(businessPackage);
+
+        String savedPackage = prefs.getString(KEY_WHATSAPP_PACKAGE, "");
+        if (!savedPackage.isEmpty() && isPackageInstalled(savedPackage)) {
+            openWhatsAppPackage(savedPackage, phone, message);
+            return;
+        }
+
+        if (hasStandard && hasBusiness) {
+            LinearLayout box = new LinearLayout(this);
+            box.setOrientation(LinearLayout.VERTICAL);
+            box.setPadding(dp(18), dp(4), dp(18), 0);
+
+            CheckBox remember = new CheckBox(this);
+            remember.setText("Seçimi default olaraq yadda saxla");
+            remember.setTextColor(TEXT);
+            remember.setTextSize(14);
+            box.addView(remember, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+
+            AlertDialog dialog = new AlertDialog.Builder(this)
+                    .setTitle("WhatsApp seç")
+                    .setMessage("Bildirişi hansı WhatsApp ilə göndərmək istəyirsiniz?")
+                    .setView(box)
+                    .setNegativeButton("Ləğv", null)
+                    .create();
+
+            dialog.setButton(AlertDialog.BUTTON_POSITIVE, "WhatsApp", (d, which) -> { });
+            dialog.setButton(AlertDialog.BUTTON_NEUTRAL, "WhatsApp Business", (d, which) -> { });
+            dialog.setOnShowListener(d -> {
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                    if (remember.isChecked()) prefs.edit().putString(KEY_WHATSAPP_PACKAGE, standardPackage).apply();
+                    dialog.dismiss();
+                    openWhatsAppPackage(standardPackage, phone, message);
+                });
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                    if (remember.isChecked()) prefs.edit().putString(KEY_WHATSAPP_PACKAGE, businessPackage).apply();
+                    dialog.dismiss();
+                    openWhatsAppPackage(businessPackage, phone, message);
+                });
+            });
+            dialog.show();
+            return;
+        }
+
+        if (hasBusiness) {
+            openWhatsAppPackage(businessPackage, phone, message);
+            return;
+        }
+        if (hasStandard) {
+            openWhatsAppPackage(standardPackage, phone, message);
+            return;
+        }
+
+        try {
+            String url = "https://wa.me/" + phone + "?text=" + urlEncode(message);
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception ex) {
+            toast("WhatsApp və WhatsApp Business tapılmadı.");
+        }
+    }
+
+    private boolean isPackageInstalled(String packageName) {
+        try {
+            getPackageManager().getPackageInfo(packageName, 0);
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private void openWhatsAppPackage(String packageName, String phone, String message) {
+        String url = "https://wa.me/" + phone + "?text=" + urlEncode(message);
         Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-
+        intent.setPackage(packageName);
         try {
-            intent.setPackage("com.whatsapp");
-            startActivity(intent);
-            return;
-        } catch (Exception ignored) { }
-
-        try {
-            intent.setPackage("com.whatsapp.w4b");
-            startActivity(intent);
-            return;
-        } catch (Exception ignored) { }
-
-        try {
-            intent.setPackage(null);
             startActivity(intent);
         } catch (Exception ex) {
-            toast("WhatsApp açılmadı.");
+            prefs.edit().remove(KEY_WHATSAPP_PACKAGE).apply();
+            toast("Seçilmiş WhatsApp açıla bilmədi. Yenidən seçim edin.");
         }
     }
 
