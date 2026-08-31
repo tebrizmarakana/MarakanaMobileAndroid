@@ -1146,22 +1146,23 @@ public class MainActivity extends Activity {
 
             LinearLayout a = new LinearLayout(this);
             a.setOrientation(LinearLayout.HORIZONTAL);
-            Button prep = button("Hazırlanır", Color.rgb(238, 246, 255), BLUE);
-            Button ready = button("Hazırdır", Color.rgb(234, 247, 241), GREEN);
-            a.addView(prep, new LinearLayout.LayoutParams(0, dp(46), 1f));
-            LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(0, dp(46), 1f);
-            rp.setMargins(dp(8), 0, 0, 0);
-            a.addView(ready, rp);
-            c.addView(a);
             int id = t.optInt("id", 0);
-            prep.setOnClickListener(v -> updateKitchen(id, "preparing"));
-            ready.setOnClickListener(v -> updateKitchen(id, "ready"));
+            if (showReady) {
+                Button undo = button("Geri al", Color.rgb(238, 246, 255), BLUE);
+                a.addView(undo, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
+                undo.setOnClickListener(v -> updateKitchen(id, "preparing", category));
+            } else {
+                Button ready = button("Hazırdır", Color.rgb(234, 247, 241), GREEN);
+                a.addView(ready, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
+                ready.setOnClickListener(v -> updateKitchen(id, "ready", category));
+            }
+            c.addView(a);
             host.addView(c);
         }
         if (visible == 0) host.addView(empty(showReady ? "Hazırdır sifarişi yoxdur." : "Hazırlanır sifarişi yoxdur."));
     }
 
-    private void updateKitchen(int ticketId,String status){JSONObject p=new JSONObject();try{p.put("ticket_id",ticketId);p.put("status",status);}catch(Exception ignored){}postJson("/api/mobile/kitchen/ticket/update",p,r->showKitchen("ready".equals(status)?"Hazırdır":"Hazırlanır"));}
+    private void updateKitchen(int ticketId,String status,String refreshCategory){JSONObject p=new JSONObject();try{p.put("ticket_id",ticketId);p.put("status",status);}catch(Exception ignored){}postJson("/api/mobile/kitchen/ticket/update",p,r->showKitchen(refreshCategory));}
 
     private void logout() {
         currentBackAction = null;

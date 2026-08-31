@@ -83,3 +83,11 @@ Android köhnə APK-nın üstünə yeni APK quraşdırmaq üçün həm `applicat
 - Mətbəx kateqoriyaları alt paneldən toxunaraq və sürüşdürərək dəyişdirilə bilir.
 - Status dəyişəndə siyahı uyğun kateqoriyaya yenidən açılır.
 - Android versiyası `versionCode 9`, `versionName 2.5.0-native-v9` oldu.
+
+
+## v10 dəyişiklikləri
+- Mətbəx `Hazırlanır` kateqoriyasında artıq yalnız `Hazırdır` düyməsi görünür.
+- Mətbəx `Hazırdır` kateqoriyasında artıq yalnız `Geri al` düyməsi görünür.
+- `Hazırlanır` bölməsində sifariş `Hazırdır` ediləndə tətbiq avtomatik `Hazırdır` tabına keçmir; istifadəçi eyni kateqoriyada qalır.
+- `Geri al` ediləndə də mövcud kateqoriya qorunur və siyahı həmin tab üzrə yenilənir.
+- Android versiyası `versionCode 10`, `versionName 2.5.1-native-v10` oldu.
