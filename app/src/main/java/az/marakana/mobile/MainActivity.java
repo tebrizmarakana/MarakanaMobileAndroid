@@ -255,28 +255,20 @@ public class MainActivity extends Activity {
     }
 
     private void installGlobalDrawerSwipe(View target) {
-        final int flingThreshold = dp(64);
-        final int edgeThreshold = dp(42);
-        GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
-            @Override
-            public boolean onDown(MotionEvent e) {
-                return true;
-            }
-
-            @Override
-            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
-                if (e1 == null || e2 == null) return false;
-                float dx = e2.getX() - e1.getX();
-                float dy = e2.getY() - e1.getY();
-                if (dx > flingThreshold && Math.abs(dx) > Math.abs(dy) && e1.getX() <= edgeThreshold) {
-                    showNavigationMenu();
-                    return true;
-                }
-                return false;
-            }
-        });
+        final float[] startX = {0f};
+        final float[] startY = {0f};
+        final int openThreshold = dp(52);
         target.setOnTouchListener((v, event) -> {
-            detector.onTouchEvent(event);
+            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                startX[0] = event.getX();
+                startY[0] = event.getY();
+            } else if (event.getActionMasked() == MotionEvent.ACTION_UP) {
+                float dx = event.getX() - startX[0];
+                float dy = event.getY() - startY[0];
+                if (dx >= openThreshold && Math.abs(dx) > Math.abs(dy) * 1.15f) {
+                    showNavigationMenu();
+                }
+            }
             return false;
         });
     }
@@ -989,9 +981,7 @@ public class MainActivity extends Activity {
     }
 
     private void installDebtGestures(View target, String category) {
-        final int flingThreshold = dp(72);
-        final int openThreshold = dp(180);
-        final int edgeThreshold = dp(36);
+        final int swipeThreshold = dp(48);
         GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onDown(MotionEvent e) {
@@ -1003,15 +993,15 @@ public class MainActivity extends Activity {
                 if (e1 == null || e2 == null) return false;
                 float dx = e2.getX() - e1.getX();
                 float dy = e2.getY() - e1.getY();
-                if (Math.abs(dx) < flingThreshold || Math.abs(dx) <= Math.abs(dy)) return false;
+                if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy)) return false;
+
                 if (dx > 0) {
-                    if (e1.getX() <= edgeThreshold || dx >= openThreshold) {
-                        showNavigationMenu();
-                    } else {
-                        String previous = shiftDebtCategory(category, -1);
-                        if (!previous.equals(category)) showDebt(previous);
-                    }
+                    // Sağa swipe: əvvəlki kateqoriya. Birinci kateqoriyadayıqsa sol menyunu aç.
+                    String previous = shiftDebtCategory(category, -1);
+                    if (!previous.equals(category)) showDebt(previous);
+                    else showNavigationMenu();
                 } else {
+                    // Sola swipe: növbəti kateqoriya.
                     String next = shiftDebtCategory(category, 1);
                     if (!next.equals(category)) showDebt(next);
                 }
@@ -1186,8 +1176,7 @@ public class MainActivity extends Activity {
     }
 
     private void installKitchenGestures(View target, String category) {
-        final int flingThreshold = dp(72);
-        final int edgeThreshold = dp(36);
+        final int swipeThreshold = dp(48);
         GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onDown(MotionEvent e) {
@@ -1199,15 +1188,15 @@ public class MainActivity extends Activity {
                 if (e1 == null || e2 == null) return false;
                 float dx = e2.getX() - e1.getX();
                 float dy = e2.getY() - e1.getY();
-                if (Math.abs(dx) < flingThreshold || Math.abs(dx) <= Math.abs(dy)) return false;
+                if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy)) return false;
+
                 if (dx > 0) {
-                    if (e1.getX() <= edgeThreshold) {
-                        showNavigationMenu();
-                    } else if ("Hazırdır".equals(category)) {
-                        showKitchen("Hazırlanır");
-                    }
-                } else if ("Hazırlanır".equals(category)) {
-                    showKitchen("Hazırdır");
+                    // Hazırdır -> Hazırlanır -> sol menyu.
+                    if ("Hazırdır".equals(category)) showKitchen("Hazırlanır");
+                    else showNavigationMenu();
+                } else {
+                    // Hazırlanır -> Hazırdır.
+                    if ("Hazırlanır".equals(category)) showKitchen("Hazırdır");
                 }
                 return true;
             }

@@ -10,8 +10,8 @@ android {
         applicationId 'az.marakana.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 12
-        versionName '2.7.0-native-v12'
+        versionCode 14
+        versionName '2.8.1-native-v14'
     }
 
     buildTypes {

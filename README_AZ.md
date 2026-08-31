@@ -106,3 +106,19 @@ Android köhnə APK-nın üstünə yeni APK quraşdırmaq üçün həm `applicat
 - Cari sifarişlərdə `1 ədəd azalt` əməliyyatı yalnız Admin səlahiyyəti olan istifadəçiyə görünür.
 - Admin səlahiyyəti olan istifadəçi azalt düyməsinə basanda əməliyyat dərhal icra olunmur; əvvəl təsdiqləmə popup-u açılır, yalnız `Təsdiqlə` seçildikdən sonra 1 ədəd azaldılır.
 - Android versiyası `versionCode 12`, `versionName 2.7.0-native-v12` oldu.
+
+
+## v13 dəyişiklikləri
+- Əsas ekranlarda barmaqla soldan-sağa yox, ekranın istənilən hissəsindən sağa sürüşdürmə ilə sol menyu açılır.
+- Borc Dəftəri və Mətbəx kateqoriya swipe məntiqi qorunur; uzun sağ swipe menyunu açır, qısa swipe kateqoriyanı dəyişir.
+- Swipe daha təbii Android drawer davranışına yaxınlaşdırıldı.
+- Android versiyası `versionCode 13`, `versionName 2.8.0-native-v13` oldu.
+
+
+## v14 dəyişiklikləri
+- Qısa swipe də aktiv edildi; uzun swipe tələb olunmur.
+- Borc Dəftərində sağ swipe əvvəlki kateqoriyaya qaytarır; artıq birinci kateqoriyadadırsa növbəti sağ swipe sol menyunu açır.
+- Sola swipe növbəti Borc Dəftəri kateqoriyasına keçir.
+- Eyni pilləli swipe məntiqi Mətbəx üçün də tətbiq edildi: Hazırdır -> sağ swipe -> Hazırlanır -> sağ swipe -> sol menyu.
+- Digər əsas ekranlarda sol menyunu açmaq üçün swipe həddi də qısaldıldı.
+- Android versiyası `versionCode 14`, `versionName 2.8.1-native-v14` oldu.
