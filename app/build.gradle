@@ -10,12 +10,25 @@ android {
         applicationId 'az.marakana.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 17
-        versionName '3.0.1-native-v17'
+        versionCode 18
+        versionName '3.1.0-native-v18'
+    }
+
+    signingConfigs {
+        release {
+            def ksPath = System.getenv("MARAKANA_KEYSTORE_PATH")
+            if (ksPath != null && !ksPath.isEmpty()) {
+                storeFile file(ksPath)
+                storePassword System.getenv("MARAKANA_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("MARAKANA_KEY_ALIAS")
+                keyPassword System.getenv("MARAKANA_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
