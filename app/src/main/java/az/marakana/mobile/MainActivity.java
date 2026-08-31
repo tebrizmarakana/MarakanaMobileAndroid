@@ -3,11 +3,13 @@ package az.marakana.mobile;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.ColorDrawable;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.Base64;
@@ -1102,24 +1104,124 @@ public class MainActivity extends Activity {
             c.addView(text(r.optString("phone", "") + "  •  ID: " + r.optString("id", "") + "  •  " + r.optString("last_change", ""), 12, MUTED, true),
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36)));
 
-            LinearLayout acts = new LinearLayout(this);
-            acts.setOrientation(LinearLayout.HORIZONTAL);
-            Button inc = button("Artır", Color.rgb(234, 247, 241), GREEN);
-            Button dec = button("Azalt", Color.rgb(255, 245, 239), ORANGE);
-            Button hist = button("Tarixçə", Color.rgb(238, 246, 255), BLUE);
-            acts.addView(inc, new LinearLayout.LayoutParams(0, dp(46), 1f));
-            LinearLayout.LayoutParams x = new LinearLayout.LayoutParams(0, dp(46), 1f);
-            x.setMargins(dp(6), 0, 0, 0);
-            acts.addView(dec, x);
-            LinearLayout.LayoutParams y = new LinearLayout.LayoutParams(0, dp(46), 1f);
-            y.setMargins(dp(6), 0, 0, 0);
-            acts.addView(hist, y);
-            c.addView(acts);
-            inc.setOnClickListener(v -> debtChangeDialog(category, r, "increase"));
-            dec.setOnClickListener(v -> debtChangeDialog(category, r, "decrease"));
-            hist.setOnClickListener(v -> showDebtHistory(r));
+            c.setClickable(true);
+            c.setFocusable(true);
+            c.setOnClickListener(v -> showDebtActions(category, r));
             host.addView(c);
         }
+    }
+
+    private void showDebtActions(String category, JSONObject record) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(14), dp(6), dp(14), dp(4));
+
+        TextView balance = text("Cari borc: " + money(record.optDouble("total_debt", 0)), 15, GREEN, true);
+        box.addView(balance, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
+
+        Button increase = button("Borcu artır", Color.rgb(234, 247, 241), GREEN);
+        box.addView(increase, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
+
+        Button decrease = button("Borcu azalt", Color.rgb(255, 245, 239), ORANGE);
+        LinearLayout.LayoutParams decreaseLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        decreaseLp.setMargins(0, dp(8), 0, 0);
+        box.addView(decrease, decreaseLp);
+
+        Button history = button("Tarixçə", Color.rgb(238, 246, 255), BLUE);
+        LinearLayout.LayoutParams historyLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        historyLp.setMargins(0, dp(8), 0, 0);
+        box.addView(history, historyLp);
+
+        Button notify = button("Bildiriş göndər", Color.rgb(232, 248, 240), GREEN);
+        LinearLayout.LayoutParams notifyLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        notifyLp.setMargins(0, dp(8), 0, 0);
+        box.addView(notify, notifyLp);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(record.optString("full_name", "Borclu"))
+                .setView(box)
+                .setNegativeButton("Bağla", null)
+                .create();
+
+        increase.setOnClickListener(v -> {
+            dialog.dismiss();
+            debtChangeDialog(category, record, "increase");
+        });
+        decrease.setOnClickListener(v -> {
+            dialog.dismiss();
+            debtChangeDialog(category, record, "decrease");
+        });
+        history.setOnClickListener(v -> {
+            dialog.dismiss();
+            showDebtHistory(record);
+        });
+        notify.setOnClickListener(v -> {
+            dialog.dismiss();
+            sendDebtNotificationWhatsApp(record);
+        });
+        dialog.show();
+    }
+
+    private void sendDebtNotificationWhatsApp(JSONObject record) {
+        String phone = normalizeWhatsAppPhone(record.optString("phone", ""));
+        if (phone.isEmpty()) {
+            toast("Bu borclunun telefon nömrəsi yoxdur.");
+            return;
+        }
+
+        String name = record.optString("full_name", "Müştəri").trim();
+        double debt = record.optDouble("total_debt", 0);
+        String lastChange = record.optString("last_change", "").trim();
+
+        StringBuilder message = new StringBuilder();
+        message.append("🔔 *BORC BİLDİRİŞİ*
+
+");
+        message.append("👤 *Ad Soyad:* ").append(name.isEmpty() ? "Müştəri" : name).append("
+");
+        message.append("💰 *Cari borc:* ").append(money(debt)).append("
+");
+        if (!lastChange.isEmpty()) message.append("🕒 *Son dəyişiklik:* ").append(lastChange).append("
+");
+        message.append("
+⚠️ *Xatırlatma:* Borcunuzu mümkün qədər tez ödəməyinizi xahiş edirik.
+");
+        message.append("🙏 Ödəniş etdikdən sonra məlumat verməyiniz kifayətdir.
+
+");
+        message.append("🎮 *Marakana Game Center*");
+
+        String url = "https://wa.me/" + phone + "?text=" + urlEncode(message.toString());
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+
+        try {
+            intent.setPackage("com.whatsapp");
+            startActivity(intent);
+            return;
+        } catch (Exception ignored) { }
+
+        try {
+            intent.setPackage("com.whatsapp.w4b");
+            startActivity(intent);
+            return;
+        } catch (Exception ignored) { }
+
+        try {
+            intent.setPackage(null);
+            startActivity(intent);
+        } catch (Exception ex) {
+            toast("WhatsApp açılmadı.");
+        }
+    }
+
+    private String normalizeWhatsAppPhone(String raw) {
+        String digits = raw == null ? "" : raw.replaceAll("[^0-9]", "");
+        if (digits.isEmpty()) return "";
+        if (digits.startsWith("00994")) digits = digits.substring(2);
+        if (digits.startsWith("994")) return digits;
+        if (digits.startsWith("0") && digits.length() >= 10) return "994" + digits.substring(1);
+        if (digits.length() == 9) return "994" + digits;
+        return digits;
     }
 
     private void debtChangeDialog(String category, JSONObject record, String action) {

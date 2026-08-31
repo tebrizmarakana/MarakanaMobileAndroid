@@ -122,3 +122,11 @@ Android köhnə APK-nın üstünə yeni APK quraşdırmaq üçün həm `applicat
 - Eyni pilləli swipe məntiqi Mətbəx üçün də tətbiq edildi: Hazırdır -> sağ swipe -> Hazırlanır -> sağ swipe -> sol menyu.
 - Digər əsas ekranlarda sol menyunu açmaq üçün swipe həddi də qısaldıldı.
 - Android versiyası `versionCode 14`, `versionName 2.8.1-native-v14` oldu.
+
+
+## v15 dəyişiklikləri
+- Borc Dəftərində `Artır / Azalt / Tarixçə` düymələri borclu kartının altından çıxarıldı.
+- Borclunun kartına toxunanda əməliyyat pəncərəsi açılır: `Borcu artır`, `Borcu azalt`, `Tarixçə`, `Bildiriş göndər`.
+- `Bildiriş göndər` WhatsApp-da həmin borclunun nömrəsini açır və ikonlu borc bildiriş mətnini hazır yazır: ad, cari borc, son dəyişiklik və tezliklə ödəniş xatırlatması.
+- WhatsApp və WhatsApp Business üçün açılış dəstəyi əlavə edildi.
+- Android versiyası `versionCode 15`, `versionName 2.9.0-native-v15` oldu.
