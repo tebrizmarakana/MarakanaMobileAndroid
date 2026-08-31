@@ -75,3 +75,11 @@ Android köhnə APK-nın üstünə yeni APK quraşdırmaq üçün həm `applicat
 - Sol yuxarı menyu düyməsi ChatGPT stilinə yaxınlaşdırıldı: yazı əvəzinə modern 3-xətli ikon istifadə olunur.
 - Menyu əsas ekranlarda ChatGPT kimi soldan sağa sürüşdürmə ilə açılır.
 - Android versiyası `versionCode 8`, `versionName 2.4.0-native-v8` oldu.
+
+
+## v9 dəyişiklikləri
+- Mətbəx ekranına Borc Dəftəri kimi alt kateqoriya paneli əlavə edildi.
+- Alt paneldə `Hazırlanır` və `Hazırdır` bölmələri ayrıca göstərilir; hazır olan sifarişlər yalnız `Hazırdır`, qalanlar `Hazırlanır` bölməsində görünür.
+- Mətbəx kateqoriyaları alt paneldən toxunaraq və sürüşdürərək dəyişdirilə bilir.
+- Status dəyişəndə siyahı uyğun kateqoriyaya yenidən açılır.
+- Android versiyası `versionCode 9`, `versionName 2.5.0-native-v9` oldu.
