@@ -1,0 +1,19 @@
+MARAKANA MOBILE NATIVE ANDROID - GITHUB UPLOAD
+
+1) Bu ZIP-i kompüterdə çıxart (Extract All).
+2) Açılan MarakanaMobile_GitHub_Upload_v3 qovluğuna gir.
+3) GitHub repo-nun Code səhifəsində Add file > Upload files aç.
+4) Buradakı `app` qovluğunu QOVLUQ KİMİ sürüklə. `app` qovluğunun içinə girib faylları ayrıca seçmə.
+5) Sonra qalan root faylları və `.github` qovluğunu da yüklə.
+6) Repo kökündə mütləq `app` qovluğu görünməlidir.
+7) Actions > Build Marakana Mobile Native APK > Run workflow.
+
+Düz struktur:
+  .github/workflows/build-apk.yml
+  app/build.gradle
+  app/proguard-rules.pro
+  app/src/main/AndroidManifest.xml
+  app/src/main/java/az/marakana/mobile/MainActivity.java
+  build.gradle
+  settings.gradle
+  gradle.properties
