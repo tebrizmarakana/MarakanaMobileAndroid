@@ -11,7 +11,9 @@ import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.Base64;
+import android.view.GestureDetector;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -92,6 +94,9 @@ public class MainActivity extends Activity {
     private String role = "hall";
     private String roleLabel = "Zal";
     private boolean adminDebtOnly = false;
+    private Runnable currentBackAction = null;
+    private PopupWindow activeNavigationPopup = null;
+    private static final String[] DEBT_CATEGORIES = {"İşçi", "Müştəri", "Firma"};
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -121,6 +126,21 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         io.shutdownNow();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (activeNavigationPopup != null && activeNavigationPopup.isShowing()) {
+            activeNavigationPopup.dismiss();
+            return;
+        }
+        if (currentBackAction != null) {
+            Runnable action = currentBackAction;
+            currentBackAction = null;
+            action.run();
+            return;
+        }
+        super.onBackPressed();
     }
 
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
@@ -205,6 +225,7 @@ public class MainActivity extends Activity {
     }
 
     private ScrollView screenWithBody(String title, boolean back, Runnable backAction) {
+        currentBackAction = back ? backAction : null;
         clear();
         LinearLayout shell = new LinearLayout(this);
         shell.setOrientation(LinearLayout.VERTICAL);
@@ -249,6 +270,10 @@ public class MainActivity extends Activity {
     }
 
     private void showNavigationMenu() {
+        if (activeNavigationPopup != null && activeNavigationPopup.isShowing()) {
+            return;
+        }
+
         FrameLayout overlay = new FrameLayout(this);
         overlay.setBackgroundColor(Color.TRANSPARENT);
 
@@ -261,7 +286,7 @@ public class MainActivity extends Activity {
         panel.setPadding(dp(18), dp(22), dp(18), dp(18));
         panel.setBackgroundColor(Color.WHITE);
         panel.setElevation(dp(12));
-        FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams((int)(getResources().getDisplayMetrics().widthPixels * 0.82f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START);
+        FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams((int) (getResources().getDisplayMetrics().widthPixels * 0.82f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START);
         overlay.addView(panel, panelLp);
 
         TextView appTitle = text("Marakana Mobile", 22, TEXT, true);
@@ -272,13 +297,28 @@ public class MainActivity extends Activity {
 
         final PopupWindow[] holder = new PopupWindow[1];
         if (role.equals("admin")) {
-            addDrawerItem(panel, "Terminallar / Zal", () -> { holder[0].dismiss(); showTerminals(); });
-            addDrawerItem(panel, "Borc Dəftəri", () -> { holder[0].dismiss(); showDebt("İşçi"); });
-            addDrawerItem(panel, "Mətbəx", () -> { holder[0].dismiss(); showKitchen(); });
+            addDrawerItem(panel, "Terminallar / Zal", () -> {
+                holder[0].dismiss();
+                showTerminals();
+            });
+            addDrawerItem(panel, "Borc Dəftəri", () -> {
+                holder[0].dismiss();
+                showDebt("İşçi");
+            });
+            addDrawerItem(panel, "Mətbəx", () -> {
+                holder[0].dismiss();
+                showKitchen();
+            });
         } else if (role.equals("kitchen")) {
-            addDrawerItem(panel, "Mətbəx", () -> { holder[0].dismiss(); showKitchen(); });
+            addDrawerItem(panel, "Mətbəx", () -> {
+                holder[0].dismiss();
+                showKitchen();
+            });
         } else {
-            addDrawerItem(panel, "Terminallar / Zal", () -> { holder[0].dismiss(); showTerminals(); });
+            addDrawerItem(panel, "Terminallar / Zal", () -> {
+                holder[0].dismiss();
+                showTerminals();
+            });
         }
 
         View flex = new View(this);
@@ -290,10 +330,15 @@ public class MainActivity extends Activity {
 
         PopupWindow popup = new PopupWindow(overlay, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, true);
         holder[0] = popup;
+        activeNavigationPopup = popup;
         popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         popup.setOutsideTouchable(true);
+        popup.setOnDismissListener(() -> activeNavigationPopup = null);
         scrim.setOnClickListener(v -> popup.dismiss());
-        exit.setOnClickListener(v -> { popup.dismiss(); logout(); });
+        exit.setOnClickListener(v -> {
+            popup.dismiss();
+            logout();
+        });
         popup.showAtLocation(content, Gravity.START | Gravity.TOP, 0, 0);
     }
 
@@ -311,7 +356,7 @@ public class MainActivity extends Activity {
     private LinearLayout scrollBody(ScrollView scroll) {
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(2), dp(4), dp(2), dp(22));
+        body.setPadding(0, dp(4), 0, dp(22));
         scroll.addView(body, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return body;
     }
@@ -691,10 +736,12 @@ public class MainActivity extends Activity {
     private boolean hasPositive(Map<String,Integer> map) { for (Integer v: map.values()) if (v!=null && v>0) return true; return false; }
 
     private void showDebt(String category) {
+        currentBackAction = null;
         clear();
+
         LinearLayout shell = new LinearLayout(this);
         shell.setOrientation(LinearLayout.VERTICAL);
-        shell.setPadding(dp(14), dp(12), dp(14), 0);
+        shell.setPadding(dp(8), dp(10), dp(8), 0);
         content.addView(shell, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         shell.addView(buildMainHeader("Borc Dəftəri", false, null));
@@ -702,8 +749,9 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         shell.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
         LinearLayout body = scrollBody(scroll);
-        body.setPadding(dp(2), dp(4), dp(2), dp(14));
+        body.setPadding(0, dp(4), 0, dp(92));
 
         Button create = button("Yeni borclu yarat", BLUE, Color.WHITE);
         body.addView(create);
@@ -718,7 +766,11 @@ public class MainActivity extends Activity {
         recordsHost.setOrientation(LinearLayout.VERTICAL);
         body.addView(recordsHost);
 
-        shell.addView(buildDebtFooter(category), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(72)));
+        installDebtGestures(scroll, category);
+        installDebtGestures(body, category);
+
+        LinearLayout footer = buildDebtFooter(category);
+        shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(86)));
 
         loadJson("/api/mobile/debt/list?category=" + urlEncode(category), result -> {
             JSONArray records = result.optJSONArray("records");
@@ -730,46 +782,147 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void installDebtGestures(View target, String category) {
+        final int flingThreshold = dp(72);
+        final int openThreshold = dp(180);
+        final int edgeThreshold = dp(36);
+        GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return true;
+            }
+
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                if (e1 == null || e2 == null) return false;
+                float dx = e2.getX() - e1.getX();
+                float dy = e2.getY() - e1.getY();
+                if (Math.abs(dx) < flingThreshold || Math.abs(dx) <= Math.abs(dy)) return false;
+                if (dx > 0) {
+                    if (e1.getX() <= edgeThreshold || dx >= openThreshold) {
+                        showNavigationMenu();
+                    } else {
+                        String previous = shiftDebtCategory(category, -1);
+                        if (!previous.equals(category)) showDebt(previous);
+                    }
+                } else {
+                    String next = shiftDebtCategory(category, 1);
+                    if (!next.equals(category)) showDebt(next);
+                }
+                return true;
+            }
+        });
+        target.setOnTouchListener((v, event) -> {
+            detector.onTouchEvent(event);
+            return false;
+        });
+    }
+
+    private String shiftDebtCategory(String current, int direction) {
+        int index = 0;
+        for (int i = 0; i < DEBT_CATEGORIES.length; i++) {
+            if (DEBT_CATEGORIES[i].equals(current)) {
+                index = i;
+                break;
+            }
+        }
+        int next = index + direction;
+        if (next < 0 || next >= DEBT_CATEGORIES.length) return current;
+        return DEBT_CATEGORIES[next];
+    }
+
     private LinearLayout buildDebtFooter(String activeCategory) {
         LinearLayout footer = new LinearLayout(this);
         footer.setOrientation(LinearLayout.HORIZONTAL);
         footer.setGravity(Gravity.CENTER);
-        footer.setPadding(dp(4), dp(8), dp(4), dp(8));
-        footer.setBackground(bg(Color.WHITE, 18, BORDER));
-        footer.setElevation(dp(8));
+        footer.setPadding(dp(6), dp(8), dp(6), dp(8));
+        footer.setBackground(bg(Color.WHITE, 22, BORDER));
+        footer.setElevation(dp(12));
 
-        String[] categories = {"İşçi", "Müştəri", "Firma"};
-        for (int i = 0; i < categories.length; i++) {
-            String category = categories[i];
+        String[] icons = {"👤", "👥", "🏢"};
+        for (int i = 0; i < DEBT_CATEGORIES.length; i++) {
+            String category = DEBT_CATEGORIES[i];
             boolean active = category.equals(activeCategory);
-            Button tab = button(category, active ? Color.rgb(232, 243, 255) : Color.WHITE, active ? BLUE : MUTED);
-            tab.setTextSize(14);
-            tab.setLayoutParams(new LinearLayout.LayoutParams(0, dp(54), 1f));
-            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) tab.getLayoutParams();
-            if (i > 0) lp.setMargins(dp(4), 0, 0, 0);
+            LinearLayout tab = buildDebtFooterTab(icons[i], category, active);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+            if (i > 0) lp.setMargins(dp(6), 0, 0, 0);
             tab.setLayoutParams(lp);
-            if (active) tab.setBackground(bg(Color.rgb(232, 243, 255), 14, BLUE));
-            else tab.setBackground(bg(Color.WHITE, 14, Color.TRANSPARENT));
             tab.setOnClickListener(v -> showDebt(category));
             footer.addView(tab);
         }
         return footer;
     }
 
+    private LinearLayout buildDebtFooterTab(String iconText, String label, boolean active) {
+        LinearLayout tab = new LinearLayout(this);
+        tab.setOrientation(LinearLayout.VERTICAL);
+        tab.setGravity(Gravity.CENTER);
+        tab.setPadding(dp(8), dp(6), dp(8), dp(6));
+        int bgColor = active ? Color.rgb(238, 241, 245) : Color.WHITE;
+        int stroke = active ? Color.rgb(210, 218, 226) : Color.TRANSPARENT;
+        tab.setBackground(bg(bgColor, 18, stroke));
+
+        TextView icon = text(iconText, 18, active ? TEXT : MUTED, false);
+        icon.setGravity(Gravity.CENTER);
+        tab.addView(icon, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)));
+
+        TextView title = text(label, 14, active ? TEXT : MUTED, true);
+        title.setGravity(Gravity.CENTER);
+        tab.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)));
+        return tab;
+    }
+
     private void renderDebtRecords(LinearLayout host, JSONArray records, String category, String query) {
-        host.removeAllViews(); String q=query==null?"":query.trim().toLowerCase(Locale.ROOT); double total=0;
-        for(int i=0;i<records.length();i++){ JSONObject r=records.optJSONObject(i); if(r==null)continue; total+=r.optDouble("total_debt",0); }
-        LinearLayout sum=card(); sum.addView(text("Toplam borc",13,MUTED,true)); sum.addView(text(money(total),22,TEXT,true),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(40))); host.addView(sum);
-        for(int i=0;i<records.length();i++) {
-            JSONObject r=records.optJSONObject(i); if(r==null)continue;
-            String hay=(r.optString("full_name","")+" "+r.optString("phone","")+" "+r.optString("id","")).toLowerCase(Locale.ROOT); if(!q.isEmpty()&&!hay.contains(q))continue;
-            LinearLayout c=card(); LinearLayout row=new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL);
-            row.addView(text(r.optString("full_name",""),17,TEXT,true),new LinearLayout.LayoutParams(0,dp(38),1f)); TextView amt=text(money(r.optDouble("total_debt",0)),17,GREEN,true); amt.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL); row.addView(amt,new LinearLayout.LayoutParams(dp(145),dp(38))); c.addView(row);
-            c.addView(text(r.optString("phone","")+"  •  ID: "+r.optString("id","")+"  •  "+r.optString("last_change",""),12,MUTED,true),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(36)));
-            LinearLayout acts=new LinearLayout(this); acts.setOrientation(LinearLayout.HORIZONTAL);
-            Button inc=button("Artır",Color.rgb(234,247,241),GREEN); Button dec=button("Azalt",Color.rgb(255,245,239),ORANGE); Button hist=button("Tarixçə",Color.rgb(238,246,255),BLUE);
-            acts.addView(inc,new LinearLayout.LayoutParams(0,dp(46),1f)); LinearLayout.LayoutParams x=new LinearLayout.LayoutParams(0,dp(46),1f);x.setMargins(dp(6),0,0,0);acts.addView(dec,x); LinearLayout.LayoutParams y=new LinearLayout.LayoutParams(0,dp(46),1f);y.setMargins(dp(6),0,0,0);acts.addView(hist,y); c.addView(acts);
-            inc.setOnClickListener(v->debtChangeDialog(category,r,"increase")); dec.setOnClickListener(v->debtChangeDialog(category,r,"decrease")); hist.setOnClickListener(v->showDebtHistory(r)); host.addView(c);
+        host.removeAllViews();
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        double total = 0;
+        for (int i = 0; i < records.length(); i++) {
+            JSONObject r = records.optJSONObject(i);
+            if (r == null) continue;
+            total += r.optDouble("total_debt", 0);
+        }
+
+        LinearLayout sum = card();
+        sum.addView(text("Toplam borc", 13, MUTED, true));
+        sum.addView(text(money(total), 22, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+        host.addView(sum);
+
+        for (int i = 0; i < records.length(); i++) {
+            JSONObject r = records.optJSONObject(i);
+            if (r == null) continue;
+            String hay = (r.optString("full_name", "") + " " + r.optString("phone", "") + " " + r.optString("id", "")).toLowerCase(Locale.ROOT);
+            if (!q.isEmpty() && !hay.contains(q)) continue;
+
+            LinearLayout c = card();
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.addView(text(r.optString("full_name", ""), 17, TEXT, true), new LinearLayout.LayoutParams(0, dp(38), 1f));
+            TextView amt = text(money(r.optDouble("total_debt", 0)), 17, GREEN, true);
+            amt.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+            row.addView(amt, new LinearLayout.LayoutParams(dp(145), dp(38)));
+            c.addView(row);
+
+            c.addView(text(r.optString("phone", "") + "  •  ID: " + r.optString("id", "") + "  •  " + r.optString("last_change", ""), 12, MUTED, true),
+                    new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36)));
+
+            LinearLayout acts = new LinearLayout(this);
+            acts.setOrientation(LinearLayout.HORIZONTAL);
+            Button inc = button("Artır", Color.rgb(234, 247, 241), GREEN);
+            Button dec = button("Azalt", Color.rgb(255, 245, 239), ORANGE);
+            Button hist = button("Tarixçə", Color.rgb(238, 246, 255), BLUE);
+            acts.addView(inc, new LinearLayout.LayoutParams(0, dp(46), 1f));
+            LinearLayout.LayoutParams x = new LinearLayout.LayoutParams(0, dp(46), 1f);
+            x.setMargins(dp(6), 0, 0, 0);
+            acts.addView(dec, x);
+            LinearLayout.LayoutParams y = new LinearLayout.LayoutParams(0, dp(46), 1f);
+            y.setMargins(dp(6), 0, 0, 0);
+            acts.addView(hist, y);
+            c.addView(acts);
+            inc.setOnClickListener(v -> debtChangeDialog(category, r, "increase"));
+            dec.setOnClickListener(v -> debtChangeDialog(category, r, "decrease"));
+            hist.setOnClickListener(v -> showDebtHistory(r));
+            host.addView(c);
         }
     }
 
@@ -795,6 +948,7 @@ public class MainActivity extends Activity {
     private void updateKitchen(int ticketId,String status){JSONObject p=new JSONObject();try{p.put("ticket_id",ticketId);p.put("status",status);}catch(Exception ignored){}postJson("/api/mobile/kitchen/ticket/update",p,r->showKitchen());}
 
     private void logout() {
+        currentBackAction = null;
         prefs.edit().putBoolean(KEY_AUTO_LOGIN, false).apply();
         if (sessionToken.isEmpty()) { showLogin(); return; }
         String old=sessionToken; sessionToken=""; io.execute(()->{try{request(serverBase,"/api/mobile/logout","POST",new JSONObject(),old);}catch(Exception ignored){}runOnUiThread(this::showLogin);});

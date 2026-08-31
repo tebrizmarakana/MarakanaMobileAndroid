@@ -37,3 +37,29 @@ və ya HTTPS domeniniz varsa:
 `https://app.example.com`
 
 Tətbiq avtomatik `/mobile` əlavə etmir; API çağırışlarını `/api/mobile/...` ünvanına edir.
+
+## v4 düzəlişləri
+- Giriş ekranına ayrıca **Borc Dəftəri** rejimi əlavə edildi. Bu seçim serverə `admin` rolu ilə daxil olur və birbaşa native Borc Dəftərini açır.
+- Adi **Admin** girişində də yuxarı menyuda **Borc Dəftəri** görünür.
+- **Şifrəni yadda saxla və avtomatik daxil ol** seçimi əlavə edildi. Şifrə Android Keystore AES/GCM ilə şifrələnərək cihazda saxlanılır.
+- Tətbiq bağlanıb yenidən açılanda yadda saxlama aktivdirsə avtomatik giriş edir.
+- İstifadəçi **Çıxış** düyməsinə özü basanda avtomatik giriş söndürülür.
+
+## v5 dəyişiklikləri
+- Borc Dəftərində İşçi / Müştəri / Firma kateqoriyaları WhatsApp tipli sabit aşağı footer-a köçürüldü və tam eni 3 bərabər hissəyə bölür.
+- Borc Dəftərinin yuxarısındakı ayrıca mavi “Borc Dəftəri” keçid düyməsi ləğv edildi.
+- Əsas ekranların sol yuxarısına ☰ menyu əlavə edildi. Admin girişində menyuda “Terminallar / Zal”, “Borc Dəftəri”, “Mətbəx” görünür; digər rollarda yalnız icazəli əsas bölmə görünür.
+- “Çıxış” menyunun ən aşağı hissəsinə köçürüldü.
+- Android versiyası `versionCode 5`, `versionName 2.2.0-native-v5` oldu. Növbəti buraxılışlarda `versionCode` mütləq artırılmalıdır.
+
+### APK update haqqında vacib qeyd
+Android köhnə APK-nın üstünə yeni APK quraşdırmaq üçün həm `applicationId` eyni, həm `versionCode` daha böyük, həm də imza sertifikatı eyni olmalıdır. Bu layihədə `applicationId` dəyişməyib (`az.marakana.mobile`) və v5-də versionCode artırılıb. GitHub-da hər build üçün eyni signing key saxlanmalıdır; əks halda Android köhnə tətbiqi silməyi tələb edə bilər. v5 workflow-u `~/.android/debug.keystore` faylını `actions/cache` ilə sabit saxlayır və ilk v5 build-də bir dəfə signing key yaradır. Buna görə v5-dən sonrakı build-lər eyni cache/signing key ilə update kimi quraşdırıla bilər. Əvvəlki v4 APK başqa GitHub runner debug açarı ilə imzalanıbsa, v5-ə keçiddə bir dəfə silib yenidən quraşdırmaq lazım gələ bilər; bundan sonra versionCode artırılmaqla update axını davam edir.
+
+
+## v6 dəyişiklikləri
+- Borc Dəftəri ekranı daha tam enli edildi və müxtəlif cihazlarda daha yaxşı uyğunlaşması üçün kənar boşluqlar azaldıldı.
+- Alt kateqoriya paneli WhatsApp tərzində yeniləndi: ikonlu, tam enli, seçilən tab açıq boz rənglə vurğulanır.
+- Borc kateqoriyaları arasında sağa/sola sürüşdürmə əlavə edildi.
+- Borc Dəftərində soldan sürüşdürmə və menyu düyməsi ilə yan menyu açılır.
+- Android geri düyməsi ilə Tarixçə və digər alt ekranlardan əvvəlki ekrana qayıtmaq dəstəyi əlavə edildi.
+- Android versiyası `versionCode 6`, `versionName 2.3.0-native-v6` oldu.
