@@ -1174,21 +1174,12 @@ public class MainActivity extends Activity {
         String lastChange = record.optString("last_change", "").trim();
 
         StringBuilder message = new StringBuilder();
-        message.append("🔔 *BORC BİLDİRİŞİ*
-
-");
-        message.append("👤 *Ad Soyad:* ").append(name.isEmpty() ? "Müştəri" : name).append("
-");
-        message.append("💰 *Cari borc:* ").append(money(debt)).append("
-");
-        if (!lastChange.isEmpty()) message.append("🕒 *Son dəyişiklik:* ").append(lastChange).append("
-");
-        message.append("
-⚠️ *Xatırlatma:* Borcunuzu mümkün qədər tez ödəməyinizi xahiş edirik.
-");
-        message.append("🙏 Ödəniş etdikdən sonra məlumat verməyiniz kifayətdir.
-
-");
+        message.append("🔔 *BORC BİLDİRİŞİ*\n\n");
+        message.append("👤 *Ad Soyad:* ").append(name.isEmpty() ? "Müştəri" : name).append("\n");
+        message.append("💰 *Cari borc:* ").append(money(debt)).append("\n");
+        if (!lastChange.isEmpty()) message.append("🕒 *Son dəyişiklik:* ").append(lastChange).append("\n");
+        message.append("\n⚠️ *Xatırlatma:* Borcunuzu mümkün qədər tez ödəməyinizi xahiş edirik.\n");
+        message.append("🙏 Ödəniş etdikdən sonra məlumat verməyiniz kifayətdir.\n\n");
         message.append("🎮 *Marakana Game Center*");
 
         String url = "https://wa.me/" + phone + "?text=" + urlEncode(message.toString());

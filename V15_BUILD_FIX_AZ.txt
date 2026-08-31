@@ -1,0 +1,8 @@
+Marakana Mobile v15 BUILD FIX
+
+GitHub Actions compile xətası düzəldildi.
+Səbəb: WhatsApp borc bildirişi mətnində Java string sətir keçidləri səhv yazılmışdı.
+Düzəliş: sətir keçidləri Java üçün \n escape-ləri ilə yazıldı.
+
+versionCode: 15
+versionName: 2.9.0-native-v15
