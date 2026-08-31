@@ -810,11 +810,14 @@ public class MainActivity extends Activity {
                 row.addView(text(o.optString("name", ""), 15, TEXT, true), new LinearLayout.LayoutParams(0, dp(40), 1f));
                 row.addView(text("x" + o.optInt("qty", 0) + "  " + money(o.optDouble("total", 0)), 14, GREEN, true), new LinearLayout.LayoutParams(dp(135), dp(40)));
                 oc.addView(row);
-                Button remove = button("1 ədəd azalt", Color.rgb(255, 245, 239), ORANGE);
-                remove.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
-                final String itemName = o.optString("name", ""); final double unit = o.optDouble("unit_price", 0);
-                remove.setOnClickListener(v -> removeOrder(name, itemName, unit));
-                oc.addView(remove);
+                final String itemName = o.optString("name", "");
+                final double unit = o.optDouble("unit_price", 0);
+                if (canAdmin) {
+                    Button remove = button("1 ədəd azalt", Color.rgb(255, 245, 239), ORANGE);
+                    remove.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+                    remove.setOnClickListener(v -> confirmRemoveOrder(name, itemName, unit));
+                    oc.addView(remove);
+                }
                 body.addView(oc);
             }
         });
@@ -835,53 +838,108 @@ public class MainActivity extends Activity {
         }).show();
     }
 
+    private void confirmRemoveOrder(String station, String item, double unitPrice) {
+        if (!canAdmin) {
+            toast("Sifarişi azaltmaq üçün Admin icazəsi tələb olunur.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Sifarişi azalt")
+                .setMessage(item + " məhsulundan 1 ədəd azaltmaq istəyirsiniz?")
+                .setNegativeButton("Ləğv", null)
+                .setPositiveButton("Təsdiqlə", (dialog, which) -> removeOrder(station, item, unitPrice))
+                .show();
+    }
+
     private void removeOrder(String station, String item, double unitPrice) {
-        JSONObject p = new JSONObject(); try { p.put("station_name", station); p.put("name", item); p.put("unit_price", unitPrice); p.put("qty", 1); } catch(Exception ignored) {}
+        if (!canAdmin) {
+            toast("Sifarişi azaltmaq üçün Admin icazəsi tələb olunur.");
+            return;
+        }
+        JSONObject p = new JSONObject();
+        try {
+            p.put("station_name", station);
+            p.put("name", item);
+            p.put("unit_price", unitPrice);
+            p.put("qty", 1);
+        } catch(Exception ignored) {}
         postJson("/api/mobile/order/remove", p, r -> showStation(station));
     }
 
     private void showProducts(String station) {
         ScrollView sv = screenWithBody("Sifariş • " + station, true, () -> showStation(station));
         LinearLayout body = scrollBody(sv);
-        EditText search = input("Məhsul axtar"); body.addView(search); spacer(body, 10);
-        LinearLayout list = new LinearLayout(this); list.setOrientation(LinearLayout.VERTICAL); body.addView(list);
-        Map<String,Integer> quantities = new HashMap<>();
+        EditText search = input("Məhsul axtar");
+        body.addView(search);
+        spacer(body, 10);
+
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        body.addView(list);
         final JSONArray[] allProducts = {new JSONArray()};
 
-        Button send = button("Sifarişi göndər", GREEN, Color.WHITE); send.setVisibility(View.GONE); body.addView(send);
-        send.setOnClickListener(v -> {
-            JSONArray items = new JSONArray();
-            for (Map.Entry<String,Integer> e : quantities.entrySet()) if (e.getValue() > 0) { JSONObject x = new JSONObject(); try { x.put("barcode", e.getKey()); x.put("qty", e.getValue()); items.put(x); } catch(Exception ignored) {} }
-            if (items.length()==0) return;
-            JSONObject p = new JSONObject(); try { p.put("station_name", station); p.put("items", items); } catch(Exception ignored) {}
-            postJson("/api/mobile/order/batch_add", p, r -> showStation(station));
-        });
-
         loadJson("/api/mobile/products", result -> {
-            JSONArray products = result.optJSONArray("products"); allProducts[0] = products == null ? new JSONArray() : products;
+            JSONArray products = result.optJSONArray("products");
+            allProducts[0] = products == null ? new JSONArray() : products;
             Runnable render = () -> {
-                list.removeAllViews(); String q = search.getText().toString().trim().toLowerCase(Locale.ROOT);
-                for (int i=0;i<allProducts[0].length();i++) {
-                    JSONObject product = allProducts[0].optJSONObject(i); if (product==null) continue;
-                    String pn = product.optString("name", ""); if (!q.isEmpty() && !pn.toLowerCase(Locale.ROOT).contains(q)) continue;
-                    String barcode = product.optString("barcode", "");
-                    LinearLayout c = card(); LinearLayout top = new LinearLayout(this); top.setOrientation(LinearLayout.HORIZONTAL); top.setGravity(Gravity.CENTER_VERTICAL);
-                    top.addView(text(pn, 15, TEXT, true), new LinearLayout.LayoutParams(0, dp(44), 1f));
-                    top.addView(text(money(product.optDouble("price",0)), 14, GREEN, true), new LinearLayout.LayoutParams(dp(105), dp(44))); c.addView(top);
-                    TextView qty = text("Seçim: " + quantities.getOrDefault(barcode,0), 13, MUTED, true); c.addView(qty, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
-                    LinearLayout actions = new LinearLayout(this); actions.setOrientation(LinearLayout.HORIZONTAL);
-                    Button minus = button("−", CARD, ORANGE); Button plus = button("+", Color.rgb(234,247,241), GREEN);
-                    actions.addView(minus, new LinearLayout.LayoutParams(0, dp(44), 1f)); LinearLayout.LayoutParams pl=new LinearLayout.LayoutParams(0,dp(44),1f); pl.setMargins(dp(8),0,0,0); actions.addView(plus,pl); c.addView(actions);
-                    plus.setOnClickListener(v -> { quantities.put(barcode, quantities.getOrDefault(barcode,0)+1); qty.setText("Seçim: " + quantities.get(barcode)); send.setVisibility(View.VISIBLE); });
-                    minus.setOnClickListener(v -> { int nv=Math.max(0,quantities.getOrDefault(barcode,0)-1); quantities.put(barcode,nv); qty.setText("Seçim: "+nv); send.setVisibility(hasPositive(quantities)?View.VISIBLE:View.GONE); });
+                list.removeAllViews();
+                String q = search.getText().toString().trim().toLowerCase(Locale.ROOT);
+                for (int i = 0; i < allProducts[0].length(); i++) {
+                    JSONObject product = allProducts[0].optJSONObject(i);
+                    if (product == null) continue;
+                    final String productName = product.optString("name", "");
+                    if (!q.isEmpty() && !productName.toLowerCase(Locale.ROOT).contains(q)) continue;
+                    final String barcode = product.optString("barcode", "");
+                    final double price = product.optDouble("price", 0);
+
+                    LinearLayout c = card();
+                    LinearLayout top = new LinearLayout(this);
+                    top.setOrientation(LinearLayout.HORIZONTAL);
+                    top.setGravity(Gravity.CENTER_VERTICAL);
+                    top.addView(text(productName, 15, TEXT, true), new LinearLayout.LayoutParams(0, dp(48), 1f));
+                    top.addView(text(money(price), 14, GREEN, true), new LinearLayout.LayoutParams(dp(110), dp(48)));
+                    c.addView(top);
+
+                    TextView hint = text("Miqdar seçmək üçün toxun", 12, MUTED, true);
+                    c.addView(hint, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30)));
+                    c.setClickable(true);
+                    c.setFocusable(true);
+                    c.setOnClickListener(v -> showProductQuantityPicker(station, barcode, productName));
                     list.addView(c);
                 }
             };
-            search.addTextChangedListener(new SimpleTextWatcher(render)); render.run();
+            search.addTextChangedListener(new SimpleTextWatcher(render));
+            render.run();
         });
     }
 
-    private boolean hasPositive(Map<String,Integer> map) { for (Integer v: map.values()) if (v!=null && v>0) return true; return false; }
+    private void showProductQuantityPicker(String station, String barcode, String productName) {
+        String[] choices = new String[10];
+        for (int i = 0; i < choices.length; i++) choices[i] = (i + 1) + " ədəd";
+        new AlertDialog.Builder(this)
+                .setTitle(productName + " • Miqdar")
+                .setItems(choices, (dialog, which) -> addProductQuantity(station, barcode, which + 1))
+                .setNegativeButton("Ləğv", null)
+                .show();
+    }
+
+    private void addProductQuantity(String station, String barcode, int qty) {
+        if (qty < 1 || qty > 10) return;
+        JSONArray items = new JSONArray();
+        JSONObject item = new JSONObject();
+        JSONObject payload = new JSONObject();
+        try {
+            item.put("barcode", barcode);
+            item.put("qty", qty);
+            items.put(item);
+            payload.put("station_name", station);
+            payload.put("items", items);
+        } catch (Exception ignored) {}
+        postJson("/api/mobile/order/batch_add", payload, result -> {
+            toast(qty + " ədəd sifarişə əlavə edildi.");
+            showProducts(station);
+        });
+    }
 
     private void showDebt(String category) {
         currentBackAction = null;

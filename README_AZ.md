@@ -99,3 +99,10 @@ Android köhnə APK-nın üstünə yeni APK quraşdırmaq üçün həm `applicat
 - Zal, Mətbəx və Admin/Borc icazələri giriş zamanı eyni istifadəçi şifrəsi ilə arxa planda yoxlanılır; ayrıca admin şifrəsi tələb olunmur.
 - Bölmələr arasında keçiddə tətbiq həmin istifadəçinin eyni şifrəsi ilə uyğun mobil rola səssiz keçid edir və yeni sessiya yaradır.
 - Android versiyası `versionCode 11`, `versionName 2.6.0-native-v11` oldu.
+
+
+## v12 dəyişiklikləri
+- Sifariş əlavə etmə ekranında `+ / -` düymələri ləğv edildi. Məhsul kartına toxunanda 1–10 arası miqdar seçimi açılır və seçilən miqdar dərhal sifarişə əlavə edilir.
+- Cari sifarişlərdə `1 ədəd azalt` əməliyyatı yalnız Admin səlahiyyəti olan istifadəçiyə görünür.
+- Admin səlahiyyəti olan istifadəçi azalt düyməsinə basanda əməliyyat dərhal icra olunmur; əvvəl təsdiqləmə popup-u açılır, yalnız `Təsdiqlə` seçildikdən sonra 1 ədəd azaldılır.
+- Android versiyası `versionCode 12`, `versionName 2.7.0-native-v12` oldu.
