@@ -1,0 +1,16 @@
+MARAKANA MOBILE v5 UPDATE
+
+GitHub repo kökündə bu paketdəki 2 hissəni yenilə:
+1) app/  -> köhnə app/ qovluğunun yerinə
+2) .github/workflows/build-apk.yml -> mövcud workflow-un yerinə
+
+Sonra Actions -> Build Marakana Mobile Native v5 APK -> Run workflow.
+Artifact adı: MarakanaMobile-v5-update-apk
+APK adı: MarakanaMobile-v5.apk
+
+Versiya:
+versionCode 5
+versionName 2.2.0-native-v5
+applicationId az.marakana.mobile (dəyişməyib)
+
+Qeyd: v5 workflow ilk v5 build-də signing key yaradır və GitHub Actions cache-də saxlayır. v5-dən sonrakı versiyalarda versionCode-u artır və eyni signing cache key-i saxla.

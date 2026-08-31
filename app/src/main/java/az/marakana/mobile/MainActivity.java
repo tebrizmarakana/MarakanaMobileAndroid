@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.Base64;
@@ -18,7 +19,8 @@ import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
 import android.widget.EditText;
-import android.widget.HorizontalScrollView;
+import android.widget.FrameLayout;
+import android.widget.PopupWindow;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -76,6 +78,7 @@ public class MainActivity extends Activity {
     private static final int GREEN = Color.rgb(28, 133, 90);
     private static final int ORANGE = Color.rgb(181, 90, 37);
     private static final int BORDER = Color.rgb(216, 227, 238);
+    private static final int MENU_SCRIM = Color.argb(105, 18, 32, 46);
 
     private final ExecutorService io = Executors.newCachedThreadPool();
     private SharedPreferences prefs;
@@ -208,27 +211,101 @@ public class MainActivity extends Activity {
         shell.setPadding(dp(14), dp(12), dp(14), dp(14));
         content.addView(shell, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        LinearLayout header = new LinearLayout(this);
-        header.setOrientation(LinearLayout.HORIZONTAL);
-        header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(4), 0, dp(4), dp(10));
-        if (back) {
-            Button b = button("‹", CARD, TEXT);
-            b.setTextSize(26);
-            b.setLayoutParams(new LinearLayout.LayoutParams(dp(52), dp(46)));
-            b.setOnClickListener(v -> backAction.run());
-            header.addView(b);
-        }
-        TextView h = text(title, 21, TEXT, true);
-        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0, dp(48), 1f);
-        hp.setMargins(back ? dp(10) : 0, 0, 0, 0);
-        header.addView(h, hp);
+        LinearLayout header = buildMainHeader(title, back, backAction);
         shell.addView(header);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         shell.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         return scroll;
+    }
+
+    private LinearLayout buildMainHeader(String title, boolean back, Runnable backAction) {
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(4), 0, dp(4), dp(10));
+
+        if (back) {
+            Button b = button("‹", CARD, TEXT);
+            b.setTextSize(26);
+            b.setLayoutParams(new LinearLayout.LayoutParams(dp(52), dp(46)));
+            b.setOnClickListener(v -> { if (backAction != null) backAction.run(); });
+            header.addView(b);
+        } else if (!sessionToken.isEmpty()) {
+            Button menu = button("☰", CARD, TEXT);
+            menu.setTextSize(22);
+            menu.setContentDescription("Menyu");
+            menu.setLayoutParams(new LinearLayout.LayoutParams(dp(52), dp(46)));
+            menu.setOnClickListener(v -> showNavigationMenu());
+            header.addView(menu);
+        }
+
+        TextView h = text(title, 21, TEXT, true);
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        hp.setMargins((back || !sessionToken.isEmpty()) ? dp(10) : 0, 0, 0, 0);
+        header.addView(h, hp);
+        return header;
+    }
+
+    private void showNavigationMenu() {
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(Color.TRANSPARENT);
+
+        View scrim = new View(this);
+        scrim.setBackgroundColor(MENU_SCRIM);
+        overlay.addView(scrim, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(18), dp(22), dp(18), dp(18));
+        panel.setBackgroundColor(Color.WHITE);
+        panel.setElevation(dp(12));
+        FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams((int)(getResources().getDisplayMetrics().widthPixels * 0.82f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START);
+        overlay.addView(panel, panelLp);
+
+        TextView appTitle = text("Marakana Mobile", 22, TEXT, true);
+        panel.addView(appTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
+        TextView account = text((username.isEmpty() ? "İstifadəçi" : username) + "  •  " + roleLabel, 13, MUTED, true);
+        panel.addView(account, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
+        spacer(panel, 8);
+
+        final PopupWindow[] holder = new PopupWindow[1];
+        if (role.equals("admin")) {
+            addDrawerItem(panel, "Terminallar / Zal", () -> { holder[0].dismiss(); showTerminals(); });
+            addDrawerItem(panel, "Borc Dəftəri", () -> { holder[0].dismiss(); showDebt("İşçi"); });
+            addDrawerItem(panel, "Mətbəx", () -> { holder[0].dismiss(); showKitchen(); });
+        } else if (role.equals("kitchen")) {
+            addDrawerItem(panel, "Mətbəx", () -> { holder[0].dismiss(); showKitchen(); });
+        } else {
+            addDrawerItem(panel, "Terminallar / Zal", () -> { holder[0].dismiss(); showTerminals(); });
+        }
+
+        View flex = new View(this);
+        panel.addView(flex, new LinearLayout.LayoutParams(1, 0, 1f));
+
+        Button exit = button("Çıxış", Color.rgb(255, 246, 246), Color.rgb(176, 54, 54));
+        exit.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+        panel.addView(exit);
+
+        PopupWindow popup = new PopupWindow(overlay, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, true);
+        holder[0] = popup;
+        popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        popup.setOutsideTouchable(true);
+        scrim.setOnClickListener(v -> popup.dismiss());
+        exit.setOnClickListener(v -> { popup.dismiss(); logout(); });
+        popup.showAtLocation(content, Gravity.START | Gravity.TOP, 0, 0);
+    }
+
+    private void addDrawerItem(LinearLayout panel, String label, Runnable action) {
+        Button item = button(label, CARD, TEXT);
+        item.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        item.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) item.getLayoutParams();
+        lp.setMargins(0, 0, 0, dp(8));
+        item.setLayoutParams(lp);
+        item.setOnClickListener(v -> action.run());
+        panel.addView(item);
     }
 
     private LinearLayout scrollBody(ScrollView scroll) {
@@ -475,31 +552,6 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void addTopTabs(LinearLayout body, String active) {
-        HorizontalScrollView hsv = new HorizontalScrollView(this);
-        hsv.setHorizontalScrollBarEnabled(false);
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        hsv.addView(row);
-        body.addView(hsv, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
-
-        if (role.equals("admin") && adminDebtOnly) {
-            addTab(row, "Borc Dəftəri", true, () -> showDebt("İşçi"));
-        } else {
-            addTab(row, "Terminallar", active.equals("terminals"), this::showTerminals);
-            if (role.equals("admin")) addTab(row, "Borc Dəftəri", active.equals("debt"), () -> showDebt("İşçi"));
-            if (role.equals("admin")) addTab(row, "Mətbəx", active.equals("kitchen"), this::showKitchen);
-        }
-        Button out = smallButton("Çıxış", false);
-        out.setOnClickListener(v -> logout());
-        row.addView(out);
-    }
-
-    private void addTab(LinearLayout row, String label, boolean active, Runnable action) {
-        Button b = smallButton(label, active);
-        b.setOnClickListener(v -> action.run());
-        row.addView(b);
-    }
 
     private Button smallButton(String label, boolean active) {
         Button b = button(label, active ? BLUE : CARD, active ? Color.WHITE : TEXT);
@@ -511,7 +563,6 @@ public class MainActivity extends Activity {
     private void showTerminals() {
         ScrollView sv = screenWithBody("Terminallar", false, null);
         LinearLayout body = scrollBody(sv);
-        addTopTabs(body, "terminals");
         TextView status = text("Yüklənir…", 14, MUTED, false);
         body.addView(status, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
         loadJson("/api/mobile/terminals", result -> {
@@ -640,19 +691,69 @@ public class MainActivity extends Activity {
     private boolean hasPositive(Map<String,Integer> map) { for (Integer v: map.values()) if (v!=null && v>0) return true; return false; }
 
     private void showDebt(String category) {
-        ScrollView sv = screenWithBody("Borc Dəftəri", false, null);
-        LinearLayout body = scrollBody(sv); addTopTabs(body, "debt");
-        LinearLayout cats = new LinearLayout(this); cats.setOrientation(LinearLayout.HORIZONTAL); body.addView(cats, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
-        for (String c : new String[]{"İşçi","Müştəri","Firma"}) { Button b=smallButton(c,c.equals(category)); b.setOnClickListener(v->showDebt(c)); cats.addView(b); }
-        Button create = button("Yeni borclu yarat", BLUE, Color.WHITE); body.addView(create); create.setOnClickListener(v -> createDebtorDialog(category)); spacer(body,10);
-        EditText search = input("Ad, telefon və ya ID ilə axtar"); body.addView(search); spacer(body,10);
-        LinearLayout recordsHost = new LinearLayout(this); recordsHost.setOrientation(LinearLayout.VERTICAL); body.addView(recordsHost);
+        clear();
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(14), dp(12), dp(14), 0);
+        content.addView(shell, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        shell.addView(buildMainHeader("Borc Dəftəri", false, null));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        shell.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        LinearLayout body = scrollBody(scroll);
+        body.setPadding(dp(2), dp(4), dp(2), dp(14));
+
+        Button create = button("Yeni borclu yarat", BLUE, Color.WHITE);
+        body.addView(create);
+        create.setOnClickListener(v -> createDebtorDialog(category));
+        spacer(body, 10);
+
+        EditText search = input("Ad, telefon və ya ID ilə axtar");
+        body.addView(search);
+        spacer(body, 10);
+
+        LinearLayout recordsHost = new LinearLayout(this);
+        recordsHost.setOrientation(LinearLayout.VERTICAL);
+        body.addView(recordsHost);
+
+        shell.addView(buildDebtFooter(category), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(72)));
+
         loadJson("/api/mobile/debt/list?category=" + urlEncode(category), result -> {
-            JSONArray records = result.optJSONArray("records"); if (records==null) records=new JSONArray();
+            JSONArray records = result.optJSONArray("records");
+            if (records == null) records = new JSONArray();
             final JSONArray finalRecords = records;
             Runnable render = () -> renderDebtRecords(recordsHost, finalRecords, category, search.getText().toString());
-            search.addTextChangedListener(new SimpleTextWatcher(render)); render.run();
+            search.addTextChangedListener(new SimpleTextWatcher(render));
+            render.run();
         });
+    }
+
+    private LinearLayout buildDebtFooter(String activeCategory) {
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(dp(4), dp(8), dp(4), dp(8));
+        footer.setBackground(bg(Color.WHITE, 18, BORDER));
+        footer.setElevation(dp(8));
+
+        String[] categories = {"İşçi", "Müştəri", "Firma"};
+        for (int i = 0; i < categories.length; i++) {
+            String category = categories[i];
+            boolean active = category.equals(activeCategory);
+            Button tab = button(category, active ? Color.rgb(232, 243, 255) : Color.WHITE, active ? BLUE : MUTED);
+            tab.setTextSize(14);
+            tab.setLayoutParams(new LinearLayout.LayoutParams(0, dp(54), 1f));
+            LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) tab.getLayoutParams();
+            if (i > 0) lp.setMargins(dp(4), 0, 0, 0);
+            tab.setLayoutParams(lp);
+            if (active) tab.setBackground(bg(Color.rgb(232, 243, 255), 14, BLUE));
+            else tab.setBackground(bg(Color.WHITE, 14, Color.TRANSPARENT));
+            tab.setOnClickListener(v -> showDebt(category));
+            footer.addView(tab);
+        }
+        return footer;
     }
 
     private void renderDebtRecords(LinearLayout host, JSONArray records, String category, String query) {
@@ -689,7 +790,7 @@ public class MainActivity extends Activity {
         ScrollView sv=screenWithBody("Tarixçə",true,()->showDebt(record.optString("category","İşçi"))); LinearLayout body=scrollBody(sv); LinearLayout head=card();head.addView(text(record.optString("full_name",""),19,TEXT,true));head.addView(text("Cari borc: "+money(record.optDouble("total_debt",0)),15,GREEN,true),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(38)));body.addView(head); JSONArray h=record.optJSONArray("history"); if(h==null||h.length()==0){body.addView(empty("Tarixçə yoxdur."));return;} for(int i=0;i<h.length();i++){JSONObject x=h.optJSONObject(i);if(x==null)continue;LinearLayout c=card();c.addView(text(x.optString("action","Əməliyyat")+"  •  "+money(x.optDouble("amount",0)),15,TEXT,true));c.addView(text(x.optString("timestamp","")+"  •  Qalıq: "+money(x.optDouble("balance_after",0)),12,MUTED,true),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(34)));if(!x.optString("note","").isEmpty())c.addView(text(x.optString("note",""),13,MUTED,false));body.addView(c);} }
 
     private void showKitchen() {
-        ScrollView sv=screenWithBody("Mətbəx",false,null); LinearLayout body=scrollBody(sv); if(role.equals("admin"))addTopTabs(body,"kitchen"); else {Button out=button("Çıxış",CARD,TEXT);body.addView(out);out.setOnClickListener(v->logout());spacer(body,10);} loadJson("/api/mobile/kitchen/tickets",result->{JSONArray tickets=result.optJSONArray("tickets");if(tickets==null||tickets.length()==0){body.addView(empty("Mətbəx sifarişi yoxdur."));return;}for(int i=0;i<tickets.length();i++){JSONObject t=tickets.optJSONObject(i);if(t==null)continue;LinearLayout c=card();LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);row.addView(text(t.optString("station_name",""),18,TEXT,true),new LinearLayout.LayoutParams(0,dp(40),1f));row.addView(text(t.optString("status_label","Yeni"),14,t.optString("status","").equals("ready")?GREEN:BLUE,true),new LinearLayout.LayoutParams(dp(110),dp(40)));c.addView(row);c.addView(text(t.optString("created_at_text","")+"  •  "+t.optInt("total_qty",0)+" məhsul",12,MUTED,true),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(32)));JSONArray items=t.optJSONArray("items");if(items!=null)for(int j=0;j<items.length();j++){JSONObject it=items.optJSONObject(j);if(it!=null)c.addView(text("• "+it.optString("name","")+" x"+it.optInt("qty",1),14,TEXT,false),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(30)));}LinearLayout a=new LinearLayout(this);a.setOrientation(LinearLayout.HORIZONTAL);Button prep=button("Hazırlanır",Color.rgb(238,246,255),BLUE);Button ready=button("Hazırdır",Color.rgb(234,247,241),GREEN);a.addView(prep,new LinearLayout.LayoutParams(0,dp(46),1f));LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(0,dp(46),1f);rp.setMargins(dp(8),0,0,0);a.addView(ready,rp);c.addView(a);int id=t.optInt("id",0);prep.setOnClickListener(v->updateKitchen(id,"preparing"));ready.setOnClickListener(v->updateKitchen(id,"ready"));body.addView(c);}}); }
+        ScrollView sv=screenWithBody("Mətbəx",false,null); LinearLayout body=scrollBody(sv); loadJson("/api/mobile/kitchen/tickets",result->{JSONArray tickets=result.optJSONArray("tickets");if(tickets==null||tickets.length()==0){body.addView(empty("Mətbəx sifarişi yoxdur."));return;}for(int i=0;i<tickets.length();i++){JSONObject t=tickets.optJSONObject(i);if(t==null)continue;LinearLayout c=card();LinearLayout row=new LinearLayout(this);row.setOrientation(LinearLayout.HORIZONTAL);row.addView(text(t.optString("station_name",""),18,TEXT,true),new LinearLayout.LayoutParams(0,dp(40),1f));row.addView(text(t.optString("status_label","Yeni"),14,t.optString("status","").equals("ready")?GREEN:BLUE,true),new LinearLayout.LayoutParams(dp(110),dp(40)));c.addView(row);c.addView(text(t.optString("created_at_text","")+"  •  "+t.optInt("total_qty",0)+" məhsul",12,MUTED,true),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(32)));JSONArray items=t.optJSONArray("items");if(items!=null)for(int j=0;j<items.length();j++){JSONObject it=items.optJSONObject(j);if(it!=null)c.addView(text("• "+it.optString("name","")+" x"+it.optInt("qty",1),14,TEXT,false),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(30)));}LinearLayout a=new LinearLayout(this);a.setOrientation(LinearLayout.HORIZONTAL);Button prep=button("Hazırlanır",Color.rgb(238,246,255),BLUE);Button ready=button("Hazırdır",Color.rgb(234,247,241),GREEN);a.addView(prep,new LinearLayout.LayoutParams(0,dp(46),1f));LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(0,dp(46),1f);rp.setMargins(dp(8),0,0,0);a.addView(ready,rp);c.addView(a);int id=t.optInt("id",0);prep.setOnClickListener(v->updateKitchen(id,"preparing"));ready.setOnClickListener(v->updateKitchen(id,"ready"));body.addView(c);}}); }
 
     private void updateKitchen(int ticketId,String status){JSONObject p=new JSONObject();try{p.put("ticket_id",ticketId);p.put("status",status);}catch(Exception ignored){}postJson("/api/mobile/kitchen/ticket/update",p,r->showKitchen());}
 
