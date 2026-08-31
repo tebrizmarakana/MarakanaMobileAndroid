@@ -145,6 +145,13 @@ public class MainActivity extends Activity {
 
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
 
+    private int getStatusBarInset() {
+        int result = 0;
+        int resId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        if (resId > 0) result = getResources().getDimensionPixelSize(resId);
+        return result;
+    }
+
     private GradientDrawable bg(int color, int radius, int strokeColor) {
         GradientDrawable d = new GradientDrawable();
         d.setColor(color);
@@ -237,15 +244,76 @@ public class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
+        if (!back && !sessionToken.isEmpty()) installGlobalDrawerSwipe(scroll);
         shell.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         return scroll;
+    }
+
+    private void installGlobalDrawerSwipe(View target) {
+        final int flingThreshold = dp(64);
+        final int edgeThreshold = dp(42);
+        GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return true;
+            }
+
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                if (e1 == null || e2 == null) return false;
+                float dx = e2.getX() - e1.getX();
+                float dy = e2.getY() - e1.getY();
+                if (dx > flingThreshold && Math.abs(dx) > Math.abs(dy) && e1.getX() <= edgeThreshold) {
+                    showNavigationMenu();
+                    return true;
+                }
+                return false;
+            }
+        });
+        target.setOnTouchListener((v, event) -> {
+            detector.onTouchEvent(event);
+            return false;
+        });
+    }
+
+    private View buildChatGptMenuButton() {
+        FrameLayout outer = new FrameLayout(this);
+        outer.setBackground(bg(CARD, 18, BORDER));
+        outer.setElevation(dp(3));
+        outer.setClickable(true);
+        outer.setFocusable(true);
+        outer.setContentDescription("Menyu");
+        outer.setLayoutParams(new LinearLayout.LayoutParams(dp(52), dp(46)));
+
+        LinearLayout bars = new LinearLayout(this);
+        bars.setOrientation(LinearLayout.VERTICAL);
+        bars.setGravity(Gravity.CENTER_VERTICAL);
+        int padH = dp(15);
+        int padV = dp(10);
+        bars.setPadding(padH, padV, padH, padV);
+
+        int[] widths = {dp(18), dp(18), dp(12)};
+        for (int i = 0; i < widths.length; i++) {
+            View line = new View(this);
+            GradientDrawable d = new GradientDrawable();
+            d.setColor(TEXT);
+            d.setCornerRadius(dp(2));
+            line.setBackground(d);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(widths[i], dp(3));
+            if (i > 0) lp.topMargin = dp(5);
+            bars.addView(line, lp);
+        }
+
+        outer.addView(bars, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER));
+        outer.setOnClickListener(v -> showNavigationMenu());
+        return outer;
     }
 
     private LinearLayout buildMainHeader(String title, boolean back, Runnable backAction) {
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        header.setPadding(dp(4), 0, dp(4), dp(10));
+        header.setPadding(dp(4), getStatusBarInset() + dp(6), dp(4), dp(10));
 
         if (back) {
             Button b = button("‹", CARD, TEXT);
@@ -254,12 +322,7 @@ public class MainActivity extends Activity {
             b.setOnClickListener(v -> { if (backAction != null) backAction.run(); });
             header.addView(b);
         } else if (!sessionToken.isEmpty()) {
-            Button menu = button("☰", CARD, TEXT);
-            menu.setTextSize(22);
-            menu.setContentDescription("Menyu");
-            menu.setLayoutParams(new LinearLayout.LayoutParams(dp(52), dp(46)));
-            menu.setOnClickListener(v -> showNavigationMenu());
-            header.addView(menu);
+            header.addView(buildChatGptMenuButton());
         }
 
         TextView h = text(title, 21, TEXT, true);

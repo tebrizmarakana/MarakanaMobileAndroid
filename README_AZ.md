@@ -63,3 +63,15 @@ Android köhnə APK-nın üstünə yeni APK quraşdırmaq üçün həm `applicat
 - Borc Dəftərində soldan sürüşdürmə və menyu düyməsi ilə yan menyu açılır.
 - Android geri düyməsi ilə Tarixçə və digər alt ekranlardan əvvəlki ekrana qayıtmaq dəstəyi əlavə edildi.
 - Android versiyası `versionCode 6`, `versionName 2.3.0-native-v6` oldu.
+
+
+## v7 dəyişiklikləri
+- Başlıq və sol menyu düyməsinin yuxarı məsafəsi artırıldı ki, Android status bar (saat, batareya, bildiriş ikonları) üzərinə çıxmasın.
+- Üst hissə WhatsApp-a yaxın görünüş üçün aşağı salındı.
+- Android versiyası `versionCode 7`, `versionName 2.3.1-native-v7` oldu.
+
+
+## v8 dəyişiklikləri
+- Sol yuxarı menyu düyməsi ChatGPT stilinə yaxınlaşdırıldı: yazı əvəzinə modern 3-xətli ikon istifadə olunur.
+- Menyu əsas ekranlarda ChatGPT kimi soldan sağa sürüşdürmə ilə açılır.
+- Android versiyası `versionCode 8`, `versionName 2.4.0-native-v8` oldu.
