@@ -1,0 +1,10 @@
+MARAKANA MOBILE v17 UPDATE
+
+1. Bu paketin daxilindəkiləri GitHub repo-nun kökünə köhnə faylların üstünə yüklə.
+2. Commit changes et.
+3. Actions -> Build Marakana Mobile Native v17 APK -> Run workflow.
+4. Artifact: MarakanaMobile-v17-update-apk
+5. APK: MarakanaMobile-v17.apk
+
+versionCode 17
+versionName 3.0.0-native-v17

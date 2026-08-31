@@ -138,3 +138,10 @@ Android köhnə APK-nın üstünə yeni APK quraşdırmaq üçün həm `applicat
 - İstifadəçi `Seçimi default olaraq yadda saxla` seçərsə növbəti bildirişlər həmin WhatsApp tətbiqi ilə açılır.
 - Android 11+ paket görünürlüğü üçün WhatsApp və WhatsApp Business `<queries>` əlavə edildi.
 - `versionCode 16`, `versionName 3.0.0-native-v16`.
+
+
+## v17 dəyişiklikləri
+- Borclu əməliyyat pəncərəsində `Bildiriş göndər` düyməsinin altında `Zəng et` düyməsi əlavə edildi.
+- `Zəng et` seçiləndə borclunun/firmanın telefon nömrəsi sistemin adi Telefon tətbiqində açılır və istifadəçi normal zəng edə bilir.
+- Telefon nömrəsi yoxdursa xəbərdarlıq göstərilir.
+- Android versiyası `versionCode 17`, `versionName 3.0.1-native-v17` oldu.

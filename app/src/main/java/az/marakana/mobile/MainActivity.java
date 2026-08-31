@@ -1138,6 +1138,11 @@ public class MainActivity extends Activity {
         notifyLp.setMargins(0, dp(8), 0, 0);
         box.addView(notify, notifyLp);
 
+        Button call = button("Zəng et", Color.rgb(245, 247, 250), TEXT);
+        LinearLayout.LayoutParams callLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        callLp.setMargins(0, dp(8), 0, 0);
+        box.addView(call, callLp);
+
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(record.optString("full_name", "Borclu"))
                 .setView(box)
@@ -1160,7 +1165,26 @@ public class MainActivity extends Activity {
             dialog.dismiss();
             sendDebtNotificationWhatsApp(category, record);
         });
+        call.setOnClickListener(v -> {
+            dialog.dismiss();
+            callDebtContact(record);
+        });
         dialog.show();
+    }
+
+    private void callDebtContact(JSONObject record) {
+        String phone = record.optString("phone", "").trim();
+        if (phone.isEmpty()) {
+            toast("Bu qeyd üçün telefon nömrəsi yoxdur.");
+            return;
+        }
+        try {
+            String dialPhone = phone.replaceAll("[^0-9+]", "");
+            Intent intent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(dialPhone)));
+            startActivity(intent);
+        } catch (Exception ex) {
+            toast("Telefon tətbiqi açıla bilmədi.");
+        }
     }
 
     private void sendDebtNotificationWhatsApp(String category, JSONObject record) {
