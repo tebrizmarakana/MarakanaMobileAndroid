@@ -1081,18 +1081,37 @@ public class MainActivity extends Activity {
             for (int i=0; i<orders.length(); i++) {
                 JSONObject o = orders.optJSONObject(i); if (o == null) continue;
                 LinearLayout oc = card();
-                LinearLayout row = new LinearLayout(this); row.setOrientation(LinearLayout.HORIZONTAL); row.setGravity(Gravity.CENTER_VERTICAL);
-                row.addView(text(o.optString("name", ""), 15, TEXT, true), new LinearLayout.LayoutParams(0, dp(40), 1f));
-                row.addView(text("x" + o.optInt("qty", 0) + "  " + money(o.optDouble("total", 0)), 14, GREEN, true), new LinearLayout.LayoutParams(dp(135), dp(40)));
-                oc.addView(row);
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+
                 final String itemName = o.optString("name", "");
                 final double unit = o.optDouble("unit_price", 0);
+
+                row.addView(
+                        text(itemName, 15, TEXT, true),
+                        new LinearLayout.LayoutParams(0, dp(44), 1f)
+                );
+
+                TextView orderAmount = text(
+                        "x" + o.optInt("qty", 0) + "  " + money(o.optDouble("total", 0)),
+                        14,
+                        GREEN,
+                        true
+                );
+                orderAmount.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams amountLp = new LinearLayout.LayoutParams(dp(128), dp(44));
+                row.addView(orderAmount, amountLp);
+
                 if (canAdmin) {
-                    Button remove = button("1 ədəd azalt", Color.rgb(255, 245, 239), ORANGE);
-                    remove.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+                    Button remove = button("Azalt", Color.rgb(255, 245, 239), ORANGE);
+                    LinearLayout.LayoutParams removeLp = new LinearLayout.LayoutParams(dp(78), dp(40));
+                    removeLp.setMargins(dp(6), dp(2), 0, dp(2));
+                    row.addView(remove, removeLp);
                     remove.setOnClickListener(v -> confirmRemoveOrder(name, itemName, unit));
-                    oc.addView(remove);
                 }
+
+                oc.addView(row);
                 body.addView(oc);
             }
         });

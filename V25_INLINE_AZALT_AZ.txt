@@ -1,0 +1,9 @@
+MARAKANA MOBILE v25 — CARİ SİFARİŞDƏ INLINE AZALT
+
+- Admin / azalt icazəsi olan istifadəçidə böyük `1 ədəd azalt` düyməsi kartın altından çıxarıldı.
+- `Azalt` düyməsi məhsulun adı və məbləği ilə eyni sətirdə, ən sağda yerləşir.
+- İcazəsi olmayan istifadəçidə `Azalt` düyməsi görünmür.
+- `Azalt` basıldıqda əvvəlki kimi təsdiqləmə popup-u açılır; təsdiqdən sonra 1 ədəd azalır.
+- versionCode 25
+- versionName 3.4.2-native-v25
+- Daimi release signing sistemi saxlanılıb.
