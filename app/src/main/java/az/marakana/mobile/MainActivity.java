@@ -112,6 +112,8 @@ public class MainActivity extends Activity {
     private FrameLayout activeOrderCartButton = null;
     private String activeOrderCartStation = "";
     private Runnable currentBackAction = null;
+    private long lastExitBackPressedAt = 0L;
+    private static final long EXIT_BACK_INTERVAL_MS = 2000L;
     private PopupWindow activeNavigationPopup = null;
     private static final String[] DEBT_CATEGORIES = {"İşçi", "Müştəri", "Firma"};
     private static final String[] KITCHEN_CATEGORIES = {"Hazırlanır", "Hazırdır"};
@@ -150,15 +152,27 @@ public class MainActivity extends Activity {
     public void onBackPressed() {
         if (activeNavigationPopup != null && activeNavigationPopup.isShowing()) {
             activeNavigationPopup.dismiss();
+            lastExitBackPressedAt = 0L;
             return;
         }
+
         if (currentBackAction != null) {
             Runnable action = currentBackAction;
             currentBackAction = null;
+            lastExitBackPressedAt = 0L;
             action.run();
             return;
         }
-        super.onBackPressed();
+
+        long now = System.currentTimeMillis();
+        if (now - lastExitBackPressedAt <= EXIT_BACK_INTERVAL_MS) {
+            lastExitBackPressedAt = 0L;
+            super.onBackPressed();
+            return;
+        }
+
+        lastExitBackPressedAt = now;
+        toast("Proqramdan çıxmaq üçün geri düyməsinə bir daha basın.");
     }
 
     private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
@@ -1056,7 +1070,7 @@ public class MainActivity extends Activity {
                 ? s.optString("elapsed_label", "Aktiv")
                 : (s.optString("kind", "terminal").equals("table") ? "Masa bağlıdır" : "Açılmayıb");
 
-        TextView n = text(name, 18, TEXT, true);
+        TextView n = text(name, 18, active ? BLUE : TEXT, true);
         top.addView(n, new LinearLayout.LayoutParams(0, dp(48), 1f));
 
         TextView elapsed = text(stateText, 13, MUTED, true);

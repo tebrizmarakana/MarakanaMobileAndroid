@@ -1,0 +1,8 @@
+MARAKANA MOBILE v28 — AKTİV TERMİNAL ADI MAVİ
+
+- Vaxtı açılmış/aktiv terminalların adı mavi rəngdə göstərilir.
+- Vaxtı açılmamış terminalların adı əvvəlki tünd rəngdə qalır.
+- Dəqiqə və məbləğ göstəricilərinin mövcud düzülüşü dəyişməyib.
+- versionCode 28
+- versionName 3.4.5-native-v28
+- Daimi release signing sistemi saxlanılıb.
