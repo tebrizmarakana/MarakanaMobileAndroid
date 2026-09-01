@@ -1,0 +1,23 @@
+MARAKANA MOBILE v20 — BUILD FIX 2
+
+Bu build xətasının səbəbi Google Code Scanner import paketinin səhv yazılması idi.
+
+SƏHV:
+  com.google.android.gms.codescanner.*
+
+DÜZGÜN:
+  com.google.mlkit.vision.codescanner.*
+
+Həmçinin:
+  gradle.properties -> android.useAndroidX=true
+  workflow -> :app:assembleRelease
+
+VACİB: GitHub Actions logunda hələ `:app:assembleDebug` görünürsə,
+repo-dakı `.github/workflows/build-apk.yml` köhnədir.
+Bu paketdə kökdə ayrıca `build-apk.yml` qoyulub.
+GitHub-da `.github/workflows/build-apk.yml` faylını açıb onun məzmununu
+kökdəki `build-apk.yml` ilə TAM əvəz et və Commit et.
+
+Düzgün yoxlama:
+  Workflow adı: Build Marakana Mobile Native v20 RELEASE APK
+  Build komandası: gradle --no-daemon :app:assembleRelease
