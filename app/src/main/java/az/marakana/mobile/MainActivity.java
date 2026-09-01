@@ -637,7 +637,7 @@ public class MainActivity extends Activity {
 
     private void startQrServerScanner() {
         IntentIntegrator integrator = new IntentIntegrator(this);
-        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE_TYPES);
+        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
         integrator.setPrompt("Marakana proqramındakı Mobil Panel QR kodunu oxudun");
         integrator.setBeepEnabled(false);
         integrator.setBarcodeImageEnabled(false);
