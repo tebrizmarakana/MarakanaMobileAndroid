@@ -1,0 +1,26 @@
+MARAKANA MOBILE v20 — BUILD FIX
+
+GitHub logundakı konkret xəta:
+  android.useAndroidX property is not enabled
+
+Düzəliş:
+  gradle.properties -> android.useAndroidX=true
+
+VACİB — repo-da workflow hələ də köhnə debug build-dir.
+Logda bu sətir görünür:
+  gradle --no-daemon :app:assembleDebug
+
+Daimi signing üçün bu belə olmalıdır:
+  gradle --no-daemon :app:assembleRelease
+
+Ona görə `.github/workflows/build-apk.yml` faylını da bu paketdəki versiya ilə əvəz et.
+Ən etibarlı yol:
+  GitHub repo -> .github -> workflows -> build-apk.yml -> Edit (qələm)
+  sonra bu paketin `BUILD_APK_V20_RELEASE_BACKUP.yml` məzmununu tam kopyala-yapışdır -> Commit changes.
+
+Yoxlama:
+  Actions səhifəsində workflow adı `Build Marakana Mobile Native v20 RELEASE APK` olmalıdır.
+  Build logunda `:app:assembleRelease` görünməlidir.
+
+versionCode: 20
+versionName: 3.2.1-native-v20
