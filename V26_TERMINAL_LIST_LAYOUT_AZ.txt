@@ -1,0 +1,9 @@
+MARAKANA MOBILE v26 — TERMINAL SİYAHISI
+
+- Dəqiqə göstəricisi terminal adından dərhal sonra, eyni sətirdə göstərilir.
+- Nümunə: KABINET-1   168 dəq   63.30 AZN
+- Terminal kartındakı `Sifariş: 23` göstəricisi tam gizlədildi.
+- Məbləğ ən sağda qalır.
+- versionCode 26
+- versionName 3.4.3-native-v26
+- Daimi release signing sistemi saxlanılıb.

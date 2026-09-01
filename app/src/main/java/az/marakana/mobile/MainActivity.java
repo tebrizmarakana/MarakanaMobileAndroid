@@ -1045,16 +1045,41 @@ public class MainActivity extends Activity {
 
     private View stationCard(JSONObject s) {
         LinearLayout c = card();
-        LinearLayout top = new LinearLayout(this); top.setOrientation(LinearLayout.HORIZONTAL); top.setGravity(Gravity.CENTER_VERTICAL);
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+
         String name = s.optString("name", "Terminal");
-        TextView n = text(name, 18, TEXT, true); top.addView(n, new LinearLayout.LayoutParams(0, dp(40), 1f));
         boolean active = s.optBoolean("active", false);
-        TextView amount = text(String.format(Locale.US, "%.2f AZN", s.optDouble("current_total", 0)), 17, active ? GREEN : MUTED, true);
-        amount.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL); top.addView(amount, new LinearLayout.LayoutParams(dp(135), dp(40)));
+        String stateText = active
+                ? s.optString("elapsed_label", "Aktiv")
+                : (s.optString("kind", "terminal").equals("table") ? "Masa bağlıdır" : "Açılmayıb");
+
+        TextView n = text(name, 18, TEXT, true);
+        top.addView(n, new LinearLayout.LayoutParams(0, dp(48), 1f));
+
+        TextView elapsed = text(stateText, 13, MUTED, true);
+        elapsed.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams elapsedLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(48)
+        );
+        elapsedLp.setMargins(dp(10), 0, dp(12), 0);
+        top.addView(elapsed, elapsedLp);
+
+        TextView amount = text(
+                String.format(Locale.US, "%.2f AZN", s.optDouble("current_total", 0)),
+                17,
+                active ? GREEN : MUTED,
+                true
+        );
+        amount.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        top.addView(amount, new LinearLayout.LayoutParams(dp(135), dp(48)));
+
         c.addView(top);
-        TextView meta = text((active ? s.optString("elapsed_label", "Aktiv") : (s.optString("kind", "terminal").equals("table") ? "Masa bağlıdır" : "Açılmayıb")) + "  •  Sifariş: " + s.optInt("order_count", 0), 13, MUTED, true);
-        c.addView(meta, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
-        c.setClickable(true); c.setOnClickListener(v -> showStation(name));
+        c.setClickable(true);
+        c.setOnClickListener(v -> showStation(name));
         return c;
     }
 
