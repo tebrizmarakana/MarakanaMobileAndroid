@@ -32,8 +32,10 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.google.zxing.integration.android.IntentIntegrator;
-import com.google.zxing.integration.android.IntentResult;
+import com.google.android.gms.codescanner.GmsBarcodeScanner;
+import com.google.android.gms.codescanner.GmsBarcodeScannerOptions;
+import com.google.android.gms.codescanner.GmsBarcodeScanning;
+import com.google.mlkit.vision.barcode.common.Barcode;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -137,21 +139,6 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         io.shutdownNow();
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        IntentResult scanResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
-        if (scanResult != null) {
-            String scanned = scanResult.getContents();
-            if (scanned == null || scanned.trim().isEmpty()) {
-                toast("QR kod oxunması ləğv edildi.");
-                return;
-            }
-            connectToScannedServer(scanned);
-            return;
-        }
-        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override
@@ -636,13 +623,38 @@ public class MainActivity extends Activity {
     }
 
     private void startQrServerScanner() {
-        IntentIntegrator integrator = new IntentIntegrator(this);
-        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE);
-        integrator.setPrompt("Marakana proqramındakı Mobil Panel QR kodunu oxudun");
-        integrator.setBeepEnabled(false);
-        integrator.setBarcodeImageEnabled(false);
-        integrator.setOrientationLocked(false);
-        integrator.initiateScan();
+        try {
+            GmsBarcodeScannerOptions options = new GmsBarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                    .enableAutoZoom()
+                    .build();
+
+            GmsBarcodeScanner scanner = GmsBarcodeScanning.getClient(this, options);
+            toast("QR oxuyucu açılır…");
+
+            scanner.startScan()
+                    .addOnSuccessListener(barcode -> {
+                        String scanned = barcode == null ? "" : barcode.getRawValue();
+                        if (scanned == null || scanned.trim().isEmpty()) {
+                            toast("QR kodda məlumat tapılmadı.");
+                            return;
+                        }
+                        connectToScannedServer(scanned);
+                    })
+                    .addOnCanceledListener(() -> toast("QR kod oxunması ləğv edildi."))
+                    .addOnFailureListener(error -> {
+                        String detail = error == null || error.getMessage() == null
+                                ? ""
+                                : error.getMessage().trim();
+                        if (detail.isEmpty()) {
+                            toast("QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın.");
+                        } else {
+                            toast("QR oxuyucu açıla bilmədi: " + detail);
+                        }
+                    });
+        } catch (Throwable error) {
+            toast("QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın.");
+        }
     }
 
     private void connectToScannedServer(String scannedValue) {

@@ -161,3 +161,11 @@ Android köhnə APK-nın üstünə yeni APK quraşdırmaq üçün həm `applicat
 - Desktop Marakana proqramının Mobil Panel QR kodundakı `/mobile` linki avtomatik API server bazasına çevrilir.
 - `/api/mobile/ping` uğurlu olduqda server ünvanı yadda saxlanılır və Giriş ekranı açılır.
 - v18-dəki daimi signing secrets dəyişdirilmir və olduğu kimi istifadə olunur.
+
+
+## v20 düzəlişləri
+- QR kod oxuyucu köhnə ZXing IntentIntegrator-dan Google Code Scanner-a keçirildi.
+- QR düyməsinə toxunanda tətbiqin bağlanması probleminə qarşı scanner çağırışı təhlükəsiz error handling ilə quruldu.
+- QR yalnız QR_CODE formatını oxuyur və nəticədəki `/mobile` ünvanını API server bazasına çevirir.
+- versionCode 20, versionName 3.2.1-native-v20.
+- GitHub Actions mütləq `assembleRelease` işlətməlidir; v20 daimi Marakana release keystore ilə imzalanır.

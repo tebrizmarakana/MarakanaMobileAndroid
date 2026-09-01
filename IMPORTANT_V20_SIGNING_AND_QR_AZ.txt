@@ -1,0 +1,19 @@
+MARAKANA MOBILE v20 — VACİB
+
+1) QR crash düzəlişi:
+   Köhnə ZXing IntentIntegrator çıxarıldı və Google Code Scanner 16.1.0 istifadə olunur.
+   QR düyməsi artıq tətbiqi bağlamamalıdır; scanner xətası olsa tətbiq daxilində xəbərdarlıq göstərilir.
+
+2) Update/signing düzəlişi:
+   GitHub repo-da köhnə workflow `:app:assembleDebug` işlədirdisə, APK debug sertifikatı ilə yığılırdı.
+   Bu paketdə `.github/workflows/build-apk.yml` `:app:assembleRelease` işləyir və v18-də yaradılmış
+   daimi MARAKANA_KEYSTORE_* GitHub Secrets-lərindən istifadə edir.
+
+3) YOXLA:
+   GitHub Actions-da workflow adı belə görünməlidir:
+   `Build Marakana Mobile Native v20 RELEASE APK`
+   Əgər hələ `Build Marakana Mobile Native APK` görünürsə, `.github/workflows/build-apk.yml`
+   repo-da yenilənməyib.
+
+4) Cari telefondakı v19 debug-signed quraşdırmadırsa, v20 release-ə keçiddə SON DƏFƏ uninstall lazım olacaq.
+   v20 release qurulduqdan sonra v21, v22 və sonrakılar eyni release keystore ilə normal Update olacaq.
