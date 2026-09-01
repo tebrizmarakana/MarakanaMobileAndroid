@@ -1,0 +1,11 @@
+MARAKANA MOBILE v24 — SƏBƏT HEADER İKONU
+
+- Sifariş ekranındakı böyük Səbət düyməsi ləğv edildi.
+- `Sifariş • Kabinet ...` başlığı ilə üzbəüz, ekranın ən sağında yalnız səbət ikonu görünür.
+- Səbət boş olduqda qırmızı say badge-i gizlidir.
+- Məhsul səbətə əlavə ediləndə ikonun yuxarı sağında qırmızı badge-də ümumi məhsul sayı görünür.
+- Səbət ikonuna toxunanda səbət açılır; məhsullar yoxlanılır, miqdar dəyişdirilir/silinir və sonda təsdiqlənib sifariş göndərilir.
+- Hər terminalın səbəti ayrıdır.
+- versionCode 24
+- versionName 3.4.1-native-v24
+- Daimi release signing sistemi saxlanılıb.

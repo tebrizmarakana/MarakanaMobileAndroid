@@ -109,6 +109,8 @@ public class MainActivity extends Activity {
     private boolean canKitchen = false;
     private boolean canAdmin = false;
     private final Map<String, LinkedHashMap<String, OrderCartItem>> orderCarts = new HashMap<>();
+    private FrameLayout activeOrderCartButton = null;
+    private String activeOrderCartStation = "";
     private Runnable currentBackAction = null;
     private PopupWindow activeNavigationPopup = null;
     private static final String[] DEBT_CATEGORIES = {"İşçi", "Müştəri", "Firma"};
@@ -241,7 +243,11 @@ public class MainActivity extends Activity {
         root.addView(content, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
     }
 
-    private void clear() { content.removeAllViews(); }
+    private void clear() {
+        activeOrderCartButton = null;
+        activeOrderCartStation = "";
+        content.removeAllViews();
+    }
 
     private void setBusy(boolean value) {
         runOnUiThread(() -> busy.setVisibility(value ? View.VISIBLE : View.GONE));
@@ -263,6 +269,92 @@ public class MainActivity extends Activity {
         if (!back && !sessionToken.isEmpty()) installGlobalDrawerSwipe(scroll);
         shell.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         return scroll;
+    }
+
+    private ScrollView screenWithOrderCartHeader(String title, String station, Runnable backAction) {
+        currentBackAction = backAction;
+        clear();
+
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(14), dp(12), dp(14), dp(14));
+        content.addView(shell, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
+        LinearLayout header = buildMainHeader(title, true, backAction);
+        activeOrderCartStation = station;
+        activeOrderCartButton = buildOrderCartHeaderButton(station);
+        header.addView(activeOrderCartButton, new LinearLayout.LayoutParams(dp(52), dp(48)));
+        shell.addView(header);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        shell.addView(scroll, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+        ));
+        return scroll;
+    }
+
+    private FrameLayout buildOrderCartHeaderButton(String station) {
+        FrameLayout holder = new FrameLayout(this);
+        holder.setClickable(true);
+        holder.setFocusable(true);
+        holder.setContentDescription("Səbət");
+        holder.setBackgroundColor(Color.TRANSPARENT);
+
+        TextView icon = text("🛒", 25, TEXT, false);
+        icon.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(
+                dp(46),
+                dp(46),
+                Gravity.CENTER
+        );
+        holder.addView(icon, iconLp);
+
+        TextView badge = text("", 10, Color.WHITE, true);
+        badge.setTag("order_cart_badge");
+        badge.setGravity(Gravity.CENTER);
+        badge.setMinWidth(dp(20));
+        badge.setMinHeight(dp(20));
+        badge.setPadding(dp(4), 0, dp(4), 0);
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setColor(Color.rgb(220, 45, 55));
+        badgeBg.setCornerRadius(dp(20));
+        badge.setBackground(badgeBg);
+
+        FrameLayout.LayoutParams badgeLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(20),
+                Gravity.TOP | Gravity.END
+        );
+        badgeLp.setMargins(0, 0, 0, 0);
+        holder.addView(badge, badgeLp);
+
+        holder.setOnClickListener(v -> showOrderCart(station));
+        updateOrderCartHeaderBadge(station);
+        return holder;
+    }
+
+    private void updateOrderCartHeaderBadge(String station) {
+        if (activeOrderCartButton == null) return;
+        if (!station.equals(activeOrderCartStation)) return;
+
+        View badgeView = activeOrderCartButton.findViewWithTag("order_cart_badge");
+        if (!(badgeView instanceof TextView)) return;
+
+        TextView badge = (TextView) badgeView;
+        int count = cartTotalQty(station);
+        if (count <= 0) {
+            badge.setVisibility(View.GONE);
+            badge.setText("");
+        } else {
+            badge.setVisibility(View.VISIBLE);
+            badge.setText(count > 99 ? "99+" : String.valueOf(count));
+        }
     }
 
     private void installGlobalDrawerSwipe(View target) {
@@ -1077,13 +1169,12 @@ public class MainActivity extends Activity {
     }
 
     private void showProducts(String station) {
-        ScrollView sv = screenWithBody("Sifariş • " + station, true, () -> showStation(station));
+        ScrollView sv = screenWithOrderCartHeader(
+                "Sifariş • " + station,
+                station,
+                () -> showStation(station)
+        );
         LinearLayout body = scrollBody(sv);
-
-        Button cartButton = button(cartButtonLabel(station), GREEN, Color.WHITE);
-        body.addView(cartButton);
-        cartButton.setOnClickListener(v -> showOrderCart(station));
-        spacer(body, 10);
 
         EditText search = input("Məhsul axtar");
         body.addView(search);
@@ -1101,7 +1192,7 @@ public class MainActivity extends Activity {
             final Runnable[] productRender = new Runnable[1];
             productRender[0] = () -> {
                 list.removeAllViews();
-                cartButton.setText(cartButtonLabel(station));
+                updateOrderCartHeaderBadge(station);
                 String q = search.getText().toString().trim().toLowerCase(Locale.ROOT);
                 for (int i = 0; i < allProducts[0].length(); i++) {
                     JSONObject product = allProducts[0].optJSONObject(i);
@@ -1130,7 +1221,7 @@ public class MainActivity extends Activity {
                     c.setOnClickListener(v -> showProductQuantityPicker(
                             station, barcode, productName, price,
                             () -> {
-                                cartButton.setText(cartButtonLabel(station));
+                                updateOrderCartHeaderBadge(station);
                                 if (productRender[0] != null) productRender[0].run();
                             }
                     ));
