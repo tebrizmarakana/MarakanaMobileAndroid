@@ -799,9 +799,75 @@ public class MainActivity extends Activity {
         tp.setMargins(0, dp(12), 0, 0);
         body.addView(t, tp);
 
-        EditText user = input("İstifadəçi adı");
-        user.setText(username);
-        body.addView(user);
+        Spinner userSpin = new Spinner(this);
+        userSpin.setBackground(bg(CARD, 14, BORDER));
+        List<String> loginUsernames = new ArrayList<>();
+        List<String> loginUserLabels = new ArrayList<>();
+        loginUserLabels.add("İstifadəçilər yüklənir…");
+        ArrayAdapter<String> userAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, loginUserLabels);
+        userSpin.setAdapter(userAdapter);
+        LinearLayout.LayoutParams usp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
+        body.addView(userSpin, usp);
+
+        TextView userHint = text("PC proqramındakı mobil icazəli istifadəçilər avtomatik yüklənir.", 12, MUTED, false);
+        LinearLayout.LayoutParams uhp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34));
+        uhp.setMargins(dp(4), dp(2), 0, 0);
+        body.addView(userHint, uhp);
+
+        io.execute(() -> {
+            try {
+                JSONObject usersResult = request(serverBase, "/api/mobile/users", "GET", null, "");
+                JSONArray usersArray = usersResult.optJSONArray("users");
+                List<String> loadedUsernames = new ArrayList<>();
+                List<String> loadedLabels = new ArrayList<>();
+                if (usersArray != null) {
+                    for (int i = 0; i < usersArray.length(); i++) {
+                        JSONObject item = usersArray.optJSONObject(i);
+                        if (item == null) continue;
+                        String itemUsername = item.optString("username", "").trim();
+                        if (itemUsername.isEmpty()) continue;
+                        String fullName = item.optString("full_name", "").trim();
+                        String label = fullName.isEmpty() || fullName.equalsIgnoreCase(itemUsername)
+                                ? itemUsername
+                                : fullName + " (" + itemUsername + ")";
+                        loadedUsernames.add(itemUsername);
+                        loadedLabels.add(label);
+                    }
+                }
+                runOnUiThread(() -> {
+                    loginUsernames.clear();
+                    loginUsernames.addAll(loadedUsernames);
+                    loginUserLabels.clear();
+                    if (loadedLabels.isEmpty()) {
+                        loginUserLabels.add("Mobil giriş icazəli istifadəçi tapılmadı");
+                        userHint.setText("PC proqramında istifadəçiyə Mobil Panel icazəsi verilməlidir.");
+                    } else {
+                        loginUserLabels.addAll(loadedLabels);
+                        userHint.setText("İstifadəçini siyahıdan seçin.");
+                    }
+                    userAdapter.notifyDataSetChanged();
+
+                    if (!username.isEmpty() && !loginUsernames.isEmpty()) {
+                        for (int i = 0; i < loginUsernames.size(); i++) {
+                            if (username.equalsIgnoreCase(loginUsernames.get(i))) {
+                                userSpin.setSelection(i);
+                                break;
+                            }
+                        }
+                    }
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> {
+                    loginUsernames.clear();
+                    loginUserLabels.clear();
+                    loginUserLabels.add("İstifadəçilər yüklənmədi");
+                    userAdapter.notifyDataSetChanged();
+                    userHint.setText("Desktop proqramı v1250+ olmalıdır və serverə əlçatan olmalıdır.");
+                    toast("PC istifadəçi siyahısı alınmadı.");
+                });
+            }
+        });
+
         EditText pass = input("Şifrə");
         pass.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         String rememberedPassword = prefs.getBoolean(KEY_AUTO_LOGIN, false) ? loadSavedPassword() : "";
@@ -845,12 +911,16 @@ public class MainActivity extends Activity {
         server.setOnClickListener(v -> showServerSetup());
 
         login.setOnClickListener(v -> {
-            String u = user.getText().toString().trim();
+            int userPosition = userSpin.getSelectedItemPosition();
+            if (userPosition < 0 || userPosition >= loginUsernames.size()) {
+                toast("İstifadəçini siyahıdan seçin.");
+                return;
+            }
+            String u = loginUsernames.get(userPosition);
             String p = pass.getText().toString();
             int rolePosition = roleSpin.getSelectedItemPosition();
             String selectedRole = rolePosition == 1 ? "kitchen" : (rolePosition == 2 || rolePosition == 3) ? "admin" : "hall";
             boolean selectedDebtOnly = rolePosition == 3;
-            if (u.isEmpty()) { toast("İstifadəçi adını yazın."); return; }
             if (p.isEmpty()) { toast("Şifrəni yazın."); return; }
             performLogin(u, p, selectedRole, selectedDebtOnly, remember.isChecked(), true);
         });

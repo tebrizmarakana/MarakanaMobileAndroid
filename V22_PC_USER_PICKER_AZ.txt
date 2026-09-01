@@ -1,0 +1,10 @@
+MARAKANA MOBILE v22 — PC İSTİFADƏÇİ SİYAHISI
+
+- Giriş ekranında istifadəçi adını əl ilə yazmaq əvəzinə siyahıdan seçirsən.
+- Siyahı desktop v1250-dəki /api/mobile/users endpoint-dən gəlir.
+- Yalnız aktiv və ən az bir Mobil Panel icazəsi olan PC istifadəçiləri göstərilir.
+- Şifrə yenə istifadəçinin öz şifrəsidir.
+- Mövcud Zal / Mətbəx / Admin / Borc Dəftəri rol seçimi saxlanılıb.
+- versionCode 22
+- versionName 3.3.0-native-v22
+- Daimi release signing sistemi saxlanılıb.
