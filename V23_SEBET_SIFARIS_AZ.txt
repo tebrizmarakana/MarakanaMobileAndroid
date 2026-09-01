@@ -1,0 +1,11 @@
+MARAKANA MOBILE v23 — SƏBƏT SİSTEMİ
+
+- Məhsula toxunanda 1–10 arası miqdar seçilir və sifariş dərhal serverə getmir, səbətə düşür.
+- Səbət düyməsində ümumi ədəd və yekun məbləğ görünür.
+- Səbətdə məhsulları yoxlamaq, miqdarı dəyişmək, ayrı məhsulu silmək və bütün səbəti təmizləmək olur.
+- Sonda `Sifarişi göndər` basılır, təsdiqləmə popup-u açılır və yalnız təsdiqdən sonra bütün səbət bir dəfəlik batch sifariş kimi göndərilir.
+- Hər terminalın səbəti ayrıdır.
+- Sifariş uğurla göndəriləndən sonra həmin terminalın səbəti avtomatik təmizlənir.
+- versionCode 23
+- versionName 3.4.0-native-v23
+- Daimi release signing sistemi saxlanılıb.

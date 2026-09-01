@@ -57,6 +57,7 @@ import android.security.keystore.KeyProperties;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -107,6 +108,7 @@ public class MainActivity extends Activity {
     private boolean canHall = false;
     private boolean canKitchen = false;
     private boolean canAdmin = false;
+    private final Map<String, LinkedHashMap<String, OrderCartItem>> orderCarts = new HashMap<>();
     private Runnable currentBackAction = null;
     private PopupWindow activeNavigationPopup = null;
     private static final String[] DEBT_CATEGORIES = {"İşçi", "Müştəri", "Firma"};
@@ -1047,9 +1049,42 @@ public class MainActivity extends Activity {
         postJson("/api/mobile/order/remove", p, r -> showStation(station));
     }
 
+    private LinkedHashMap<String, OrderCartItem> cartForStation(String station) {
+        LinkedHashMap<String, OrderCartItem> cart = orderCarts.get(station);
+        if (cart == null) {
+            cart = new LinkedHashMap<>();
+            orderCarts.put(station, cart);
+        }
+        return cart;
+    }
+
+    private int cartTotalQty(String station) {
+        int total = 0;
+        for (OrderCartItem item : cartForStation(station).values()) total += item.qty;
+        return total;
+    }
+
+    private double cartTotalAmount(String station) {
+        double total = 0;
+        for (OrderCartItem item : cartForStation(station).values()) total += item.price * item.qty;
+        return total;
+    }
+
+    private String cartButtonLabel(String station) {
+        int qty = cartTotalQty(station);
+        if (qty <= 0) return "🛒 Səbət";
+        return "🛒 Səbət • " + qty + " ədəd • " + money(cartTotalAmount(station));
+    }
+
     private void showProducts(String station) {
         ScrollView sv = screenWithBody("Sifariş • " + station, true, () -> showStation(station));
         LinearLayout body = scrollBody(sv);
+
+        Button cartButton = button(cartButtonLabel(station), GREEN, Color.WHITE);
+        body.addView(cartButton);
+        cartButton.setOnClickListener(v -> showOrderCart(station));
+        spacer(body, 10);
+
         EditText search = input("Məhsul axtar");
         body.addView(search);
         spacer(body, 10);
@@ -1064,6 +1099,7 @@ public class MainActivity extends Activity {
             allProducts[0] = products == null ? new JSONArray() : products;
             Runnable render = () -> {
                 list.removeAllViews();
+                cartButton.setText(cartButtonLabel(station));
                 String q = search.getText().toString().trim().toLowerCase(Locale.ROOT);
                 for (int i = 0; i < allProducts[0].length(); i++) {
                     JSONObject product = allProducts[0].optJSONObject(i);
@@ -1081,11 +1117,21 @@ public class MainActivity extends Activity {
                     top.addView(text(money(price), 14, GREEN, true), new LinearLayout.LayoutParams(dp(110), dp(48)));
                     c.addView(top);
 
-                    TextView hint = text("Miqdar seçmək üçün toxun", 12, MUTED, true);
+                    OrderCartItem current = cartForStation(station).get(barcode);
+                    String hintText = current == null
+                            ? "Miqdar seçib səbətə əlavə etmək üçün toxun"
+                            : "Səbətdə: " + current.qty + " ədəd • Miqdarı dəyişmək üçün toxun";
+                    TextView hint = text(hintText, 12, current == null ? MUTED : GREEN, true);
                     c.addView(hint, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30)));
                     c.setClickable(true);
                     c.setFocusable(true);
-                    c.setOnClickListener(v -> showProductQuantityPicker(station, barcode, productName));
+                    c.setOnClickListener(v -> showProductQuantityPicker(
+                            station, barcode, productName, price,
+                            () -> {
+                                cartButton.setText(cartButtonLabel(station));
+                                render.run();
+                            }
+                    ));
                     list.addView(c);
                 }
             };
@@ -1094,31 +1140,179 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void showProductQuantityPicker(String station, String barcode, String productName) {
+    private void showProductQuantityPicker(
+            String station,
+            String barcode,
+            String productName,
+            double price,
+            Runnable onChanged
+    ) {
         String[] choices = new String[10];
         for (int i = 0; i < choices.length; i++) choices[i] = (i + 1) + " ədəd";
-        new AlertDialog.Builder(this)
+
+        OrderCartItem existing = cartForStation(station).get(barcode);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
                 .setTitle(productName + " • Miqdar")
-                .setItems(choices, (dialog, which) -> addProductQuantity(station, barcode, which + 1))
+                .setItems(choices, (dialog, which) -> {
+                    putProductInCart(station, barcode, productName, price, which + 1);
+                    toast((which + 1) + " ədəd səbətə əlavə edildi.");
+                    if (onChanged != null) onChanged.run();
+                })
+                .setNegativeButton("Ləğv", null);
+
+        if (existing != null) {
+            builder.setNeutralButton("Səbətdən sil", (dialog, which) -> {
+                cartForStation(station).remove(barcode);
+                toast(productName + " səbətdən silindi.");
+                if (onChanged != null) onChanged.run();
+            });
+        }
+        builder.show();
+    }
+
+    private void putProductInCart(String station, String barcode, String name, double price, int qty) {
+        if (qty < 1 || qty > 10) return;
+        LinkedHashMap<String, OrderCartItem> cart = cartForStation(station);
+        OrderCartItem existing = cart.get(barcode);
+        if (existing == null) {
+            cart.put(barcode, new OrderCartItem(barcode, name, price, qty));
+        } else {
+            existing.name = name;
+            existing.price = price;
+            existing.qty = qty;
+        }
+    }
+
+    private void showOrderCart(String station) {
+        ScrollView sv = screenWithBody("Səbət • " + station, true, () -> showProducts(station));
+        LinearLayout body = scrollBody(sv);
+        LinkedHashMap<String, OrderCartItem> cart = cartForStation(station);
+
+        if (cart.isEmpty()) {
+            body.addView(empty("Səbət boşdur."));
+            spacer(body, 12);
+            Button products = button("Məhsullara bax", BLUE, Color.WHITE);
+            body.addView(products);
+            products.setOnClickListener(v -> showProducts(station));
+            return;
+        }
+
+        LinearLayout summary = card();
+        summary.addView(text("Sifariş xülasəsi", 18, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+        summary.addView(
+                text(cartTotalQty(station) + " ədəd • Yekun: " + money(cartTotalAmount(station)), 15, GREEN, true),
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36))
+        );
+        body.addView(summary);
+
+        for (OrderCartItem item : new ArrayList<>(cart.values())) {
+            LinearLayout c = card();
+
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.addView(text(item.name, 15, TEXT, true), new LinearLayout.LayoutParams(0, dp(42), 1f));
+            TextView qtyTotal = text("x" + item.qty + "  " + money(item.price * item.qty), 14, GREEN, true);
+            qtyTotal.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+            row.addView(qtyTotal, new LinearLayout.LayoutParams(dp(150), dp(42)));
+            c.addView(row);
+
+            TextView unit = text("1 ədəd: " + money(item.price), 12, MUTED, false);
+            c.addView(unit, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)));
+
+            LinearLayout actions = new LinearLayout(this);
+            actions.setOrientation(LinearLayout.HORIZONTAL);
+
+            Button edit = button("Miqdarı dəyiş", Color.rgb(238, 246, 255), BLUE);
+            Button remove = button("Sil", Color.rgb(255, 245, 239), ORANGE);
+            actions.addView(edit, new LinearLayout.LayoutParams(0, dp(44), 1f));
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(dp(92), dp(44));
+            rlp.setMargins(dp(8), 0, 0, 0);
+            actions.addView(remove, rlp);
+            c.addView(actions);
+
+            edit.setOnClickListener(v -> showProductQuantityPicker(
+                    station, item.barcode, item.name, item.price,
+                    () -> showOrderCart(station)
+            ));
+            remove.setOnClickListener(v -> {
+                cartForStation(station).remove(item.barcode);
+                showOrderCart(station);
+            });
+
+            body.addView(c);
+        }
+
+        spacer(body, 6);
+        Button send = button(
+                "Sifarişi göndər • " + money(cartTotalAmount(station)),
+                GREEN,
+                Color.WHITE
+        );
+        body.addView(send);
+        send.setOnClickListener(v -> confirmSendOrderCart(station));
+
+        spacer(body, 10);
+        Button continueShopping = button("Məhsul əlavə etməyə davam et", CARD, TEXT);
+        body.addView(continueShopping);
+        continueShopping.setOnClickListener(v -> showProducts(station));
+
+        spacer(body, 10);
+        Button clearCart = button("Səbəti təmizlə", Color.rgb(255, 245, 239), ORANGE);
+        body.addView(clearCart);
+        clearCart.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Səbəti təmizlə")
+                .setMessage("Səbətdəki bütün məhsulları silmək istəyirsiniz?")
                 .setNegativeButton("Ləğv", null)
+                .setPositiveButton("Təmizlə", (d, w) -> {
+                    cartForStation(station).clear();
+                    showOrderCart(station);
+                })
+                .show());
+    }
+
+    private void confirmSendOrderCart(String station) {
+        if (cartForStation(station).isEmpty()) {
+            toast("Səbət boşdur.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Sifarişi göndər")
+                .setMessage(
+                        station + "\n\n" +
+                        "Miqdar: " + cartTotalQty(station) + " ədəd\n" +
+                        "Yekun: " + money(cartTotalAmount(station)) +
+                        "\n\nSifarişi terminala göndərmək istəyirsiniz?"
+                )
+                .setNegativeButton("Ləğv", null)
+                .setPositiveButton("Göndər", (dialog, which) -> sendOrderCart(station))
                 .show();
     }
 
-    private void addProductQuantity(String station, String barcode, int qty) {
-        if (qty < 1 || qty > 10) return;
+    private void sendOrderCart(String station) {
+        LinkedHashMap<String, OrderCartItem> cart = cartForStation(station);
+        if (cart.isEmpty()) {
+            toast("Səbət boşdur.");
+            return;
+        }
+
         JSONArray items = new JSONArray();
-        JSONObject item = new JSONObject();
         JSONObject payload = new JSONObject();
         try {
-            item.put("barcode", barcode);
-            item.put("qty", qty);
-            items.put(item);
+            for (OrderCartItem cartItem : cart.values()) {
+                JSONObject item = new JSONObject();
+                item.put("barcode", cartItem.barcode);
+                item.put("qty", cartItem.qty);
+                items.put(item);
+            }
             payload.put("station_name", station);
             payload.put("items", items);
         } catch (Exception ignored) {}
+
         postJson("/api/mobile/order/batch_add", payload, result -> {
-            toast(qty + " ədəd sifarişə əlavə edildi.");
-            showProducts(station);
+            cart.clear();
+            toast("Sifariş göndərildi.");
+            showStation(station);
         });
     }
 
@@ -1681,6 +1875,7 @@ public class MainActivity extends Activity {
         canHall = false;
         canKitchen = false;
         canAdmin = false;
+        orderCarts.clear();
         prefs.edit().putBoolean(KEY_AUTO_LOGIN, false).apply();
         if (sessionToken.isEmpty()) { showLogin(); return; }
         String old=sessionToken; sessionToken=""; io.execute(()->{try{request(serverBase,"/api/mobile/logout","POST",new JSONObject(),old);}catch(Exception ignored){}runOnUiThread(this::showLogin);});
@@ -1707,6 +1902,20 @@ public class MainActivity extends Activity {
         URL url=new URL(base+path); HttpURLConnection c=(HttpURLConnection)url.openConnection(); c.setConnectTimeout(7000);c.setReadTimeout(10000);c.setRequestMethod(method);c.setRequestProperty("Accept","application/json"); if(token!=null&&!token.isEmpty())c.setRequestProperty("X-Session-Token",token);
         if(payload!=null&&method.equals("POST")){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");byte[] bytes=payload.toString().getBytes(StandardCharsets.UTF_8);try(OutputStream os=c.getOutputStream()){os.write(bytes);}}
         int code=c.getResponseCode();InputStream is=(code>=200&&code<300)?c.getInputStream():c.getErrorStream();StringBuilder sb=new StringBuilder();if(is!=null)try(BufferedReader br=new BufferedReader(new InputStreamReader(is,StandardCharsets.UTF_8))){String line;while((line=br.readLine())!=null)sb.append(line);}String raw=sb.toString();JSONObject obj=raw.isEmpty()?new JSONObject():new JSONObject(raw);if(code<200||code>=300){String err=obj.optString("error","HTTP "+code);throw new Exception(code+": "+err);}return obj;
+    }
+
+    private static class OrderCartItem {
+        final String barcode;
+        String name;
+        double price;
+        int qty;
+
+        OrderCartItem(String barcode, String name, double price, int qty) {
+            this.barcode = barcode == null ? "" : barcode;
+            this.name = name == null ? "" : name;
+            this.price = price;
+            this.qty = qty;
+        }
     }
 
     private static class SimpleTextWatcher implements android.text.TextWatcher {
