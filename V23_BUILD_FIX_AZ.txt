@@ -1,0 +1,7 @@
+MARAKANA MOBILE v23 — BUILD FIX
+
+GitHub compile xətası düzəldildi:
+variable render might not have been initialized
+
+Məhsul siyahısının yenilənmə callback-i təhlükəsiz holder vasitəsilə çağırılır.
+Version dəyişməyib: versionCode 23 / versionName 3.4.0-native-v23.

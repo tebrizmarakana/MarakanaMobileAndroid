@@ -1097,7 +1097,9 @@ public class MainActivity extends Activity {
         loadJson("/api/mobile/products", result -> {
             JSONArray products = result.optJSONArray("products");
             allProducts[0] = products == null ? new JSONArray() : products;
-            Runnable render = () -> {
+
+            final Runnable[] productRender = new Runnable[1];
+            productRender[0] = () -> {
                 list.removeAllViews();
                 cartButton.setText(cartButtonLabel(station));
                 String q = search.getText().toString().trim().toLowerCase(Locale.ROOT);
@@ -1129,14 +1131,16 @@ public class MainActivity extends Activity {
                             station, barcode, productName, price,
                             () -> {
                                 cartButton.setText(cartButtonLabel(station));
-                                render.run();
+                                if (productRender[0] != null) productRender[0].run();
                             }
                     ));
                     list.addView(c);
                 }
             };
-            search.addTextChangedListener(new SimpleTextWatcher(render));
-            render.run();
+            search.addTextChangedListener(new SimpleTextWatcher(() -> {
+                if (productRender[0] != null) productRender[0].run();
+            }));
+            productRender[0].run();
         });
     }
 
