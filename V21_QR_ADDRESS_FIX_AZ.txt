@@ -1,0 +1,11 @@
+MARAKANA MOBILE v21 — QR SERVER ADDRESS FIX
+
+Dəyişikliklər:
+- QR oxunan kimi server/IP ünvanı Server bağlantısı xanasına yazılır.
+- QR-də /mobile və ya /api sonluğu varsa API baza ünvanına çevrilir.
+- QR mətnində əlavə yazı və ya JSON varsa server URL-ni çıxarmağa çalışır.
+- Ünvan xanaya yazıldıqdan sonra avtomatik /api/mobile/ping yoxlaması edilir.
+- Avtomatik qoşulma alınmasa ekran bağlanmır; oxunan ünvan xanada qalır və Serverə qoşul düyməsi ilə yenidən yoxlamaq olur.
+- versionCode 21
+- versionName 3.2.2-native-v21
+- Daimi release signing sistemi qorunur.

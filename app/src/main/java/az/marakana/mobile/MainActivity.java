@@ -95,6 +95,7 @@ public class MainActivity extends Activity {
     private LinearLayout root;
     private LinearLayout content;
     private ProgressBar busy;
+    private EditText serverAddressInput = null;
 
     private String serverBase = "";
     private String sessionToken = "";
@@ -428,9 +429,40 @@ public class MainActivity extends Activity {
         if (v.isEmpty()) return "";
         if (!v.toLowerCase(Locale.ROOT).startsWith("http://") && !v.toLowerCase(Locale.ROOT).startsWith("https://")) v = "http://" + v;
         while (v.endsWith("/")) v = v.substring(0, v.length() - 1);
-        if (v.endsWith("/mobile")) v = v.substring(0, v.length() - 7);
-        if (v.endsWith("/api")) v = v.substring(0, v.length() - 4);
+        String lower = v.toLowerCase(Locale.ROOT);
+        if (lower.endsWith("/mobile")) v = v.substring(0, v.length() - 7);
+        else if (lower.endsWith("/api")) v = v.substring(0, v.length() - 4);
         return v;
+    }
+
+    private String extractServerBaseFromQr(String raw) {
+        String value = raw == null ? "" : raw.trim();
+        if (value.isEmpty()) return "";
+
+        // QR JSON formatında olarsa tanınan sahələrdən ünvanı götür.
+        try {
+            JSONObject obj = new JSONObject(value);
+            String[] keys = {"server", "server_url", "base", "base_url", "url", "mobile_url"};
+            for (String key : keys) {
+                String candidate = obj.optString(key, "").trim();
+                if (!candidate.isEmpty()) {
+                    value = candidate;
+                    break;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // QR mətnində əlavə yazı varsa ilk http/https ünvanını çıxar.
+        try {
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("(https?://[^\\s]+)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .matcher(value);
+            if (matcher.find()) value = matcher.group(1);
+        } catch (Exception ignored) {}
+
+        // Sonda QR mətnindən qala bilən sadə durğu işarələrini təmizlə.
+        value = value.replaceAll("[\\)\\]\\}>,;]+$", "");
+        return normalizeServerBase(value);
     }
 
 
@@ -658,11 +690,22 @@ public class MainActivity extends Activity {
     }
 
     private void connectToScannedServer(String scannedValue) {
-        String value = normalizeServerBase(scannedValue);
+        String value = extractServerBaseFromQr(scannedValue);
         if (value.isEmpty()) {
             toast("QR kodda server ünvanı tapılmadı.");
             return;
         }
+
+        // QR oxunan kimi ünvanı server xanasında göstər.
+        runOnUiThread(() -> {
+            if (serverAddressInput != null) {
+                serverAddressInput.setText(value);
+                serverAddressInput.setSelection(value.length());
+            }
+            toast("QR koddan server ünvanı əlavə olundu.");
+        });
+
+        // Ünvan göründükdən sonra avtomatik qoşulmanı da yoxla.
         setBusy(true);
         io.execute(() -> {
             try {
@@ -674,8 +717,8 @@ public class MainActivity extends Activity {
                     showLogin();
                 });
             } catch (Exception ex) {
-                runOnUiThread(() -> toast("QR kod oxundu, amma serverə qoşulmaq alınmadı."));
-                showError(ex);
+                // Qoşulma alınmasa server ekranında qalır və oxunan ünvan xanada qalır.
+                runOnUiThread(() -> toast("Ünvan əlavə olundu, amma serverə avtomatik qoşulmaq alınmadı."));
             } finally {
                 setBusy(false);
             }
@@ -703,9 +746,9 @@ public class MainActivity extends Activity {
         hint.setPadding(dp(8), 0, dp(8), dp(20));
         body.addView(hint);
 
-        EditText server = input("192.168.1.20:8765 və ya server domeni");
-        server.setText(serverBase);
-        body.addView(server);
+        serverAddressInput = input("192.168.1.20:8765 və ya server domeni");
+        serverAddressInput.setText(serverBase);
+        body.addView(serverAddressInput);
         Button connect = button("Serverə qoşul", BLUE, Color.WHITE);
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
         cp.setMargins(0, dp(12), 0, 0);
@@ -720,7 +763,7 @@ public class MainActivity extends Activity {
         qrConnect.setOnClickListener(v -> startQrServerScanner());
 
         connect.setOnClickListener(v -> {
-            String value = normalizeServerBase(server.getText().toString());
+            String value = normalizeServerBase(serverAddressInput.getText().toString());
             if (value.isEmpty()) { toast("Server ünvanını yazın."); return; }
             setBusy(true);
             io.execute(() -> {
