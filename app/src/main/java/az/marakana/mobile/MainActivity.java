@@ -32,6 +32,9 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.zxing.integration.android.IntentIntegrator;
+import com.google.zxing.integration.android.IntentResult;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -134,6 +137,21 @@ public class MainActivity extends Activity {
     protected void onDestroy() {
         super.onDestroy();
         io.shutdownNow();
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        IntentResult scanResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
+        if (scanResult != null) {
+            String scanned = scanResult.getContents();
+            if (scanned == null || scanned.trim().isEmpty()) {
+                toast("QR kod oxunması ləğv edildi.");
+                return;
+            }
+            connectToScannedServer(scanned);
+            return;
+        }
+        super.onActivityResult(requestCode, resultCode, data);
     }
 
     @Override
@@ -617,6 +635,41 @@ public class MainActivity extends Activity {
         });
     }
 
+    private void startQrServerScanner() {
+        IntentIntegrator integrator = new IntentIntegrator(this);
+        integrator.setDesiredBarcodeFormats(IntentIntegrator.QR_CODE_TYPES);
+        integrator.setPrompt("Marakana proqramındakı Mobil Panel QR kodunu oxudun");
+        integrator.setBeepEnabled(false);
+        integrator.setBarcodeImageEnabled(false);
+        integrator.setOrientationLocked(false);
+        integrator.initiateScan();
+    }
+
+    private void connectToScannedServer(String scannedValue) {
+        String value = normalizeServerBase(scannedValue);
+        if (value.isEmpty()) {
+            toast("QR kodda server ünvanı tapılmadı.");
+            return;
+        }
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                request(value, "/api/mobile/ping", "GET", null, "");
+                serverBase = value;
+                prefs.edit().putString(KEY_SERVER, value).apply();
+                runOnUiThread(() -> {
+                    toast("QR kodla serverə qoşuldu.");
+                    showLogin();
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> toast("QR kod oxundu, amma serverə qoşulmaq alınmadı."));
+                showError(ex);
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
     private void showServerSetup() {
         ScrollView sv = screenWithBody("Marakana Mobile", false, null);
         LinearLayout body = scrollBody(sv);
@@ -646,6 +699,14 @@ public class MainActivity extends Activity {
         cp.setMargins(0, dp(12), 0, 0);
         connect.setLayoutParams(cp);
         body.addView(connect);
+
+        Button qrConnect = button("▦  QR kodla qoşul", CARD, TEXT);
+        LinearLayout.LayoutParams qrp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
+        qrp.setMargins(0, dp(10), 0, 0);
+        qrConnect.setLayoutParams(qrp);
+        body.addView(qrConnect);
+        qrConnect.setOnClickListener(v -> startQrServerScanner());
+
         connect.setOnClickListener(v -> {
             String value = normalizeServerBase(server.getText().toString());
             if (value.isEmpty()) { toast("Server ünvanını yazın."); return; }

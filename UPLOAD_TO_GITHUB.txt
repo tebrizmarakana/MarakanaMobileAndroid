@@ -1,17 +1,7 @@
-MARAKANA MOBILE v18 - GITHUB UPLOAD
+Marakana Mobile v19 GitHub upload
 
-1) ƏVVƏL PRIVATE signing paketindəki GITHUB_SECRETS_V18.txt əsasında GitHub Actions-da 4 secret yarat.
-2) Sonra bu v18 repo/update paketinin fayllarını repo kökünə yüklə.
-3) Repo-da struktur belə qalmalıdır:
-   .github/workflows/build-apk.yml
-   app/build.gradle
-   app/src/main/java/az/marakana/mobile/MainActivity.java
-   build.gradle
-   settings.gradle
-   gradle.properties
-4) Commit changes et.
-5) Actions -> Build Marakana Mobile Native v18 RELEASE APK -> Run workflow.
-6) Artifact: MarakanaMobile-v18-permanent-update-apk
-7) APK: MarakanaMobile-v18-release.apk
-
-PRIVATE .jks və secret məlumatlarını repo-ya yükləmə.
+1) v18-də yaratdığın 4 daimi signing secret GitHub Actions-da qalmalıdır. Yenidən secret yaratmağa ehtiyac yoxdur.
+2) Bu paketin içindəkiləri repo kökünə yüklə və köhnə faylların üstünə yaz.
+3) Commit changes et.
+4) Actions -> Build Marakana Mobile Native v19 RELEASE APK -> Run workflow.
+5) Artifact: MarakanaMobile-v19-permanent-update-apk

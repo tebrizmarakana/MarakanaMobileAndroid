@@ -1,0 +1,11 @@
+Marakana Mobile v19 — QR ilə serverə qoşulma
+
+- Server bağlantısı ekranında "QR kodla qoşul" düyməsi əlavə edildi.
+- Düymə telefon kamerası ilə QR skaneri açır.
+- Desktop Marakana proqramındakı Mobil Panel QR kodu birbaşa oxunur.
+- Desktop QR kodundakı /mobile linki avtomatik API server bazasına çevrilir.
+- /api/mobile/ping uğurlu olduqda server ünvanı yadda saxlanılır və Giriş ekranı açılır.
+- Daimi release signing sistemi v18-dən olduğu kimi qorunur.
+
+versionCode: 19
+versionName: 3.2.0-native-v19

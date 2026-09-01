@@ -1,0 +1,24 @@
+MARAKANA MOBILE v19 — QR İLƏ SERVERƏ QOŞULMA + DAİMİ SIGNING
+
+1. v18-də yaratdığın GitHub Actions signing secret-ləri olduğu kimi qalır:
+   - MARAKANA_KEYSTORE_BASE64
+   - MARAKANA_KEYSTORE_PASSWORD
+   - MARAKANA_KEY_ALIAS
+   - MARAKANA_KEY_PASSWORD
+2. v19 UPDATE_FILES paketinin daxilindəkiləri GitHub repo-nun kökünə köhnə faylların üstünə yüklə.
+3. Commit changes et.
+4. Actions -> Build Marakana Mobile Native v19 RELEASE APK -> Run workflow.
+5. Artifact: MarakanaMobile-v19-permanent-update-apk
+6. APK: MarakanaMobile-v19-release.apk
+
+versionCode 19
+versionName 3.2.0-native-v19
+
+QR yeniliyi:
+- Server bağlantısı ekranında "QR kodla qoşul" düyməsi var.
+- Telefon kamerası açılır.
+- Desktop proqramdakı Mobil Panel QR kodu oxunur.
+- QR-dəki /mobile linki avtomatik server API ünvanına çevrilir.
+- Ping uğurlu olduqda server yadda saxlanılır və Giriş ekranı açılır.
+
+VACİB: .jks faylını və secret dəyərlərini PUBLIC GitHub repo-ya yükləmə.

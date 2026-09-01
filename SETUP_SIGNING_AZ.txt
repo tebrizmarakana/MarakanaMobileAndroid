@@ -1,4 +1,4 @@
-MARAKANA MOBILE v18 — DAİMİ UPDATE SIGNING QURULUMU
+MARAKANA MOBILE v19 — DAİMİ UPDATE SIGNING QURULUMU
 
 Bu repo paketində PRIVATE keystore yoxdur. Onu PUBLIC GitHub-a yükləmə.
 
@@ -11,13 +11,13 @@ GitHub-da:
    - MARAKANA_KEYSTORE_PASSWORD
    - MARAKANA_KEY_ALIAS
    - MARAKANA_KEY_PASSWORD
-5. Sonra repo fayllarını v18 UPDATE_FILES ilə yenilə.
-6. Actions -> Build Marakana Mobile Native v18 RELEASE APK -> Run workflow.
-7. Artifact: MarakanaMobile-v18-permanent-update-apk
-8. APK: MarakanaMobile-v18-release.apk
+5. Sonra repo fayllarını v19 UPDATE_FILES ilə yenilə.
+6. Actions -> Build Marakana Mobile Native v19 RELEASE APK -> Run workflow.
+7. Artifact: MarakanaMobile-v19-permanent-update-apk
+8. APK: MarakanaMobile-v19-release.apk
 
 VACİB:
-- v18 yeni daimi release sertifikatına keçir.
-- v17 və əvvəlki APK başqa imza ilə olduğu üçün v18-ə keçiddə köhnə tətbiqi SON DƏFƏ silmək lazım ola bilər.
+- v19 yeni daimi release sertifikatına keçir.
+- v17 və əvvəlki APK başqa imza ilə olduğu üçün v19-ə keçiddə köhnə tətbiqi SON DƏFƏ silmək lazım ola bilər.
 - Bundan sonra v19, v20 və s. eyni GitHub Secrets ilə build olunarsa köhnəni silmədən UPDATE kimi quraşacaq.
 - PRIVATE signing paketini təhlükəsiz yerdə backup et və heç vaxt public repo-ya yükləmə.

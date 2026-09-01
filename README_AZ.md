@@ -150,6 +150,14 @@ Android köhnə APK-nın üstünə yeni APK quraşdırmaq üçün həm `applicat
 ## v18 — Daimi Android signing
 - `versionCode 18`, `versionName 3.1.0-native-v18`.
 - Debug/cache signing ləğv edildi.
-- GitHub Actions artıq daimi release keystore-u GitHub Secrets-dən bərpa edib `assembleRelease` build edir.
+- GitHub Actions daimi release keystore-u GitHub Secrets-dən bərpa edib `assembleRelease` build edir.
 - v18-dən sonrakı bütün versiyalar eyni signing secrets ilə build edilərsə Android köhnə tətbiqi silmədən normal update qəbul edəcək.
 - PRIVATE keystore və secret dəyərlərini public GitHub repo-ya yükləmək olmaz.
+
+## v19 — QR ilə serverə qoşulma
+- `versionCode 19`, `versionName 3.2.0-native-v19`.
+- Server bağlantısı ekranında `QR kodla qoşul` düyməsi əlavə edildi.
+- Daxili kamera QR skaneri açılır.
+- Desktop Marakana proqramının Mobil Panel QR kodundakı `/mobile` linki avtomatik API server bazasına çevrilir.
+- `/api/mobile/ping` uğurlu olduqda server ünvanı yadda saxlanılır və Giriş ekranı açılır.
+- v18-dəki daimi signing secrets dəyişdirilmir və olduğu kimi istifadə olunur.
