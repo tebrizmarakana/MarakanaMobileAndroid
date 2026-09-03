@@ -1,0 +1,16 @@
+V32 STATIC TEST RESULTS
+=======================
+PASS - versionCode 32
+PASS - versionName 3.4.9-native-v32
+PASS - main GitHub workflow artifact v32
+PASS - KitchenBackgroundService declared with remoteMessaging foreground service type
+PASS - FOREGROUND_SERVICE + FOREGROUND_SERVICE_REMOTE_MESSAGING permissions declared
+PASS - BOOT_COMPLETED + MY_PACKAGE_REPLACED receiver declared
+PASS - kitchen background password uses separate AES/GCM encrypted SharedPreferences keys
+PASS - service starts in kitchen role and stops/clears on role exit/logout
+PASS - service polls /api/mobile/kitchen/tickets and re-logins on session failure
+PASS - initial ticket snapshot suppresses old-order notification spam
+PASS - MainActivity live refresh no longer emits duplicate kitchen notifications
+PASS - selected kitchen notification sound remains shared with background service
+PASS - notification tap carries open_kitchen intent extra
+PASS - background API uses desktop-compatible X-Session-Token header

@@ -93,6 +93,10 @@ public class MainActivity extends Activity {
     private static final String KEY_PASSWORD_IV = "password_iv";
     private static final String KEY_WHATSAPP_PACKAGE = "whatsapp_default_package";
     private static final String KEY_KITCHEN_NOTIFICATION_SOUND = "kitchen_notification_sound";
+    private static final String KEY_KITCHEN_BG_PASSWORD_ENC = "kitchen_bg_password_enc";
+    private static final String KEY_KITCHEN_BG_PASSWORD_IV = "kitchen_bg_password_iv";
+    private static final String KEY_KITCHEN_BG_SNAPSHOT_INITIALIZED = "kitchen_bg_snapshot_initialized";
+    private static final String KEY_KITCHEN_BG_KNOWN_TICKETS = "kitchen_bg_known_tickets";
     private static final String KITCHEN_NOTIFICATION_SILENT = "__silent__";
     private static final String KITCHEN_NOTIFICATION_CHANNEL_PREFIX = "marakana_kitchen_orders_";
     private static final int REQUEST_NOTIFICATION_PERMISSION = 7301;
@@ -157,9 +161,17 @@ public class MainActivity extends Activity {
         username = prefs.getString(KEY_USERNAME, "");
         role = prefs.getString(KEY_ROLE, "hall");
         adminDebtOnly = prefs.getBoolean(KEY_ADMIN_DEBT_ONLY, false);
+        boolean openKitchenFromNotification = getIntent() != null && getIntent().getBooleanExtra("open_kitchen", false);
+        if ("kitchen".equals(role) && hasKitchenBackgroundPassword()) {
+            startKitchenBackgroundService();
+        }
         buildRoot();
         if (serverBase.isEmpty()) {
             showServerSetup();
+        } else if (openKitchenFromNotification && "kitchen".equals(role) && !username.isEmpty()) {
+            String kitchenPassword = loadKitchenBackgroundPassword();
+            if (!kitchenPassword.isEmpty()) autoLogin(username, kitchenPassword, "kitchen", false);
+            else showLogin();
         } else if (prefs.getBoolean(KEY_AUTO_LOGIN, false) && !username.isEmpty()) {
             String savedPassword = loadSavedPassword();
             if (!savedPassword.isEmpty()) {
@@ -703,6 +715,76 @@ public class MainActivity extends Activity {
         prefs.edit().remove(KEY_PASSWORD_ENC).remove(KEY_PASSWORD_IV).putBoolean(KEY_AUTO_LOGIN, false).apply();
     }
 
+    private void saveKitchenBackgroundPassword(String password) {
+        try {
+            if (password == null || password.isEmpty()) {
+                clearKitchenBackgroundPassword();
+                return;
+            }
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateLoginKey());
+            byte[] encrypted = cipher.doFinal(password.getBytes(StandardCharsets.UTF_8));
+            prefs.edit()
+                    .putString(KEY_KITCHEN_BG_PASSWORD_ENC, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                    .putString(KEY_KITCHEN_BG_PASSWORD_IV, Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP))
+                    .apply();
+        } catch (Exception ex) {
+            clearKitchenBackgroundPassword();
+        }
+    }
+
+    private String loadKitchenBackgroundPassword() {
+        String enc = prefs.getString(KEY_KITCHEN_BG_PASSWORD_ENC, "");
+        String iv = prefs.getString(KEY_KITCHEN_BG_PASSWORD_IV, "");
+        if (enc.isEmpty() || iv.isEmpty()) return "";
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec spec = new GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP));
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateLoginKey(), spec);
+            byte[] raw = cipher.doFinal(Base64.decode(enc, Base64.NO_WRAP));
+            return new String(raw, StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            clearKitchenBackgroundPassword();
+            return "";
+        }
+    }
+
+    private boolean hasKitchenBackgroundPassword() {
+        return !prefs.getString(KEY_KITCHEN_BG_PASSWORD_ENC, "").isEmpty()
+                && !prefs.getString(KEY_KITCHEN_BG_PASSWORD_IV, "").isEmpty();
+    }
+
+    private void clearKitchenBackgroundPassword() {
+        prefs.edit()
+                .remove(KEY_KITCHEN_BG_PASSWORD_ENC)
+                .remove(KEY_KITCHEN_BG_PASSWORD_IV)
+                .remove(KEY_KITCHEN_BG_SNAPSHOT_INITIALIZED)
+                .remove(KEY_KITCHEN_BG_KNOWN_TICKETS)
+                .apply();
+    }
+
+    private void startKitchenBackgroundService() {
+        Intent serviceIntent = new Intent(this, KitchenBackgroundService.class);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent);
+            else startService(serviceIntent);
+        } catch (Exception ignored) {}
+    }
+
+    private void stopKitchenBackgroundService(boolean clearCredentials) {
+        try { stopService(new Intent(this, KitchenBackgroundService.class)); } catch (Exception ignored) {}
+        if (clearCredentials) clearKitchenBackgroundPassword();
+    }
+
+    private void updateKitchenBackgroundServiceForRole(String passwordForKitchen) {
+        if ("kitchen".equals(role)) {
+            saveKitchenBackgroundPassword(passwordForKitchen);
+            startKitchenBackgroundService();
+        } else {
+            stopKitchenBackgroundService(true);
+        }
+    }
+
     private void autoLogin(String savedUser, String savedPassword, String savedRole, boolean savedDebtOnly) {
         ScrollView sv = screenWithBody("Marakana Mobile", false, null);
         LinearLayout body = scrollBody(sv);
@@ -737,6 +819,7 @@ public class MainActivity extends Activity {
                 editor.apply();
                 if (rememberPassword) savePasswordSecurely(p); else clearSavedPassword();
                 runOnUiThread(() -> {
+                    updateKitchenBackgroundServiceForRole(p);
                     if (role.equals("kitchen")) showKitchen();
                     else if (role.equals("admin") && adminDebtOnly) showDebt("İşçi");
                     else showTerminals();
@@ -793,6 +876,11 @@ public class MainActivity extends Activity {
         if (normalizedTarget.isEmpty()) normalizedTarget = "hall";
         if (normalizedTarget.equals(role)) {
             adminDebtOnly = "admin".equals(normalizedTarget) && debtOnly;
+            if ("kitchen".equals(normalizedTarget)) {
+                String sameRolePassword = sessionPassword;
+                if (sameRolePassword.isEmpty()) sameRolePassword = loadKitchenBackgroundPassword();
+                if (!sameRolePassword.isEmpty()) updateKitchenBackgroundServiceForRole(sameRolePassword);
+            }
             if (openTarget != null) openTarget.run();
             return;
         }
@@ -827,6 +915,7 @@ public class MainActivity extends Activity {
                     catch (Exception ignored) {}
                 }
                 runOnUiThread(() -> {
+                    updateKitchenBackgroundServiceForRole(passwordToUse);
                     if (openTarget != null) openTarget.run();
                 });
             } catch (Exception ex) {
@@ -2004,7 +2093,6 @@ public class MainActivity extends Activity {
                         runOnUiThread(() -> {
                             if (!kitchenAutoRefreshActive || generation != kitchenRefreshGeneration) return;
                             if (kitchenLiveRecordsHost == null || kitchenLiveRecordsHost.getParent() == null) return;
-                            handleKitchenTicketNotifications(finalTickets);
                             if (!signature.equals(kitchenLastTicketsSignature)) {
                                 kitchenLastTicketsSignature = signature;
                                 renderKitchenTickets(kitchenLiveRecordsHost, finalTickets, kitchenLiveCategory);
@@ -2202,6 +2290,7 @@ public class MainActivity extends Activity {
         }
 
         Intent openApp = new Intent(this, MainActivity.class);
+        openApp.putExtra("open_kitchen", true);
         openApp.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
         PendingIntent contentIntent = PendingIntent.getActivity(
                 this,
@@ -2354,6 +2443,7 @@ public class MainActivity extends Activity {
 
     private void logout() {
         stopKitchenAutoRefresh();
+        stopKitchenBackgroundService(true);
         currentBackAction = null;
         sessionPassword = "";
         canHall = false;

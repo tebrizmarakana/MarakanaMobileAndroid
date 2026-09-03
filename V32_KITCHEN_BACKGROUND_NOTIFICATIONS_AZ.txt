@@ -1,0 +1,14 @@
+MARAKANA MOBILE v32 — MƏTBƏX FON BİLDİRİŞLƏRİ
+================================================
+
+1. Mətbəx istifadəçisi rejiminə daxil olanda fon xidməti avtomatik başlayır.
+2. APK ekrandan bağlansa belə xidmət START_STICKY ilə işləməyə davam edir.
+3. Mətbəx serveri təxminən hər 1 saniyədə yoxlanır.
+4. Yeni preparing sifarişi aşkar ediləndə heads-up bildiriş göstərilir.
+5. Bildiriş səsi əvvəlcədən seçilmiş Mətbəx səs ayarından istifadə edir.
+6. İlk dəfə xidmət başlayanda mövcud sifarişlər snapshot kimi qəbul edilir; köhnə sifarişlər üçün saxta bildiriş gəlmir.
+7. Görülmüş ticket açarları SharedPreferences-də saxlanır; servis restartında dublikat bildiriş azalır.
+8. Mətbəxdən başqa rola keçəndə və Çıxış ediləndə xidmət dayanır.
+9. BOOT_COMPLETED və MY_PACKAGE_REPLACED receiver xidmətin restart/update-dən sonra bərpasını təmin edir.
+10. Mətbəx fon şifrəsi Android Keystore AES/GCM ilə şifrələnmiş halda saxlanır.
+11. Force stop Android məhdudiyyətidir: istifadəçi tətbiqi məcburi dayandırsa, yenidən açana qədər fon xidməti işləmir.
