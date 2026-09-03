@@ -1,0 +1,14 @@
+V30 STATIC TEST RESULTS
+=======================
+PASS - POST_NOTIFICATIONS permission present
+PASS - Android 13+ runtime notification permission request present
+PASS - HIGH importance notification channel present
+PASS - heads-up kitchen notification builder present
+PASS - new-ticket dedup/baseline logic present
+PASS - notification sound picker present
+PASS - notification sound preference persisted
+PASS - kitchen-only drawer menu item present
+PASS - 750ms kitchen live refresh retained
+PASS - versionCode 30
+PASS - versionName 3.4.7-native-v30
+PASS - GitHub main workflow artifact is v30

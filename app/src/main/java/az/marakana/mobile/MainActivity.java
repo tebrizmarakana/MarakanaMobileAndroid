@@ -1,8 +1,14 @@
 package az.marakana.mobile;
 
 import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.AlertDialog;
+import android.Manifest;
 import android.content.Context;
+import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -10,7 +16,10 @@ import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
 import android.os.Bundle;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
@@ -58,10 +67,12 @@ import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -81,6 +92,11 @@ public class MainActivity extends Activity {
     private static final String KEY_PASSWORD_ENC = "password_enc";
     private static final String KEY_PASSWORD_IV = "password_iv";
     private static final String KEY_WHATSAPP_PACKAGE = "whatsapp_default_package";
+    private static final String KEY_KITCHEN_NOTIFICATION_SOUND = "kitchen_notification_sound";
+    private static final String KITCHEN_NOTIFICATION_SILENT = "__silent__";
+    private static final String KITCHEN_NOTIFICATION_CHANNEL_PREFIX = "marakana_kitchen_orders_";
+    private static final int REQUEST_NOTIFICATION_PERMISSION = 7301;
+    private static final int REQUEST_KITCHEN_SOUND = 7302;
     private static final String KEYSTORE_ALIAS = "marakana_mobile_login_key";
 
     private static final int BG = Color.rgb(240, 245, 250);
@@ -128,6 +144,9 @@ public class MainActivity extends Activity {
     private LinearLayout kitchenLiveRecordsHost = null;
     private String kitchenLiveCategory = "Hazırlanır";
     private String kitchenLastTicketsSignature = "";
+    private final Set<String> kitchenKnownTicketKeys = new HashSet<>();
+    private boolean kitchenNotificationSnapshotInitialized = false;
+    private int kitchenNotificationSequence = 41000;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -515,6 +534,12 @@ public class MainActivity extends Activity {
             addDrawerItem(panel, "Mətbəx", () -> {
                 holder[0].dismiss();
                 switchMobileRole("kitchen", false, this::showKitchen);
+            });
+        }
+        if ("kitchen".equals(role)) {
+            addDrawerItem(panel, "Bildiriş səsi", () -> {
+                holder[0].dismiss();
+                chooseKitchenNotificationSound();
             });
         }
         if (canAdmin) {
@@ -1901,6 +1926,8 @@ public class MainActivity extends Activity {
 
     private void showKitchen(String category) {
         currentBackAction = null;
+        requestKitchenNotificationPermissionIfNeeded();
+        ensureKitchenNotificationChannel();
         clear();
 
         LinearLayout shell = new LinearLayout(this);
@@ -1937,6 +1964,8 @@ public class MainActivity extends Activity {
         kitchenLiveRecordsHost = recordsHost;
         kitchenLiveCategory = category;
         kitchenLastTicketsSignature = "";
+        kitchenKnownTicketKeys.clear();
+        kitchenNotificationSnapshotInitialized = false;
         final int generation = ++kitchenRefreshGeneration;
 
         kitchenRefreshRunnable = new Runnable() {
@@ -1957,6 +1986,7 @@ public class MainActivity extends Activity {
                         runOnUiThread(() -> {
                             if (!kitchenAutoRefreshActive || generation != kitchenRefreshGeneration) return;
                             if (kitchenLiveRecordsHost == null || kitchenLiveRecordsHost.getParent() == null) return;
+                            handleKitchenTicketNotifications(finalTickets);
                             if (!signature.equals(kitchenLastTicketsSignature)) {
                                 kitchenLastTicketsSignature = signature;
                                 renderKitchenTickets(kitchenLiveRecordsHost, finalTickets, kitchenLiveCategory);
@@ -2000,6 +2030,173 @@ public class MainActivity extends Activity {
         kitchenRefreshRunnable = null;
         kitchenLiveRecordsHost = null;
         kitchenLastTicketsSignature = "";
+        kitchenKnownTicketKeys.clear();
+        kitchenNotificationSnapshotInitialized = false;
+    }
+
+    private void requestKitchenNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATION_PERMISSION);
+        }
+    }
+
+    private Uri getKitchenNotificationSoundUri() {
+        String stored = prefs.getString(KEY_KITCHEN_NOTIFICATION_SOUND, "");
+        if (KITCHEN_NOTIFICATION_SILENT.equals(stored)) return null;
+        if (stored != null && !stored.trim().isEmpty()) {
+            try { return Uri.parse(stored); } catch (Exception ignored) {}
+        }
+        return RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+    }
+
+    private String kitchenNotificationChannelId() {
+        String stored = prefs.getString(KEY_KITCHEN_NOTIFICATION_SOUND, "");
+        if (stored == null || stored.trim().isEmpty()) stored = "default";
+        return KITCHEN_NOTIFICATION_CHANNEL_PREFIX + Integer.toHexString(stored.hashCode());
+    }
+
+    private String ensureKitchenNotificationChannel() {
+        String channelId = kitchenNotificationChannelId();
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return channelId;
+        if (manager.getNotificationChannel(channelId) == null) {
+            NotificationChannel channel = new NotificationChannel(
+                    channelId,
+                    "Mətbəx sifarişləri",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Yeni mətbəx sifarişi gələndə yuxarı bildiriş və səs göstərir.");
+            channel.enableVibration(true);
+            Uri sound = getKitchenNotificationSoundUri();
+            if (sound == null) {
+                channel.setSound(null, null);
+            } else {
+                AudioAttributes attributes = new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build();
+                channel.setSound(sound, attributes);
+            }
+            manager.createNotificationChannel(channel);
+        }
+        return channelId;
+    }
+
+    private void chooseKitchenNotificationSound() {
+        requestKitchenNotificationPermissionIfNeeded();
+        Intent picker = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
+        picker.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION);
+        picker.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Mətbəx bildiriş səsi");
+        picker.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
+        picker.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true);
+        picker.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, getKitchenNotificationSoundUri());
+        startActivityForResult(picker, REQUEST_KITCHEN_SOUND);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_KITCHEN_SOUND || resultCode != RESULT_OK || data == null) return;
+        Uri picked = data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+        if (picked == null) {
+            prefs.edit().putString(KEY_KITCHEN_NOTIFICATION_SOUND, KITCHEN_NOTIFICATION_SILENT).apply();
+            toast("Mətbəx bildiriş səsi: Səssiz");
+        } else {
+            prefs.edit().putString(KEY_KITCHEN_NOTIFICATION_SOUND, picked.toString()).apply();
+            String title = "Seçildi";
+            try {
+                android.media.Ringtone ringtone = RingtoneManager.getRingtone(this, picked);
+                if (ringtone != null) title = ringtone.getTitle(this);
+            } catch (Exception ignored) {}
+            toast("Mətbəx bildiriş səsi: " + title);
+        }
+        ensureKitchenNotificationChannel();
+    }
+
+    private String kitchenTicketKey(JSONObject ticket) {
+        int id = ticket.optInt("id", 0);
+        if (id > 0) return "id:" + id;
+        return ticket.optString("station_name", "") + "|"
+                + ticket.optString("created_at_text", "") + "|"
+                + ticket.optString("created_at", "") + "|"
+                + String.valueOf(ticket.optJSONArray("items"));
+    }
+
+    private void handleKitchenTicketNotifications(JSONArray tickets) {
+        List<JSONObject> newlyArrived = new ArrayList<>();
+        Set<String> currentKeys = new HashSet<>();
+        for (int i = 0; i < tickets.length(); i++) {
+            JSONObject ticket = tickets.optJSONObject(i);
+            if (ticket == null) continue;
+            String key = kitchenTicketKey(ticket);
+            currentKeys.add(key);
+            boolean ready = "ready".equalsIgnoreCase(ticket.optString("status", ""));
+            if (kitchenNotificationSnapshotInitialized && !kitchenKnownTicketKeys.contains(key) && !ready) {
+                newlyArrived.add(ticket);
+            }
+        }
+
+        if (!kitchenNotificationSnapshotInitialized) {
+            kitchenKnownTicketKeys.clear();
+            kitchenKnownTicketKeys.addAll(currentKeys);
+            kitchenNotificationSnapshotInitialized = true;
+            return;
+        }
+
+        kitchenKnownTicketKeys.addAll(currentKeys);
+        for (JSONObject ticket : newlyArrived) showKitchenOrderNotification(ticket);
+    }
+
+    private void showKitchenOrderNotification(JSONObject ticket) {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        String station = ticket.optString("station_name", "Mətbəx");
+        int totalQty = ticket.optInt("total_qty", 0);
+        String shortText = station + " • " + totalQty + " məhsul";
+        StringBuilder details = new StringBuilder(shortText);
+        JSONArray items = ticket.optJSONArray("items");
+        if (items != null) {
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject item = items.optJSONObject(i);
+                if (item == null) continue;
+                details.append("\n• ")
+                        .append(item.optString("name", "Məhsul"))
+                        .append(" x")
+                        .append(item.optInt("qty", 1));
+            }
+        }
+
+        Intent openApp = new Intent(this, MainActivity.class);
+        openApp.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent contentIntent = PendingIntent.getActivity(
+                this,
+                7303,
+                openApp,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        String channelId = ensureKitchenNotificationChannel();
+        Notification.Builder builder = new Notification.Builder(this, channelId)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Yeni mətbəx sifarişi")
+                .setContentText(shortText)
+                .setStyle(new Notification.BigTextStyle().bigText(details.toString()))
+                .setContentIntent(contentIntent)
+                .setAutoCancel(true)
+                .setCategory(Notification.CATEGORY_MESSAGE)
+                .setPriority(Notification.PRIORITY_HIGH)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setWhen(System.currentTimeMillis())
+                .setShowWhen(true);
+
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) {
+            int ticketId = ticket.optInt("id", 0);
+            int notificationId = ticketId > 0 ? 41000 + ticketId : ++kitchenNotificationSequence;
+            manager.notify(notificationId, builder.build());
+        }
     }
 
     private void installKitchenGestures(View target, String category) {
