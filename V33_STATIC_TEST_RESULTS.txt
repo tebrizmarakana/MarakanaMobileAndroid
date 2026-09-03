@@ -1,0 +1,9 @@
+V33 STATIC TEST RESULTS
+=======================
+PASS - versionCode 33
+PASS - versionName 3.4.10-native-v33
+PASS - main GitHub workflow artifact v33
+PASS - release APK name MarakanaMobile-v33-release.apk
+PASS - kitchen terminal/station name uses BLUE
+PASS - kitchen item rows use bold=true
+PASS - v32 background kitchen notification logic preserved

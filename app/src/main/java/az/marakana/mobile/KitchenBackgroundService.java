@@ -48,7 +48,7 @@ public class KitchenBackgroundService extends Service {
     private static final String KEY_KITCHEN_NOTIFICATION_SOUND = "kitchen_notification_sound";
     private static final String KITCHEN_NOTIFICATION_SILENT = "__silent__";
     private static final String KITCHEN_NOTIFICATION_CHANNEL_PREFIX = "marakana_kitchen_orders_";
-    private static final String SERVICE_CHANNEL_ID = "marakana_kitchen_background_v32";
+    private static final String SERVICE_CHANNEL_ID = "marakana_kitchen_background_v33";
     private static final String KEYSTORE_ALIAS = "marakana_mobile_login_key";
     private static final int SERVICE_NOTIFICATION_ID = 32001;
     private static final long POLL_DELAY_MS = 1000L;

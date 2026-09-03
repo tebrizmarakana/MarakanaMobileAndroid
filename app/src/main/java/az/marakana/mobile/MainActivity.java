@@ -2408,7 +2408,7 @@ public class MainActivity extends Activity {
             LinearLayout c = card();
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
-            row.addView(text(t.optString("station_name", ""), 18, TEXT, true), new LinearLayout.LayoutParams(0, dp(40), 1f));
+            row.addView(text(t.optString("station_name", ""), 18, BLUE, true), new LinearLayout.LayoutParams(0, dp(40), 1f));
             row.addView(text(t.optString("status_label", showReady ? "Hazırdır" : "Hazırlanır"), 14, isReady ? GREEN : BLUE, true), new LinearLayout.LayoutParams(dp(110), dp(40)));
             c.addView(row);
             c.addView(text(t.optString("created_at_text", "") + "  •  " + t.optInt("total_qty", 0) + " məhsul", 12, MUTED, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
@@ -2417,7 +2417,7 @@ public class MainActivity extends Activity {
             if (items != null) {
                 for (int j = 0; j < items.length(); j++) {
                     JSONObject it = items.optJSONObject(j);
-                    if (it != null) c.addView(text("• " + it.optString("name", "") + " x" + it.optInt("qty", 1), 14, TEXT, false), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30)));
+                    if (it != null) c.addView(text("• " + it.optString("name", "") + " x" + it.optInt("qty", 1), 14, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30)));
                 }
             }
 

@@ -1,0 +1,7 @@
+MARAKANA MOBILE v33 — MƏTBƏX GÖRÜNÜŞÜ
+=====================================
+
+1. Mətbəx sifariş kartında terminal/kabinet adı mavi rəngdə göstərilir.
+2. Məhsul/sifariş adları qalın şriftlə göstərilir.
+3. Miqdar (x1, x2 və s.) eyni sətirdə qalır.
+4. v32 fon bildiriş sistemi və bildiriş səsi ayarı qorunub.
