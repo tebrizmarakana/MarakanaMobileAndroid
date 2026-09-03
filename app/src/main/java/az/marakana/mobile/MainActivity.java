@@ -11,6 +11,8 @@ import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.InputType;
 import android.util.Base64;
 import android.view.GestureDetector;
@@ -117,6 +119,15 @@ public class MainActivity extends Activity {
     private PopupWindow activeNavigationPopup = null;
     private static final String[] DEBT_CATEGORIES = {"İşçi", "Müştəri", "Firma"};
     private static final String[] KITCHEN_CATEGORIES = {"Hazırlanır", "Hazırdır"};
+    private static final long KITCHEN_LIVE_REFRESH_MS = 750L;
+    private final Handler kitchenRefreshHandler = new Handler(Looper.getMainLooper());
+    private Runnable kitchenRefreshRunnable = null;
+    private boolean kitchenAutoRefreshActive = false;
+    private boolean activityVisible = false;
+    private int kitchenRefreshGeneration = 0;
+    private LinearLayout kitchenLiveRecordsHost = null;
+    private String kitchenLiveCategory = "Hazırlanır";
+    private String kitchenLastTicketsSignature = "";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -143,7 +154,27 @@ public class MainActivity extends Activity {
     }
 
     @Override
+    protected void onStart() {
+        super.onStart();
+        activityVisible = true;
+        if (kitchenAutoRefreshActive && kitchenRefreshRunnable != null) {
+            kitchenRefreshHandler.removeCallbacks(kitchenRefreshRunnable);
+            kitchenRefreshHandler.post(kitchenRefreshRunnable);
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        activityVisible = false;
+        if (kitchenRefreshRunnable != null) {
+            kitchenRefreshHandler.removeCallbacks(kitchenRefreshRunnable);
+        }
+        super.onStop();
+    }
+
+    @Override
     protected void onDestroy() {
+        stopKitchenAutoRefresh();
         super.onDestroy();
         io.shutdownNow();
     }
@@ -258,6 +289,7 @@ public class MainActivity extends Activity {
     }
 
     private void clear() {
+        stopKitchenAutoRefresh();
         activeOrderCartButton = null;
         activeOrderCartStation = "";
         content.removeAllViews();
@@ -1895,11 +1927,79 @@ public class MainActivity extends Activity {
         LinearLayout footer = buildKitchenFooter(category);
         shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(86)));
 
-        loadJson("/api/mobile/kitchen/tickets", result -> {
-            JSONArray tickets = result.optJSONArray("tickets");
-            if (tickets == null) tickets = new JSONArray();
-            renderKitchenTickets(recordsHost, tickets, category);
-        });
+        recordsHost.addView(empty("Mətbəx sifarişləri gözlənilir..."));
+        startKitchenAutoRefresh(recordsHost, category);
+    }
+
+    private void startKitchenAutoRefresh(LinearLayout recordsHost, String category) {
+        stopKitchenAutoRefresh();
+        kitchenAutoRefreshActive = true;
+        kitchenLiveRecordsHost = recordsHost;
+        kitchenLiveCategory = category;
+        kitchenLastTicketsSignature = "";
+        final int generation = ++kitchenRefreshGeneration;
+
+        kitchenRefreshRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (!kitchenAutoRefreshActive || generation != kitchenRefreshGeneration || !activityVisible) return;
+                if (kitchenLiveRecordsHost == null || kitchenLiveRecordsHost.getParent() == null || sessionToken.isEmpty()) return;
+
+                final String tokenForRequest = sessionToken;
+                io.execute(() -> {
+                    try {
+                        JSONObject result = request(serverBase, "/api/mobile/kitchen/tickets", "GET", null, tokenForRequest);
+                        JSONArray tickets = result.optJSONArray("tickets");
+                        if (tickets == null) tickets = new JSONArray();
+                        final JSONArray finalTickets = tickets;
+                        final String signature = finalTickets.toString();
+
+                        runOnUiThread(() -> {
+                            if (!kitchenAutoRefreshActive || generation != kitchenRefreshGeneration) return;
+                            if (kitchenLiveRecordsHost == null || kitchenLiveRecordsHost.getParent() == null) return;
+                            if (!signature.equals(kitchenLastTicketsSignature)) {
+                                kitchenLastTicketsSignature = signature;
+                                renderKitchenTickets(kitchenLiveRecordsHost, finalTickets, kitchenLiveCategory);
+                            }
+                            scheduleNextKitchenRefresh(generation);
+                        });
+                    } catch (Exception ex) {
+                        runOnUiThread(() -> {
+                            if (!kitchenAutoRefreshActive || generation != kitchenRefreshGeneration) return;
+                            String message = ex.getMessage() == null ? "" : ex.getMessage();
+                            if (message.contains("401") || message.toLowerCase(Locale.ROOT).contains("sessiya")) {
+                                stopKitchenAutoRefresh();
+                                handleApiError(ex);
+                                return;
+                            }
+                            // Local şəbəkə qısa müddətlik kəsilsə ekranı popup-larla doldurmuruq;
+                            // əlaqə bərpa olunan kimi növbəti səssiz yoxlama sifarişləri gətirəcək.
+                            scheduleNextKitchenRefresh(generation);
+                        });
+                    }
+                });
+            }
+        };
+
+        if (activityVisible) kitchenRefreshHandler.post(kitchenRefreshRunnable);
+    }
+
+    private void scheduleNextKitchenRefresh(int generation) {
+        if (!activityVisible || !kitchenAutoRefreshActive || generation != kitchenRefreshGeneration) return;
+        if (kitchenRefreshRunnable == null) return;
+        kitchenRefreshHandler.removeCallbacks(kitchenRefreshRunnable);
+        kitchenRefreshHandler.postDelayed(kitchenRefreshRunnable, KITCHEN_LIVE_REFRESH_MS);
+    }
+
+    private void stopKitchenAutoRefresh() {
+        kitchenAutoRefreshActive = false;
+        kitchenRefreshGeneration++;
+        if (kitchenRefreshRunnable != null) {
+            kitchenRefreshHandler.removeCallbacks(kitchenRefreshRunnable);
+        }
+        kitchenRefreshRunnable = null;
+        kitchenLiveRecordsHost = null;
+        kitchenLastTicketsSignature = "";
     }
 
     private void installKitchenGestures(View target, String category) {
@@ -2023,6 +2123,7 @@ public class MainActivity extends Activity {
     private void updateKitchen(int ticketId,String status,String refreshCategory){JSONObject p=new JSONObject();try{p.put("ticket_id",ticketId);p.put("status",status);}catch(Exception ignored){}postJson("/api/mobile/kitchen/ticket/update",p,r->showKitchen(refreshCategory));}
 
     private void logout() {
+        stopKitchenAutoRefresh();
         currentBackAction = null;
         sessionPassword = "";
         canHall = false;

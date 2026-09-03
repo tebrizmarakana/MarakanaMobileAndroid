@@ -1,3 +1,13 @@
+# Marakana Mobile Native v29
+
+## v29 — Mətbəx canlı sifariş yenilənməsi
+- Mətbəx istifadəçisi `Hazırlanır`/`Hazırdır` ekranında gözləyərkən sifarişlər artıq əl ilə yenilənmədən avtomatik gəlir.
+- Mobil proqram PC REST API-ni lokal şəbəkədə təxminən hər **750 ms** səssiz yoxlayır.
+- Yeni məhsul gələndə siyahı həmin anda yenilənir; məlumat dəyişməyibsə UI yenidən qurulmur.
+- Mətbəx ekranından çıxanda və proqram arxa plana keçəndə polling dayanır; geri qayıdanda dərhal davam edir.
+- `versionCode 29`, `versionName 3.4.6-native-v29`.
+- Release artifact: `MarakanaMobile-v29-permanent-update-apk`.
+
 # Marakana Mobile Native Android v2
 
 Bu layihə əvvəlki WebView versiyası deyil.

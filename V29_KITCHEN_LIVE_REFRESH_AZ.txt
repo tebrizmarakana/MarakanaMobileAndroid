@@ -1,0 +1,11 @@
+MARAKANA MOBILE v29 — MƏTBƏX CANLI YENİLƏNMƏ
+
+- Mətbəx istifadəçisi Mətbəx ekranında gözləyərkən /api/mobile/kitchen/tickets avtomatik yoxlanılır.
+- Yoxlama təxminən hər 750 ms-də bir edilir və yalnız əvvəlki cavab bitəndən sonra növbəti yoxlama başlayır.
+- PC-də yeni mətbəx məhsulu/sifarişi yarananda mobil ekranda Refresh etmədən avtomatik görünür.
+- Sifariş siyahısı yalnız məlumat həqiqətən dəyişəndə yenidən render olunur; buna görə ekran boş yerə titrəmir.
+- Mətbəx ekranından çıxanda avtomatik yoxlama dayanır. App arxa plana keçəndə dayanır, geri açıldıqda dərhal yenidən yoxlayır.
+- Sessiya 401 ilə bitərsə əvvəlki login axını işləyir. Qısa LAN xətaları popup spam yaratmır və sistem özü yenidən yoxlamağa davam edir.
+- versionCode: 29
+- versionName: 3.4.6-native-v29
+- GitHub artifact: MarakanaMobile-v29-permanent-update-apk

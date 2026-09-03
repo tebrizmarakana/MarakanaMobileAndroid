@@ -1,0 +1,16 @@
+V29 STATIC TEST RESULTS
+=======================
+PASS - MainActivity Java braces/parentheses/brackets balanced
+PASS - Kitchen one-shot load replaced by foreground live polling
+PASS - Poll interval 750 ms
+PASS - No overlapping poll loop: next request is scheduled after current response/error
+PASS - UI rerenders only when ticket JSON changes
+PASS - Kitchen polling stops on screen clear/logout/destroy
+PASS - Polling pauses when Activity goes to background and resumes immediately onStart
+PASS - 401 session expiry uses existing login error handler
+PASS - transient LAN errors retry silently
+PASS - versionCode 29
+PASS - versionName 3.4.6-native-v29
+PASS - GitHub main workflow artifact is v29
+PASS - helper workflow/docs names synchronized to v29
+NOTE - Android SDK/Gradle is not installed in this Linux container, so full assembleRelease was not executed here. GitHub Actions workflow remains the actual release build path.
