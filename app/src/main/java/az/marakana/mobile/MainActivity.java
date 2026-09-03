@@ -536,12 +536,6 @@ public class MainActivity extends Activity {
                 switchMobileRole("kitchen", false, this::showKitchen);
             });
         }
-        if ("kitchen".equals(role)) {
-            addDrawerItem(panel, "Bildiriş səsi", () -> {
-                holder[0].dismiss();
-                chooseKitchenNotificationSound();
-            });
-        }
         if (canAdmin) {
             addDrawerItem(panel, "Borc Dəftəri", () -> {
                 holder[0].dismiss();
@@ -551,6 +545,30 @@ public class MainActivity extends Activity {
 
         View flex = new View(this);
         panel.addView(flex, new LinearLayout.LayoutParams(1, 0, 1f));
+
+        if ("kitchen".equals(role)) {
+            LinearLayout soundItem = new LinearLayout(this);
+            soundItem.setOrientation(LinearLayout.VERTICAL);
+            soundItem.setGravity(Gravity.CENTER_VERTICAL);
+            soundItem.setPadding(dp(14), dp(7), dp(14), dp(7));
+            soundItem.setBackground(bg(CARD, 14, BORDER));
+            soundItem.setClickable(true);
+            soundItem.setFocusable(true);
+
+            TextView soundTitle = text("Bildiriş səsi", 14, TEXT, true);
+            TextView soundValue = text(getKitchenNotificationSoundTitle(), 12, MUTED, false);
+            soundValue.setSingleLine(true);
+            soundItem.addView(soundTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(23)));
+            soundItem.addView(soundValue, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(21)));
+
+            LinearLayout.LayoutParams soundLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(60));
+            soundLp.setMargins(0, 0, 0, dp(8));
+            panel.addView(soundItem, soundLp);
+            soundItem.setOnClickListener(v -> {
+                holder[0].dismiss();
+                chooseKitchenNotificationSound();
+            });
+        }
 
         Button exit = button("Çıxış", Color.rgb(255, 246, 246), Color.rgb(176, 54, 54));
         exit.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
@@ -2047,6 +2065,21 @@ public class MainActivity extends Activity {
             try { return Uri.parse(stored); } catch (Exception ignored) {}
         }
         return RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+    }
+
+    private String getKitchenNotificationSoundTitle() {
+        String stored = prefs.getString(KEY_KITCHEN_NOTIFICATION_SOUND, "");
+        if (KITCHEN_NOTIFICATION_SILENT.equals(stored)) return "Səssiz";
+        Uri uri = getKitchenNotificationSoundUri();
+        if (uri == null) return "Səssiz";
+        try {
+            android.media.Ringtone ringtone = RingtoneManager.getRingtone(this, uri);
+            if (ringtone != null) {
+                String title = ringtone.getTitle(this);
+                if (title != null && !title.trim().isEmpty()) return title.trim();
+            }
+        } catch (Exception ignored) {}
+        return (stored == null || stored.trim().isEmpty()) ? "Standart bildiriş səsi" : "Seçilmiş bildiriş səsi";
     }
 
     private String kitchenNotificationChannelId() {

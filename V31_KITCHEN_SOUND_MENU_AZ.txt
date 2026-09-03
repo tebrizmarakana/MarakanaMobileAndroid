@@ -1,0 +1,12 @@
+MARAKANA MOBILE v31 — MƏTBƏX BİLDİRİŞ SƏSİ MENYUSU
+===================================================
+1. Bildiriş səsi yalnız Mətbəx rejimində görünür.
+2. Menyunun aşağı hissəsində, Çıxış düyməsinin üstündə yerləşir.
+3. Hazırda seçilmiş səsin adı bölmədə göstərilir.
+4. Bölməyə klikləməklə səs yenisi ilə dəyişdirilir.
+5. Səssiz seçilərsə Səssiz yazısı görünür.
+6. Seçim restart/update sonrası SharedPreferences-də qorunur.
+
+versionCode: 31
+versionName: 3.4.8-native-v31
+GitHub artifact: MarakanaMobile-v31-permanent-update-apk

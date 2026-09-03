@@ -1,0 +1,17 @@
+MARAKANA MOBILE v31 — MƏTBƏX BİLDİRİŞİ
+=======================================
+
+1. Mətbəx ekranı açıq/gözləmə rejimində yeni sifariş gələndə siyahı dərhal yenilənir.
+2. Yeni sifariş üçün WhatsApp tipli yuxarı heads-up Android bildirişi göstərilir.
+3. Bildirişdə kabinet/terminal, ümumi məhsul sayı və məhsul sətirləri var.
+4. Mətbəx rolu aktivdirsə sol menyuda “Bildiriş səsi” görünür.
+5. Səs sistem Ringtone Picker ilə seçilir; səssiz seçim də mümkündür.
+6. Seçilən səs SharedPreferences-də qalır və restart/update sonrası saxlanır.
+7. İlk poll mövcud sifarişləri baza kimi qəbul edir; köhnə sifarişə təkrar bildiriş çıxmır.
+8. Yeni sifariş ID-si bir dəfə bildirilir.
+9. Android 13+ POST_NOTIFICATIONS icazəsi dəstəklənir.
+10. 750 ms canlı polling qorunur.
+
+versionCode: 31
+versionName: 3.4.8-native-v31
+GitHub artifact: MarakanaMobile-v31-permanent-update-apk

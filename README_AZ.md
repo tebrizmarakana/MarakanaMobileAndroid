@@ -1,14 +1,16 @@
-# Marakana Mobile Native v30
+# Marakana Mobile Native v31
 
-## v30 — Mətbəx sifariş bildirişi + səs seçimi
+## v31 — Mətbəx bildiriş səsi menyunun aşağısında
 
-- Mətbəx istifadəçisi Mətbəx ekranında gözləyərkən yeni sifariş gələn kimi canlı siyahı yenilənir.
-- Yeni sifariş üçün Android yüksək prioritetli heads-up bildiriş yuxarıdan görünür.
-- Bildirişdə terminal/kabinet adı, məhsul sayı və məhsullar göstərilir.
-- Mətbəx rolu aktiv olanda sol menyuda **Bildiriş səsi** bölməsi görünür.
-- Bildiriş səsi Android-in sistem səs seçimindən dəyişdirilə və səssiz edilə bilər.
-- Android 13+ üçün bildiriş icazəsi Mətbəx rejiminə girəndə istənir.
-- İlk siyahı yüklənəndə köhnə sifarişlər bildiriş kimi təkrar gəlmir; yalnız sonradan gələn yeni sifarişlər xəbər verir.
-- 0.75 saniyəlik Mətbəx canlı refresh məntiqi qorunur.
-- `versionCode 30`, `versionName 3.4.7-native-v30`.
-- Release artifact: `MarakanaMobile-v30-permanent-update-apk`.
+- Mətbəx istifadəçisi rejimində **Bildiriş səsi** artıq sol menyunun aşağı hissəsində, **Çıxış** düyməsinin birbaşa üstündədir.
+- Bölmənin içində hazırda seçilmiş bildiriş səsinin adı görünür.
+- Həmin bölməyə klikləyib yeni bildiriş səsi seçmək mümkündür.
+- `Səssiz` seçilərsə menyuda da `Səssiz` görünür.
+- Seçilmiş səs `SharedPreferences`-də yadda qalır və proqram yenidən açılanda da adı göstərilir.
+- əvvəlki mətbəx canlı yenilənmə və yuxarıdan heads-up sifariş bildirişi qorunur.
+
+## Versiya
+
+- `versionCode 31`
+- `versionName 3.4.8-native-v31`
+- Release artifact: `MarakanaMobile-v31-permanent-update-apk`

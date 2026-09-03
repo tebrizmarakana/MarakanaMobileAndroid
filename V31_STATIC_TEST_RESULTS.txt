@@ -1,0 +1,12 @@
+V31 STATIC TEST RESULTS
+=======================
+PASS - Mətbəx rejimində Bildiriş səsi adi yuxarı menu siyahısından çıxarılıb.
+PASS - Bildiriş səsi Çıxış düyməsinin birbaşa üstündə yerləşir.
+PASS - Seçilmiş bildiriş səsinin adı menyuda görünür.
+PASS - Səs bölməsinə klik yeni səs seçicisini açır.
+PASS - Səssiz seçimi menyuda Səssiz kimi görünür.
+PASS - Seçilmiş URI SharedPreferences-də qalır.
+PASS - əvvəlki canlı mətbəx yenilənməsi və heads-up notification qorunur.
+PASS - versionCode 31
+PASS - versionName 3.4.8-native-v31
+PASS - GitHub main workflow artifact v31-dir.
