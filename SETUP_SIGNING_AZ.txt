@@ -13,8 +13,8 @@ GitHub-da:
    - MARAKANA_KEY_PASSWORD
 5. Sonra repo fayllarını v19 UPDATE_FILES ilə yenilə.
 6. Actions -> Build Marakana Mobile Native v19 RELEASE APK -> Run workflow.
-7. Artifact: MarakanaMobile-v33-permanent-update-apk
-8. APK: MarakanaMobile-v33-release.apk
+7. Artifact: MarakanaMobile-v34-permanent-update-apk
+8. APK: MarakanaMobile-v34-release.apk
 
 VACİB:
 - v19 yeni daimi release sertifikatına keçir.

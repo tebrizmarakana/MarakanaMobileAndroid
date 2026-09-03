@@ -10,8 +10,8 @@ android {
         applicationId 'az.marakana.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 33
-        versionName '3.4.10-native-v33'
+        versionCode 34
+        versionName '3.4.11-native-v34'
     }
 
     signingConfigs {

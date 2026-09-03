@@ -1,0 +1,9 @@
+V34 STATIC TEST RESULTS
+=======================
+PASS - versionCode 34
+PASS - versionName 3.4.11-native-v34
+PASS - GitHub workflow artifact v34
+PASS - release APK name MarakanaMobile-v34-release.apk
+PASS - Kitchen product text size = 15sp
+PASS - Kitchen product text remains bold
+PASS - Kitchen station name remains blue

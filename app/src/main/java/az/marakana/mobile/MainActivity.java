@@ -2417,7 +2417,7 @@ public class MainActivity extends Activity {
             if (items != null) {
                 for (int j = 0; j < items.length(); j++) {
                     JSONObject it = items.optJSONObject(j);
-                    if (it != null) c.addView(text("• " + it.optString("name", "") + " x" + it.optInt("qty", 1), 14, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30)));
+                    if (it != null) c.addView(text("• " + it.optString("name", "") + " x" + it.optInt("qty", 1), 15, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
                 }
             }
 

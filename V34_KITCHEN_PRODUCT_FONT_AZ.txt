@@ -1,0 +1,5 @@
+MARAKANA MOBILE v34 — MƏTBƏX MƏHSUL ADI ÖLÇÜSÜ
+
+- Mətbəx istifadəçisi ekranında sifariş məhsul adları 1 ölçü böyüdü: 14sp -> 15sp.
+- Qalın şrift saxlanıldı.
+- Terminal/kabinet adı mavi rəngdə saxlanıldı.

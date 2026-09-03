@@ -1,6 +1,10 @@
-# Marakana Mobile Native v33
+# Marakana Mobile Native v34
 
-## v33 — Mətbəx görünüş düzəlişi
+## v34 — Mətbəx məhsul adı ölçüsü
+
+- Mətbəx sifarişlərində məhsul adlarının şrift ölçüsü 14sp-dən 15sp-ə qaldırıldı.
+- Məhsul adları qalın şrift olaraq qalır.
+- Terminal/kabinet adı mavi rəngdə qalır.
 
 Mətbəx istifadəçisi ekranında sifarişlərin oxunması daha aydın edildi:
 
@@ -11,9 +15,9 @@ Mətbəx istifadəçisi ekranında sifarişlərin oxunması daha aydın edildi:
 
 ## Versiya
 
-- `versionCode 33`
-- `versionName 3.4.10-native-v33`
-- Release artifact: `MarakanaMobile-v33-permanent-update-apk`
-- Release APK: `MarakanaMobile-v33-release.apk`
+- `versionCode 34`
+- `versionName 3.4.11-native-v34`
+- Release artifact: `MarakanaMobile-v34-permanent-update-apk`
+- Release APK: `MarakanaMobile-v34-release.apk`
 
 GitHub Actions ilə əvvəlki permanent signing secret-ləri istifadə olunur.
