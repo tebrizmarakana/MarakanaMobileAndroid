@@ -806,16 +806,47 @@ public class MainActivity extends Activity {
         setBusy(true);
         io.execute(() -> {
             try {
-                JSONObject payload = new JSONObject();
-                payload.put("username", u);
-                payload.put("password", p);
-                payload.put("role", selectedRole);
-                JSONObject result = request(serverBase, "/api/mobile/login", "POST", payload, "");
+                String preferredRole = selectedRole == null ? "hall" : selectedRole.trim().toLowerCase(Locale.ROOT);
+                if (!preferredRole.equals("hall") && !preferredRole.equals("kitchen") && !preferredRole.equals("admin")) {
+                    preferredRole = "hall";
+                }
+
+                List<String> candidates = new ArrayList<>();
+                candidates.add(preferredRole);
+                for (String candidate : new String[]{"hall", "kitchen", "admin"}) {
+                    if (!candidates.contains(candidate)) candidates.add(candidate);
+                }
+
+                JSONObject result = null;
+                String loggedRole = "";
+                Exception lastError = null;
+                for (String candidate : candidates) {
+                    try {
+                        JSONObject payload = new JSONObject();
+                        payload.put("username", u);
+                        payload.put("password", p);
+                        payload.put("role", candidate);
+                        JSONObject candidateResult = request(serverBase, "/api/mobile/login", "POST", payload, "");
+                        String candidateToken = candidateResult.optString("token", "");
+                        if (candidateToken.isEmpty()) throw new RuntimeException("Mobil sessiya yaradılmadı.");
+                        result = candidateResult;
+                        loggedRole = candidate;
+                        break;
+                    } catch (Exception roleError) {
+                        lastError = roleError;
+                    }
+                }
+
+                if (result == null) {
+                    if (lastError != null) throw lastError;
+                    throw new RuntimeException("Bu istifadəçi üçün mobil giriş icazəsi tapılmadı.");
+                }
+
                 sessionToken = result.optString("token", "");
                 username = result.optString("username", u);
-                role = result.optString("role", selectedRole);
+                role = result.optString("role", loggedRole);
                 roleLabel = result.optString("role_label", role);
-                adminDebtOnly = role.equals("admin") && debtOnly;
+                adminDebtOnly = role.equals("admin") && debtOnly && preferredRole.equals("admin");
                 sessionPassword = p;
                 refreshAllowedMobileRoles(username, p, role);
                 SharedPreferences.Editor editor = prefs.edit()
@@ -1105,12 +1136,8 @@ public class MainActivity extends Activity {
                         if (item == null) continue;
                         String itemUsername = item.optString("username", "").trim();
                         if (itemUsername.isEmpty()) continue;
-                        String fullName = item.optString("full_name", "").trim();
-                        String label = fullName.isEmpty() || fullName.equalsIgnoreCase(itemUsername)
-                                ? itemUsername
-                                : fullName + " (" + itemUsername + ")";
                         loadedUsernames.add(itemUsername);
-                        loadedLabels.add(label);
+                        loadedLabels.add(itemUsername);
                     }
                 }
                 runOnUiThread(() -> {
@@ -1156,17 +1183,6 @@ public class MainActivity extends Activity {
         pass.setLayoutParams(pp);
         body.addView(pass);
 
-        Spinner roleSpin = new Spinner(this);
-        List<String> roles = new ArrayList<>(); roles.add("Zal"); roles.add("Mətbəx"); roles.add("Admin"); roles.add("Borc Dəftəri");
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, roles);
-        roleSpin.setAdapter(adapter);
-        roleSpin.setBackground(bg(CARD, 14, BORDER));
-        int selected = role.equals("kitchen") ? 1 : (role.equals("admin") && adminDebtOnly) ? 3 : role.equals("admin") ? 2 : 0;
-        roleSpin.setSelection(selected);
-        LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
-        rp.setMargins(0, dp(10), 0, 0);
-        body.addView(roleSpin, rp);
-
         CheckBox remember = new CheckBox(this);
         remember.setText("Şifrəni yadda saxla və avtomatik daxil ol");
         remember.setTextColor(TEXT);
@@ -1197,11 +1213,8 @@ public class MainActivity extends Activity {
             }
             String u = loginUsernames.get(userPosition);
             String p = pass.getText().toString();
-            int rolePosition = roleSpin.getSelectedItemPosition();
-            String selectedRole = rolePosition == 1 ? "kitchen" : (rolePosition == 2 || rolePosition == 3) ? "admin" : "hall";
-            boolean selectedDebtOnly = rolePosition == 3;
             if (p.isEmpty()) { toast("Şifrəni yazın."); return; }
-            performLogin(u, p, selectedRole, selectedDebtOnly, remember.isChecked(), true);
+            performLogin(u, p, role, false, remember.isChecked(), true);
         });
     }
 

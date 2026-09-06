@@ -1,0 +1,9 @@
+V43 LOGIN SIMPLIFICATION TEST RESULTS
+=====================================
+PASS - versionCode=43 / versionName=3.4.20-native-v43
+PASS - Login role Spinner removed
+PASS - Login user labels show username only
+PASS - Login tries preferred role then hall/kitchen/admin automatically
+PASS - Side menu role switching logic preserved
+PASS - Existing rental/kitchen/background notification logic preserved
+PASS - GitHub workflow/artifact names bumped to v43
