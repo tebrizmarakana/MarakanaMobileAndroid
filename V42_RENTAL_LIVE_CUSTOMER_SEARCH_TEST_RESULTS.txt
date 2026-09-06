@@ -1,0 +1,11 @@
+V42 RENTAL LIVE CUSTOMER SEARCH TEST RESULTS
+===========================================
+PASS - versionCode=42 / versionName=3.4.19-native-v42
+PASS - Yeni icarə formunda yazdıqca uyğun müştərilər lokal siyahıdan tapılır
+PASS - Ad, telefon və qohum telefonu üzrə contains axtarışı var
+PASS - Hər uyğun nəticə kliklənərək seçilə bilir
+PASS - Seçilmiş müştəri payload customer_uuid üçün istifadə olunur
+PASS - Axtarış mətni dəyişəndə əvvəlki seçimin etibarı ləğv olunur
+PASS - Axtarış hər hərfdə server request yaratmır
+PASS - Yeni icarə loading popup məntiqi saxlanılıb
+PASS - Yeni icarə və müştəri detalında 5 saniyəlik auto-refresh yoxdur

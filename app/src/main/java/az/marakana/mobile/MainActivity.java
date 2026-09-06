@@ -1907,7 +1907,7 @@ public class MainActivity extends Activity {
     }
 
     private void openRentalCreateForm() {
-        // v41: Yeni icarə düyməsinə toxunan kimi ortada loading popupı göstərilir.
+        // v42: Yeni icarə düyməsinə toxunan kimi ortada loading popupı göstərilir.
         // Forma məlumat tam yükləndikdən sonra açılır və açıldıqdan sonra avtomatik refresh edilmir.
         final AlertDialog createLoadingDialog = showRentalCenteredLoading("Yeni icarə məlumatları yüklənir...");
         loadRentalJsonOnce("/api/mobile/rental/options",
@@ -1928,17 +1928,10 @@ public class MainActivity extends Activity {
         if (consolesJson == null) consolesJson = new JSONArray();
 
         final List<JSONObject> allCustomerRows = new ArrayList<>();
-        final List<JSONObject> customerRows = new ArrayList<>();
-        final List<String> customerLabels = new ArrayList<>();
-        customerLabels.add("Müştəri seçin");
         for (int i = 0; i < customersJson.length(); i++) {
             JSONObject row = customersJson.optJSONObject(i);
             if (row == null) continue;
             allCustomerRows.add(row);
-            customerRows.add(row);
-            String name = row.optString("full_name", "Müştəri").trim();
-            String phone = row.optString("phone", "").trim();
-            customerLabels.add(name + (phone.isEmpty() ? "" : " • " + phone));
         }
 
         final List<JSONObject> consoleRows = new ArrayList<>();
@@ -1971,37 +1964,88 @@ public class MainActivity extends Activity {
         EditText customerSearch = input("Müştərini ad və ya telefonla axtar");
         customerSearch.setSingleLine(true);
         body.addView(customerSearch);
-        spacer(body, 7);
+        spacer(body, 6);
 
-        Spinner customerSpin = new Spinner(this);
-        final ArrayAdapter<String> customerAdapter = new ArrayAdapter<>(
-                this,
-                android.R.layout.simple_spinner_dropdown_item,
-                new ArrayList<>(customerLabels)
-        );
-        customerSpin.setAdapter(customerAdapter);
-        customerSpin.setBackground(bg(CARD, 12, BORDER));
-        body.addView(customerSpin, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        // v42: yazdıqca uyğun müştərilər dərhal aşağıda görünür və istənilən nəticə seçilir.
+        // Axtarış lokal yüklənmiş siyahıda ad, telefon və qohum telefonu üzrə contains məntiqi ilə işləyir.
+        final JSONObject[] selectedCustomer = new JSONObject[]{null};
+        final boolean[] suppressCustomerSearchWatcher = new boolean[]{false};
 
-        // v41: Yeni icarə formasında müştərini ad və ya telefonla əl ilə axtarmaq olur.
-        // Filtr yalnız ekrandakı seçim siyahısını dəyişir; serverə əlavə sorğu göndərilmir.
-        customerSearch.addTextChangedListener(new SimpleTextWatcher(() -> {
+        LinearLayout customerMatches = new LinearLayout(this);
+        customerMatches.setOrientation(LinearLayout.VERTICAL);
+        customerMatches.setPadding(dp(6), dp(6), dp(6), dp(6));
+        customerMatches.setBackground(bg(CARD, 12, BORDER));
+        customerMatches.setVisibility(View.GONE);
+        body.addView(customerMatches, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView selectedCustomerView = text("Müştəri seçilməyib", 12, MUTED, true);
+        selectedCustomerView.setPadding(dp(4), dp(6), dp(4), 0);
+        body.addView(selectedCustomerView);
+
+        Runnable refreshCustomerMatches = () -> {
+            if (suppressCustomerSearchWatcher[0]) return;
+            selectedCustomer[0] = null;
+            selectedCustomerView.setText("Müştəri seçilməyib");
+            selectedCustomerView.setTextColor(MUTED);
+            customerMatches.removeAllViews();
+
             String q = customerSearch.getText().toString().trim().toLowerCase(Locale.ROOT);
-            customerRows.clear();
-            customerAdapter.clear();
-            customerAdapter.add("Müştəri seçin");
+            if (q.isEmpty()) {
+                customerMatches.setVisibility(View.GONE);
+                return;
+            }
+
+            int shown = 0;
+            int totalMatches = 0;
             for (JSONObject row : allCustomerRows) {
                 String name = row.optString("full_name", "Müştəri").trim();
                 String phone = row.optString("phone", "").trim();
                 String relativePhone = row.optString("relative_phone", "").trim();
                 String haystack = (name + " " + phone + " " + relativePhone).toLowerCase(Locale.ROOT);
-                if (!q.isEmpty() && !haystack.contains(q)) continue;
-                customerRows.add(row);
-                customerAdapter.add(name + (phone.isEmpty() ? "" : " • " + phone));
+                if (!haystack.contains(q)) continue;
+                totalMatches++;
+                if (shown >= 12) continue;
+
+                String label = name + (phone.isEmpty() ? "" : " • " + phone);
+                TextView option = text(label, 14, TEXT, true);
+                option.setPadding(dp(12), dp(11), dp(12), dp(11));
+                option.setBackground(bg(Color.rgb(248, 251, 255), 9, BORDER));
+                LinearLayout.LayoutParams optionLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                optionLp.setMargins(0, 0, 0, dp(5));
+                customerMatches.addView(option, optionLp);
+                option.setClickable(true);
+                option.setOnClickListener(v -> {
+                    selectedCustomer[0] = row;
+                    suppressCustomerSearchWatcher[0] = true;
+                    customerSearch.setText(label);
+                    customerSearch.setSelection(customerSearch.getText().length());
+                    suppressCustomerSearchWatcher[0] = false;
+                    selectedCustomerView.setText("Seçildi: " + label);
+                    selectedCustomerView.setTextColor(GREEN);
+                    customerMatches.removeAllViews();
+                    customerMatches.setVisibility(View.GONE);
+                });
+                shown++;
             }
-            customerAdapter.notifyDataSetChanged();
-            customerSpin.setSelection(0);
-        }));
+
+            if (totalMatches == 0) {
+                TextView empty = text("Uyğun müştəri tapılmadı", 13, MUTED, true);
+                empty.setPadding(dp(12), dp(12), dp(12), dp(12));
+                customerMatches.addView(empty);
+            } else if (totalMatches > shown) {
+                TextView more = text("Daha " + (totalMatches - shown) + " uyğun nəticə var — axtarışı dəqiqləşdirin", 11, MUTED, false);
+                more.setPadding(dp(8), dp(5), dp(8), dp(5));
+                customerMatches.addView(more);
+            }
+            customerMatches.setVisibility(View.VISIBLE);
+        };
+
+        customerSearch.addTextChangedListener(new SimpleTextWatcher(refreshCustomerMatches));
+        customerSearch.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus && !customerSearch.getText().toString().trim().isEmpty() && selectedCustomer[0] == null) {
+                refreshCustomerMatches.run();
+            }
+        });
         spacer(body, 9);
 
         body.addView(rentalFormLabel("Konsol"));
@@ -2074,8 +2118,7 @@ public class MainActivity extends Activity {
         });
 
         java.util.concurrent.Callable<JSONObject> payloadBuilder = () -> {
-            int customerIndex = customerSpin.getSelectedItemPosition();
-            if (customerIndex <= 0 || customerIndex - 1 >= customerRows.size()) throw new Exception("Müştəri seçin.");
+            if (selectedCustomer[0] == null) throw new Exception("Axtarış nəticəsindən müştəri seçin.");
             int consoleIndex = consoleSpin.getSelectedItemPosition();
             if (consoleIndex <= 0) throw new Exception("Konsol seçin.");
             boolean consoleless = consoleIndex == consoleLabels.size() - 1;
@@ -2094,7 +2137,7 @@ public class MainActivity extends Activity {
             if (rentalDays < 1 || rentalDays > 365) throw new Exception("Gün sayı 1–365 aralığında olmalıdır.");
             String[] paymentValues = {"cash", "card", "credit"};
             JSONObject payload = new JSONObject();
-            payload.put("customer_uuid", customerRows.get(customerIndex - 1).optString("customer_uuid", ""));
+            payload.put("customer_uuid", selectedCustomer[0].optString("customer_uuid", ""));
             payload.put("console_uuid", selectedConsole.optString("console_uuid", ""));
             payload.put("consoleless", consoleless);
             payload.put("controller_count", controllerSpin.getSelectedItemPosition() + 1);
@@ -2134,8 +2177,7 @@ public class MainActivity extends Activity {
                         return;
                     }
                     quoteView.setText(rentalQuoteText(quote));
-                    int customerIndex = customerSpin.getSelectedItemPosition();
-                    String customerName = customerIndex > 0 && customerIndex - 1 < customerRows.size() ? customerRows.get(customerIndex - 1).optString("full_name", "Müştəri") : "Müştəri";
+                    String customerName = selectedCustomer[0] != null ? selectedCustomer[0].optString("full_name", "Müştəri") : "Müştəri";
                     String confirm = customerName + "\n" + quote.optString("console_name", "") + "\n" + quote.optInt("days", 0) + " gün • " + quote.optInt("controller_count", 1) + " pult\n\nYekun: " + money(quote.optDouble("total_amount", 0));
                     new AlertDialog.Builder(this)
                             .setTitle("Yeni icarəni təsdiqlə")
