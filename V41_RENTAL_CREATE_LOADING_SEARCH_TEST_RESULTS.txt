@@ -1,0 +1,9 @@
+V41 RENTAL CREATE LOADING + CUSTOMER SEARCH TEST RESULTS
+========================================================
+PASS - Yeni icarə düyməsində centered loading popup yaradılır.
+PASS - Popup yalnız options cavabı gəldikdən sonra bağlanır və forma açılır.
+PASS - Xəta halında popup bağlanır və xəta mesajı göstərilir.
+PASS - Yeni icarə formasında ad/telefon axtarış xanası var.
+PASS - Axtarış lokal filter edir, əlavə API sorğusu yaratmır.
+PASS - Seçilən müştəri filtered customerRows siyahısından payload-a düzgün bağlanır.
+PASS - versionCode=41 / versionName=3.4.18-native-v41.

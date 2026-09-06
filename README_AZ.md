@@ -1,4 +1,18 @@
-# Marakana Mobile Native v40
+# Marakana Mobile Native v41
+
+## v41 — Yeni icarə loading popupı + müştəri axtarışı
+
+- `Yeni icarə yarat` düyməsinə toxunanda ortada **Yeni icarə məlumatları yüklənir...** popupı görünür.
+- Forma yalnız məlumat tam yükləndikdən sonra açılır.
+- Yeni icarə formasında **Müştərini ad və ya telefonla axtar** xanası əlavə olunub.
+- Yazdıqca Müştəri seçimi lokal olaraq filtr olunur; əlavə server sorğusu göndərilmir.
+- Forma açıldıqdan sonra avtomatik periodik yenilənmə yoxdur.
+- `versionCode 41`
+- `versionName 3.4.18-native-v41`
+- Release artifact: `MarakanaMobile-v41-permanent-update-apk`
+- Release APK: `MarakanaMobile-v41-release.apk`
+
+---
 
 ## v40 — Müştəri detalı yüklənmə popupı
 

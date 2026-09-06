@@ -1,0 +1,8 @@
+V40 CUSTOMER DETAIL LOADING TEST RESULTS
+=========================================
+PASS - Müştəri kartına klik ediləndə modal loading popup dərhal açılır.
+PASS - Popup mətni: "Müştəri məlumatları yüklənir...".
+PASS - Müştəri detal pəncərəsi yalnız API cavabı uğurla gəldikdən sonra açılır.
+PASS - API xətasında loading popup bağlanır və xəta toast ilə göstərilir.
+PASS - Müştəri detal pəncərəsində 5 saniyəlik avtomatik yenilənmə yoxdur.
+PASS - versionCode=40 / versionName=3.4.17-native-v40.

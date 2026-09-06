@@ -1907,10 +1907,18 @@ public class MainActivity extends Activity {
     }
 
     private void openRentalCreateForm() {
-        toast("Yeni icarə məlumatları yüklənir...");
-        // v40: forma yalnız daxil olarkən bir dəfə yüklənir. Açıldıqdan sonra avtomatik refresh yoxdur.
-        loadRentalJsonOnce("/api/mobile/rental/options", result -> renderRentalCreateForm(result),
-                message -> toast("Yeni icarə açıla bilmədi: " + message));
+        // v41: Yeni icarə düyməsinə toxunan kimi ortada loading popupı göstərilir.
+        // Forma məlumat tam yükləndikdən sonra açılır və açıldıqdan sonra avtomatik refresh edilmir.
+        final AlertDialog createLoadingDialog = showRentalCenteredLoading("Yeni icarə məlumatları yüklənir...");
+        loadRentalJsonOnce("/api/mobile/rental/options",
+                result -> {
+                    if (createLoadingDialog.isShowing()) createLoadingDialog.dismiss();
+                    renderRentalCreateForm(result);
+                },
+                message -> {
+                    if (createLoadingDialog.isShowing()) createLoadingDialog.dismiss();
+                    toast("Yeni icarə açıla bilmədi: " + message);
+                });
     }
 
     private void renderRentalCreateForm(JSONObject options) {
@@ -1919,12 +1927,14 @@ public class MainActivity extends Activity {
         if (customersJson == null) customersJson = new JSONArray();
         if (consolesJson == null) consolesJson = new JSONArray();
 
+        final List<JSONObject> allCustomerRows = new ArrayList<>();
         final List<JSONObject> customerRows = new ArrayList<>();
         final List<String> customerLabels = new ArrayList<>();
         customerLabels.add("Müştəri seçin");
         for (int i = 0; i < customersJson.length(); i++) {
             JSONObject row = customersJson.optJSONObject(i);
             if (row == null) continue;
+            allCustomerRows.add(row);
             customerRows.add(row);
             String name = row.optString("full_name", "Müştəri").trim();
             String phone = row.optString("phone", "").trim();
@@ -1958,10 +1968,40 @@ public class MainActivity extends Activity {
         spacer(body, 8);
 
         body.addView(rentalFormLabel("Müştəri"));
+        EditText customerSearch = input("Müştərini ad və ya telefonla axtar");
+        customerSearch.setSingleLine(true);
+        body.addView(customerSearch);
+        spacer(body, 7);
+
         Spinner customerSpin = new Spinner(this);
-        customerSpin.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, customerLabels));
+        final ArrayAdapter<String> customerAdapter = new ArrayAdapter<>(
+                this,
+                android.R.layout.simple_spinner_dropdown_item,
+                new ArrayList<>(customerLabels)
+        );
+        customerSpin.setAdapter(customerAdapter);
         customerSpin.setBackground(bg(CARD, 12, BORDER));
         body.addView(customerSpin, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+
+        // v41: Yeni icarə formasında müştərini ad və ya telefonla əl ilə axtarmaq olur.
+        // Filtr yalnız ekrandakı seçim siyahısını dəyişir; serverə əlavə sorğu göndərilmir.
+        customerSearch.addTextChangedListener(new SimpleTextWatcher(() -> {
+            String q = customerSearch.getText().toString().trim().toLowerCase(Locale.ROOT);
+            customerRows.clear();
+            customerAdapter.clear();
+            customerAdapter.add("Müştəri seçin");
+            for (JSONObject row : allCustomerRows) {
+                String name = row.optString("full_name", "Müştəri").trim();
+                String phone = row.optString("phone", "").trim();
+                String relativePhone = row.optString("relative_phone", "").trim();
+                String haystack = (name + " " + phone + " " + relativePhone).toLowerCase(Locale.ROOT);
+                if (!q.isEmpty() && !haystack.contains(q)) continue;
+                customerRows.add(row);
+                customerAdapter.add(name + (phone.isEmpty() ? "" : " • " + phone));
+            }
+            customerAdapter.notifyDataSetChanged();
+            customerSpin.setSelection(0);
+        }));
         spacer(body, 9);
 
         body.addView(rentalFormLabel("Konsol"));
