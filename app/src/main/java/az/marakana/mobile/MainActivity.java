@@ -1680,6 +1680,7 @@ public class MainActivity extends Activity {
         LinearLayout recordsHost = new LinearLayout(this);
         recordsHost.setOrientation(LinearLayout.VERTICAL);
         body.addView(recordsHost);
+        recordsHost.addView(empty("İcarə məlumatları yüklənir..."));
 
         installRentalGestures(scroll, activeSection);
         installRentalGestures(body, activeSection);
@@ -1687,7 +1688,7 @@ public class MainActivity extends Activity {
         LinearLayout footer = buildRentalFooter(activeSection);
         shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(88)));
 
-        loadJson("/api/mobile/rental/list?section=" + urlEncode(activeSection), result -> {
+        loadRentalJson("/api/mobile/rental/list?section=" + urlEncode(activeSection), 2, result -> {
             JSONArray items = result.optJSONArray("items");
             if (items == null) items = new JSONArray();
             JSONObject counts = result.optJSONObject("counts");
@@ -1698,6 +1699,18 @@ public class MainActivity extends Activity {
             Runnable render = () -> renderRentalRecords(recordsHost, activeSection, finalItems, search.getText().toString());
             search.addTextChangedListener(new SimpleTextWatcher(render));
             render.run();
+        }, message -> {
+            summaryHost.removeAllViews();
+            recordsHost.removeAllViews();
+            LinearLayout errorCard = card();
+            errorCard.addView(text("İcarə məlumatları yüklənmədi", 15, Color.rgb(180, 55, 55), true));
+            TextView detail = text(message, 12, MUTED, false);
+            detail.setPadding(0, dp(6), 0, dp(10));
+            errorCard.addView(detail);
+            Button retry = button("Yenidən yoxla", BLUE, Color.WHITE);
+            retry.setOnClickListener(v -> showRental(activeSection));
+            errorCard.addView(retry, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
+            recordsHost.addView(errorCard);
         });
     }
 
@@ -1854,13 +1867,9 @@ public class MainActivity extends Activity {
     }
 
     private void openRentalCreateForm() {
-        loadJson("/api/mobile/rental/options", result -> {
-            if (!result.optBoolean("ok", false)) {
-                toast(result.optString("message", "Yeni icarə seçimləri yüklənmədi."));
-                return;
-            }
-            renderRentalCreateForm(result);
-        });
+        toast("Yeni icarə məlumatları yüklənir...");
+        loadRentalJson("/api/mobile/rental/options", 2, result -> renderRentalCreateForm(result),
+                message -> toast("Yeni icarə açıla bilmədi: " + message));
     }
 
     private void renderRentalCreateForm(JSONObject options) {
@@ -1898,6 +1907,13 @@ public class MainActivity extends Activity {
 
         TextView branch = text("Filial: " + options.optString("branch_id", "-"), 12, MUTED, true);
         body.addView(branch);
+        String optionsWarning = options.optString("warning", "").trim();
+        if (!optionsWarning.isEmpty()) {
+            TextView warning = text("⚠ " + optionsWarning + "\nSon uğurlu məlumatla forma açıldı.", 12, Color.rgb(155, 92, 20), true);
+            warning.setPadding(dp(10), dp(8), dp(10), dp(8));
+            warning.setBackground(bg(Color.rgb(255, 248, 224), 10, Color.rgb(235, 202, 120)));
+            body.addView(warning);
+        }
         spacer(body, 8);
 
         body.addView(rentalFormLabel("Müştəri"));
@@ -2105,13 +2121,9 @@ public class MainActivity extends Activity {
             toast("Müştəri UUID məlumatı yoxdur.");
             return;
         }
-        loadJson("/api/mobile/rental/customer_detail?customer_uuid=" + urlEncode(customerUuid), result -> {
-            if (!result.optBoolean("ok", false)) {
-                toast(result.optString("message", "Müştəri detalları alınmadı."));
-                return;
-            }
-            showRentalCustomerDetailDialog(result);
-        });
+        loadRentalJson("/api/mobile/rental/customer_detail?customer_uuid=" + urlEncode(customerUuid), 1,
+                this::showRentalCustomerDetailDialog,
+                message -> toast("Müştəri məlumatı açıla bilmədi: " + message));
     }
 
     private void showRentalCustomerDetailDialog(JSONObject result) {
@@ -2127,6 +2139,14 @@ public class MainActivity extends Activity {
         scroll.addView(box);
 
         String fullName = customer.optString("full_name", "Müştəri").trim();
+        String detailWarning = result.optString("warning", "").trim();
+        if (!detailWarning.isEmpty()) {
+            TextView warning = text("⚠ " + detailWarning, 12, Color.rgb(155, 92, 20), true);
+            warning.setPadding(dp(10), dp(8), dp(10), dp(8));
+            warning.setBackground(bg(Color.rgb(255, 248, 224), 10, Color.rgb(235, 202, 120)));
+            box.addView(warning);
+            spacer(box, 8);
+        }
         addRentalCustomerDetailField(box, "Ad Soyad", fullName);
         addRentalCustomerDetailField(box, "Telefon", customer.optString("phone", ""));
         addRentalCustomerDetailField(box, "Qohum telefonu", customer.optString("relative_phone", registration.optString("relative_phone", "")));
@@ -3068,7 +3088,7 @@ public class MainActivity extends Activity {
                 .setWhen(System.currentTimeMillis())
                 .setShowWhen(true);
 
-        // v37: Samsung/Android-un bildiriş mətnindən "Haritayı aç" kimi
+        // v38: Samsung/Android-un bildiriş mətnindən "Haritayı aç" kimi
         // lazımsız smart/contextual action yaratmasına icazə vermə.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             builder.setAllowSystemGeneratedContextualActions(false);
@@ -3223,6 +3243,46 @@ public class MainActivity extends Activity {
     private String urlEncode(String s){try{return java.net.URLEncoder.encode(s,"UTF-8");}catch(Exception e){return s;}}
 
     private interface JsonConsumer { void accept(JSONObject object); }
+    private interface StringConsumer { void accept(String value); }
+
+    private void loadRentalJson(String path, int retries, JsonConsumer success, StringConsumer failure) {
+        setBusy(true);
+        loadRentalJsonAttempt(path, Math.max(0, retries), success, failure);
+    }
+
+    private void loadRentalJsonAttempt(String path, int retries, JsonConsumer success, StringConsumer failure) {
+        io.execute(() -> {
+            try {
+                JSONObject r = request(serverBase, path, "GET", null, sessionToken);
+                if (r.has("ok") && !r.optBoolean("ok", true)) {
+                    String message = r.optString("message", r.optString("error", "İcarə məlumatı alınmadı."));
+                    throw new Exception(message);
+                }
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    success.accept(r);
+                });
+            } catch (Exception ex) {
+                String message = ex.getMessage() == null ? "Bağlantı xətası" : ex.getMessage();
+                if (retries > 0 && !(message.contains("401") || message.toLowerCase(Locale.ROOT).contains("sessiya"))) {
+                    kitchenRefreshHandler.postDelayed(() -> loadRentalJsonAttempt(path, retries - 1, success, failure), 900L);
+                    return;
+                }
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    if (message.contains("401") || message.toLowerCase(Locale.ROOT).contains("sessiya")) {
+                        sessionToken = "";
+                        toast("Sessiya bitib. Yenidən daxil olun.");
+                        showLogin();
+                    } else if (failure != null) {
+                        failure.accept(message);
+                    } else {
+                        toast(message);
+                    }
+                });
+            }
+        });
+    }
 
     private void loadJson(String path, JsonConsumer success) {
         setBusy(true); io.execute(()->{try{JSONObject r=request(serverBase,path,"GET",null,sessionToken);runOnUiThread(()->success.accept(r));}catch(Exception ex){handleApiError(ex);}finally{setBusy(false);}});

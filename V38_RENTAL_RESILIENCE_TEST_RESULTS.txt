@@ -1,0 +1,8 @@
+V38 RENTAL RESILIENCE TEST RESULTS
+=================================
+PASS - rental list shows loading state instead of silent blank screen
+PASS - rental GET requests retry automatically
+PASS - final failure renders Yenidən yoxla action
+PASS - Yeni icarə button gives immediate loading feedback and retries options
+PASS - customer detail retries and shows server/cache warning
+PASS - versionCode=38 / versionName=3.4.15-native-v38

@@ -1,0 +1,1 @@
+Local gradle command not available in container; static source/version checks passed.
