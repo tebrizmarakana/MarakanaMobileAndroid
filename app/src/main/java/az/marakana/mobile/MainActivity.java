@@ -1680,7 +1680,13 @@ public class MainActivity extends Activity {
         LinearLayout recordsHost = new LinearLayout(this);
         recordsHost.setOrientation(LinearLayout.VERTICAL);
         body.addView(recordsHost);
-        recordsHost.addView(empty("İcarə məlumatları yüklənir..."));
+        final AlertDialog rentalLoadingDialog;
+        if ("customers".equals(activeSection)) {
+            rentalLoadingDialog = showRentalCenteredLoading("Müştəri məlumatları yüklənir...");
+        } else {
+            rentalLoadingDialog = null;
+            recordsHost.addView(empty("İcarə məlumatları yüklənir..."));
+        }
 
         installRentalGestures(scroll, activeSection);
         installRentalGestures(body, activeSection);
@@ -1689,6 +1695,7 @@ public class MainActivity extends Activity {
         shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(88)));
 
         loadRentalJson("/api/mobile/rental/list?section=" + urlEncode(activeSection), 2, result -> {
+            if (rentalLoadingDialog != null && rentalLoadingDialog.isShowing()) rentalLoadingDialog.dismiss();
             JSONArray items = result.optJSONArray("items");
             if (items == null) items = new JSONArray();
             JSONObject counts = result.optJSONObject("counts");
@@ -1700,6 +1707,7 @@ public class MainActivity extends Activity {
             search.addTextChangedListener(new SimpleTextWatcher(render));
             render.run();
         }, message -> {
+            if (rentalLoadingDialog != null && rentalLoadingDialog.isShowing()) rentalLoadingDialog.dismiss();
             summaryHost.removeAllViews();
             recordsHost.removeAllViews();
             LinearLayout errorCard = card();
@@ -1712,6 +1720,38 @@ public class MainActivity extends Activity {
             errorCard.addView(retry, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
             recordsHost.addView(errorCard);
         });
+    }
+
+    private AlertDialog showRentalCenteredLoading(String message) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setPadding(dp(28), dp(22), dp(28), dp(22));
+
+        ProgressBar spinner = new ProgressBar(this);
+        LinearLayout.LayoutParams spinnerLp = new LinearLayout.LayoutParams(dp(42), dp(42));
+        spinnerLp.gravity = Gravity.CENTER_HORIZONTAL;
+        box.addView(spinner, spinnerLp);
+
+        TextView label = text(message == null || message.trim().isEmpty() ? "Yüklənir..." : message, 15, TEXT, true);
+        label.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        labelLp.gravity = Gravity.CENTER_HORIZONTAL;
+        labelLp.topMargin = dp(12);
+        box.addView(label, labelLp);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(box)
+                .setCancelable(false)
+                .create();
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.show();
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(bg(Color.WHITE, 18, Color.TRANSPARENT));
+            window.setLayout(dp(270), ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+        return dialog;
     }
 
     private String normalizeRentalSection(String section) {
@@ -1868,7 +1908,8 @@ public class MainActivity extends Activity {
 
     private void openRentalCreateForm() {
         toast("Yeni icarə məlumatları yüklənir...");
-        loadRentalJson("/api/mobile/rental/options", 2, result -> renderRentalCreateForm(result),
+        // v39: forma yalnız daxil olarkən bir dəfə yüklənir. Açıldıqdan sonra avtomatik refresh yoxdur.
+        loadRentalJsonOnce("/api/mobile/rental/options", result -> renderRentalCreateForm(result),
                 message -> toast("Yeni icarə açıla bilmədi: " + message));
     }
 
@@ -2121,7 +2162,8 @@ public class MainActivity extends Activity {
             toast("Müştəri UUID məlumatı yoxdur.");
             return;
         }
-        loadRentalJson("/api/mobile/rental/customer_detail?customer_uuid=" + urlEncode(customerUuid), 1,
+        // v39: müştəri detalı yalnız klik anında bir dəfə yüklənir; açıq pəncərə avtomatik yenilənmir.
+        loadRentalJsonOnce("/api/mobile/rental/customer_detail?customer_uuid=" + urlEncode(customerUuid),
                 this::showRentalCustomerDetailDialog,
                 message -> toast("Müştəri məlumatı açıla bilmədi: " + message));
     }
@@ -3244,6 +3286,37 @@ public class MainActivity extends Activity {
 
     private interface JsonConsumer { void accept(JSONObject object); }
     private interface StringConsumer { void accept(String value); }
+
+    private void loadRentalJsonOnce(String path, JsonConsumer success, StringConsumer failure) {
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject r = request(serverBase, path, "GET", null, sessionToken);
+                if (r.has("ok") && !r.optBoolean("ok", true)) {
+                    String message = r.optString("message", r.optString("error", "İcarə məlumatı alınmadı."));
+                    throw new Exception(message);
+                }
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    success.accept(r);
+                });
+            } catch (Exception ex) {
+                String message = ex.getMessage() == null ? "Bağlantı xətası" : ex.getMessage();
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    if (message.contains("401") || message.toLowerCase(Locale.ROOT).contains("sessiya")) {
+                        sessionToken = "";
+                        toast("Sessiya bitib. Yenidən daxil olun.");
+                        showLogin();
+                    } else if (failure != null) {
+                        failure.accept(message);
+                    } else {
+                        toast(message);
+                    }
+                });
+            }
+        });
+    }
 
     private void loadRentalJson(String path, int retries, JsonConsumer success, StringConsumer failure) {
         setBusy(true);

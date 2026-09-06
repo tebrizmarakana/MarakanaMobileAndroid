@@ -1,0 +1,9 @@
+V39 RENTAL LOADING / STATIC DETAIL TEST RESULTS
+===============================================
+PASS - customers tab shows centered modal loading popup
+PASS - popup dismisses on success and failure
+PASS - create form uses one-shot rental options load
+PASS - customer detail uses one-shot detail load
+PASS - no delayed retry/polling is attached to create/detail screens
+PASS - customers list retains v38 retry protection
+PASS - versionCode=39 / versionName=3.4.16-native-v39

@@ -1,6 +1,22 @@
-# Marakana Mobile Native v38
+# Marakana Mobile Native v39
 
-## v38 — İcarə Paneli bağlantı/timeout düzəlişi
+## v39 — İcarə Paneli yüklənmə və sabit ekran düzəlişi
+
+- Müştərilər bölməsinə daxil olarkən ekranın ortasında modal `Müştəri məlumatları yüklənir...` popup-u görünür.
+- Məlumat gələndə popup avtomatik bağlanır.
+- `Yeni icarə yarat` forması yalnız daxil olarkən bir dəfə yüklənir; açıldıqdan sonra avtomatik refresh edilmir.
+- Müştəri məlumatı pəncərəsi yalnız klik anında bir dəfə yüklənir; açıq qaldığı müddətdə avtomatik refresh edilmir.
+- Müştərilər əsas siyahısında v38-dəki timeout/retry qoruması saxlanılıb.
+
+Versiya:
+- `versionCode 39`
+- `versionName 3.4.16-native-v39`
+- Release artifact: `MarakanaMobile-v39-permanent-update-apk`
+- Release APK: `MarakanaMobile-v39-release.apk`
+
+
+
+## v39 — İcarə Paneli bağlantı/timeout düzəlişi
 
 - Müştərilər bölməsi yüklənərkən artıq boş ekran qalmır: yüklənmə və xəta/retry kartı görünür.
 - Rental V2/Cloudflare müvəqqəti xətalarında sorğu avtomatik 2 dəfə yenidən yoxlanır.
@@ -11,9 +27,9 @@
 
 ### Versiya
 - `versionCode 38`
-- `versionName 3.4.15-native-v38`
-- Release artifact: `MarakanaMobile-v38-permanent-update-apk`
-- Release APK: `MarakanaMobile-v38-release.apk`
+- `versionName 3.4.16-native-v39`
+- Release artifact: `MarakanaMobile-v39-permanent-update-apk`
+- Release APK: `MarakanaMobile-v39-release.apk`
 
 ### PC tələbi
 Tam düzəliş üçün PC proqramında **v1267 və ya daha yeni** versiya qurulmalıdır.
