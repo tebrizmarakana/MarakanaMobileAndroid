@@ -1,0 +1,11 @@
+V37 RENTAL CREATE + CUSTOMER DETAIL TEST RESULTS
+================================================
+PASS - Aktiv icarələrdə Yeni icarə yarat düyməsi var
+PASS - Yeni icarə formunda müştəri/konsol/KONSOLSUZ/pult/gün/kupon/ödəniş/depozit sahələri var
+PASS - Qiymət /api/mobile/rental/quote ilə PC-də hesablanır
+PASS - İcarə /api/mobile/rental/create ilə təsdiqdən sonra yaradılır
+PASS - Müştəri detalı /api/mobile/rental/customer_detail ilə yüklənir
+PASS - Şəxsiyyət vəsiqəsi və selfi base64 şəkilləri göstərilir və böyük baxış açılır
+PASS - Android HTTP read timeout şəkilli detal üçün 25 saniyədir
+PASS - versionCode=37, versionName=3.4.14-native-v37
+PASS - GitHub artifact/APK names use v37

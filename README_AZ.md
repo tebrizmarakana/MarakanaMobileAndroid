@@ -1,20 +1,18 @@
-# Marakana Mobile Native v36
+# Marakana Mobile Native v37
 
-## v36 — İcarə Paneli
+## v37 — İcarə Paneli: Yeni icarə + tam müştəri məlumatı
 
-Admin mobil menyusuna **İcarə Paneli** əlavə edildi. Panelin aşağı hissəsində Borc Dəftəri stilində 3 tab var:
+- Aktiv icarələr bölməsinə **Yeni icarə yarat** düyməsi əlavə edildi.
+- Mobil formda təsdiqli müştəri, konsol/KONSOLSUZ, pult tipi, pult sayı, gün sayı, kupon, ödəniş növü və depozit seçilir.
+- Qiymət PC serverində desktop Rental V2 qaydaları ilə hesablanır; təsdiqdən sonra icarə serverə yazılır.
+- Müştərilər bölməsində müştəriyə toxunanda bütün əsas məlumatlar, status, mənbə, filial, qeyd/FIN/UUID məlumatları göstərilir.
+- Saytdan qeydiyyat varsa **Şəxsiyyət vəsiqəsi** və **Selfi** şəkilləri görünür; şəkilə toxunanda böyük baxış açılır.
+- Şəkillər yalnız admin mobil sessiyası ilə PC üzərindən alınır; Rental V2 tokeni APK-ya verilmir.
 
-- **Aktiv icarələr** — aktiv/gecikmiş icarələri göstərir; müştəri, telefon, konsol, pult sayı, başlama/təhvil vaxtı, qalan vaxt, ödəniş, qalıq borc və depozit görünür. Kartın üzərinə toxunanda ətraflı məlumat açılır.
-- **Müştərilər** — müştəri siyahısı, status, telefon, qeydiyyat və tamamlanan icarə sayı; axtarış və ətraflı baxış işləyir.
-- **Tarixçə** — qaytarılmış/ləğv edilmiş icarələr; tarixlər, konsol, məbləğlər və status görünür.
-
-Tablar düymə ilə və sola/sağa swipe ilə dəyişir.
-
-### Vacib
-Bu v36 İcarə Paneli üçün PC proqramında **v1265 Mobile Rental API** tələb olunur. Köhnə PC versiyasında `/api/mobile/rental/list` endpoint-i olmadığı üçün İcarə Paneli məlumat yükləyə bilməz.
+PC tərəfdə **v1266 Mobile Rental API** tələb olunur.
 
 Versiya:
-- `versionCode 36`
-- `versionName 3.4.13-native-v36`
-- Release artifact: `MarakanaMobile-v36-permanent-update-apk`
-- Release APK: `MarakanaMobile-v36-release.apk`
+- `versionCode 37`
+- `versionName 3.4.14-native-v37`
+- Release artifact: `MarakanaMobile-v37-permanent-update-apk`
+- Release APK: `MarakanaMobile-v37-release.apk`
