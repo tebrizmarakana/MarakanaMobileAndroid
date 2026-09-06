@@ -1,4 +1,17 @@
-# Marakana Mobile Native v39
+# Marakana Mobile Native v40
+
+## v40 — Müştəri detalı yüklənmə popupı
+
+- İcarə Paneli → Müştərilər bölməsində müştərinin üzərinə klik edən kimi ortada `Müştəri məlumatları yüklənir...` popupı görünür.
+- Müştəri məlumat pəncərəsi yalnız məlumat tam yükləndikdən sonra açılır.
+- Yükləmə xətası olarsa popup bağlanır və xəta mesajı göstərilir.
+- Müştəri detalları açıldıqdan sonra 5 saniyəlik avtomatik yenilənmə yoxdur.
+- `versionCode 40`
+- `versionName 3.4.17-native-v40`
+- Release artifact: `MarakanaMobile-v40-permanent-update-apk`
+- Release APK: `MarakanaMobile-v40-release.apk`
+
+---
 
 ## v39 — İcarə Paneli yüklənmə və sabit ekran düzəlişi
 

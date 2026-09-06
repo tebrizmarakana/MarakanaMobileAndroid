@@ -1908,7 +1908,7 @@ public class MainActivity extends Activity {
 
     private void openRentalCreateForm() {
         toast("Yeni icarə məlumatları yüklənir...");
-        // v39: forma yalnız daxil olarkən bir dəfə yüklənir. Açıldıqdan sonra avtomatik refresh yoxdur.
+        // v40: forma yalnız daxil olarkən bir dəfə yüklənir. Açıldıqdan sonra avtomatik refresh yoxdur.
         loadRentalJsonOnce("/api/mobile/rental/options", result -> renderRentalCreateForm(result),
                 message -> toast("Yeni icarə açıla bilmədi: " + message));
     }
@@ -2162,10 +2162,19 @@ public class MainActivity extends Activity {
             toast("Müştəri UUID məlumatı yoxdur.");
             return;
         }
-        // v39: müştəri detalı yalnız klik anında bir dəfə yüklənir; açıq pəncərə avtomatik yenilənmir.
+
+        // v40: müştəri kartına toxunan kimi ortada yüklənmə popupı görünür.
+        // Detal pəncərəsi yalnız məlumat tam gəldikdən sonra açılır və avtomatik refresh edilmir.
+        final AlertDialog customerLoadingDialog = showRentalCenteredLoading("Müştəri məlumatları yüklənir...");
         loadRentalJsonOnce("/api/mobile/rental/customer_detail?customer_uuid=" + urlEncode(customerUuid),
-                this::showRentalCustomerDetailDialog,
-                message -> toast("Müştəri məlumatı açıla bilmədi: " + message));
+                result -> {
+                    if (customerLoadingDialog.isShowing()) customerLoadingDialog.dismiss();
+                    showRentalCustomerDetailDialog(result);
+                },
+                message -> {
+                    if (customerLoadingDialog.isShowing()) customerLoadingDialog.dismiss();
+                    toast("Müştəri məlumatı açıla bilmədi: " + message);
+                });
     }
 
     private void showRentalCustomerDetailDialog(JSONObject result) {
