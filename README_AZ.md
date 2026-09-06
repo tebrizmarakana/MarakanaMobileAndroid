@@ -1,6 +1,13 @@
-# Marakana Mobile Native v43
+# Marakana Mobile Native v44
 
-## v43 — Sadələşdirilmiş giriş
+## v44 — İcarə yaradılarkən gözləmə popupı
+
+- Yeni icarə formasında son təsdiqdə **Yarat** basıldıqda ortada `İcarə yaradılır, gözləyin...` popupı görünür.
+- Server cavab verənə qədər popup bağlanmır.
+- Uğurlu yaradılmada popup bağlanır və Aktiv icarələr açılır.
+- Xəta olduqda popup bağlanır və xəta mesajı göstərilir.
+
+## v44 — Sadələşdirilmiş giriş
 
 - Giriş ekranından Zal / Mətbəx / Admin / Borc Dəftəri bölmə seçimi çıxarıldı.
 - İstifadəçi yalnız PC istifadəçisini seçib şifrəsini yazır.
@@ -11,7 +18,7 @@
 
 ## Versiya
 
-- `versionCode 43`
-- `versionName 3.4.20-native-v43`
-- Release artifact: `MarakanaMobile-v43-permanent-update-apk`
-- Release APK: `MarakanaMobile-v43-release.apk`
+- `versionCode 44`
+- `versionName 3.4.21-native-v44`
+- Release artifact: `MarakanaMobile-v44-permanent-update-apk`
+- Release APK: `MarakanaMobile-v44-release.apk`

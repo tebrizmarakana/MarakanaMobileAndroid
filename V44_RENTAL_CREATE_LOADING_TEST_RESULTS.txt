@@ -1,0 +1,9 @@
+V44 RENTAL CREATE LOADING TEST RESULTS
+======================================
+PASS - final Yarat action opens non-cancelable centered loading popup
+PASS - popup text: İcarə yaradılır, gözləyin...
+PASS - popup dismisses on successful rental creation
+PASS - popup dismisses on API/network error
+PASS - successful create returns to Aktiv icarələr
+PASS - versionCode 44 / versionName 3.4.21-native-v44
+PASS - GitHub workflow/artifact names are v44

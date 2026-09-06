@@ -2196,14 +2196,21 @@ public class MainActivity extends Activity {
                             .setTitle("Yeni icarəni təsdiqlə")
                             .setMessage(confirm)
                             .setNegativeButton("Ləğv", null)
-                            .setPositiveButton("Yarat", (d, w) -> postJson("/api/mobile/rental/create", payload, created -> {
-                                if (!created.optBoolean("ok", false)) {
-                                    toast(created.optString("message", "İcarə yaradılmadı."));
-                                    return;
-                                }
-                                toast(created.optString("message", "İcarə yaradıldı."));
-                                showRental("active");
-                            }))
+                            .setPositiveButton("Yarat", (d, w) -> {
+                                final AlertDialog createRentalProgress = showRentalCenteredLoading("İcarə yaradılır, gözləyin...");
+                                postJson("/api/mobile/rental/create", payload, created -> {
+                                    if (createRentalProgress.isShowing()) createRentalProgress.dismiss();
+                                    if (!created.optBoolean("ok", false)) {
+                                        toast(created.optString("message", "İcarə yaradılmadı."));
+                                        return;
+                                    }
+                                    toast(created.optString("message", "İcarə yaradıldı."));
+                                    showRental("active");
+                                }, ex -> {
+                                    if (createRentalProgress.isShowing()) createRentalProgress.dismiss();
+                                    handleApiError(ex);
+                                });
+                            })
                             .show();
                 });
             } catch (Exception ex) {
@@ -3466,6 +3473,20 @@ public class MainActivity extends Activity {
     }
     private void postJson(String path, JSONObject payload, JsonConsumer success) {
         setBusy(true); io.execute(()->{try{JSONObject r=request(serverBase,path,"POST",payload,sessionToken);runOnUiThread(()->success.accept(r));}catch(Exception ex){handleApiError(ex);}finally{setBusy(false);}});
+    }
+    private void postJson(String path, JSONObject payload, JsonConsumer success, java.util.function.Consumer<Exception> failure) {
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject r = request(serverBase, path, "POST", payload, sessionToken);
+                runOnUiThread(() -> success.accept(r));
+            } catch (Exception ex) {
+                if (failure != null) runOnUiThread(() -> failure.accept(ex));
+                else handleApiError(ex);
+            } finally {
+                setBusy(false);
+            }
+        });
     }
     private void handleApiError(Exception ex){String m=ex.getMessage()==null?"Bağlantı xətası":ex.getMessage();if(m.contains("401")||m.toLowerCase(Locale.ROOT).contains("sessiya")){sessionToken="";runOnUiThread(()->{toast("Sessiya bitib. Yenidən daxil olun.");showLogin();});}else showError(ex);}
     private void showError(Exception ex){toast(ex.getMessage()==null?ex.toString():ex.getMessage());}
