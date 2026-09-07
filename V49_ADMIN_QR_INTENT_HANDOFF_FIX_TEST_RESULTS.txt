@@ -1,0 +1,11 @@
+V49 ADMIN QR CHROME / ANDROID INTENT HANDOFF FIX
+=================================================
+PASS - AndroidManifest exports MainActivity and keeps launchMode=singleTask
+PASS - marakana:// scheme is registered without host restriction
+PASS - marakanaadmin:// scheme is registered without host restriction
+PASS - MainActivity still validates host=admin-approval before accepting a challenge
+PASS - onNewIntent captures Admin QR deep-link
+PASS - onResume retries pending Admin QR approval when session is ready
+PASS - versionCode=49 / versionName=3.4.26-native-v49
+
+NOTE - Real Chrome -> APK launch must be verified on the physical Android device after installing v49.

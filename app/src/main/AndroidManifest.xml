@@ -46,11 +46,20 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- v49: Chrome/Android intent handoff üçün custom scheme-ləri hostdan asılı
+                 olmadan MainActivity-yə yönləndir. MainActivity özü yalnız admin-approval
+                 hostunu qəbul edir, yəni təhlükəsizlik yoxlaması tətbiq daxilində qalır. -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="marakana" android:host="admin-approval" />
+                <data android:scheme="marakana" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="marakanaadmin" />
             </intent-filter>
         </activity>
     </application>

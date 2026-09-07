@@ -133,7 +133,7 @@ public class MainActivity extends Activity {
     private boolean canHall = false;
     private boolean canKitchen = false;
     private boolean canAdmin = false;
-    // v48: Kamera/deep-link/HTTP Admin QR keçidini login tamamlanana qədər saxla.
+    // v49: Kamera/deep-link/HTTP Admin QR keçidini login tamamlanana qədər saxla.
     private String pendingAdminApprovalDeepLink = "";
     private final Map<String, LinkedHashMap<String, OrderCartItem>> orderCarts = new HashMap<>();
     private FrameLayout activeOrderCartButton = null;
@@ -201,30 +201,12 @@ public class MainActivity extends Activity {
 
     private boolean captureAdminApprovalDeepLink(Intent intent) {
         if (intent == null) return false;
-
-        // v48: Chrome intent:// linki MainActivity-ni explicit component ilə aça bilər.
-        // Bu halda challenge/server URI query-sində yox, Intent extra-larında gəlir.
-        // Extra-ları qəbul edib mövcud approval axınına çeviririk.
-        String extraChallenge = intent.getStringExtra("admin_qr_challenge");
-        if (extraChallenge != null && !extraChallenge.trim().isEmpty()) {
-            String extraServer = intent.getStringExtra("admin_qr_server");
-            Uri.Builder builder = new Uri.Builder()
-                    .scheme("marakana")
-                    .authority("admin-approval")
-                    .appendQueryParameter("challenge", extraChallenge.trim());
-            if (extraServer != null && !extraServer.trim().isEmpty()) {
-                builder.appendQueryParameter("server", normalizeServerBase(extraServer.trim()));
-            }
-            pendingAdminApprovalDeepLink = builder.build().toString();
-            return true;
-        }
-
         Uri data = intent.getData();
         if (data == null) return false;
         String scheme = data.getScheme() == null ? "" : data.getScheme().trim();
         String host = data.getHost() == null ? "" : data.getHost().trim();
         String path = data.getPath() == null ? "" : data.getPath().trim();
-        boolean customApproval = ("marakana".equalsIgnoreCase(scheme) || "intent".equalsIgnoreCase(scheme))
+        boolean customApproval = ("marakana".equalsIgnoreCase(scheme) || "marakanaadmin".equalsIgnoreCase(scheme) || "intent".equalsIgnoreCase(scheme))
                 && "admin-approval".equalsIgnoreCase(host);
         boolean httpApproval = ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
                 && ("/api/mobile/admin/qr/open".equals(path) || "/api/mobile/admin/qr/fallback".equals(path));
@@ -248,12 +230,17 @@ public class MainActivity extends Activity {
         }
         final String approvalLink = pendingAdminApprovalDeepLink;
         pendingAdminApprovalDeepLink = "";
-        if ("admin".equals(role)) {
-            approveAdminQrChallenge(approvalLink);
-        } else {
-            toast("Admin QR təsdiqi üçün Admin rejiminə keçilir…");
-            switchMobileRole("admin", false, () -> approveAdminQrChallenge(approvalLink));
-        }
+        // v49: QR təsdiqi üçün ekrandakı rolu dəyişməyə ehtiyac yoxdur.
+        // PC istifadəçinin real Admin icazəsini server tərəfdə yoxlayır.
+        approveAdminQrChallenge(approvalLink);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // v49: Chrome-dan tətbiqə keçid zamanı intent artıq tutulubsa, sessiya hazır olan
+        // kimi pending Admin QR təsdiqini yenidən işlət.
+        handlePendingAdminApprovalDeepLink();
     }
 
     @Override
@@ -1082,11 +1069,8 @@ public class MainActivity extends Activity {
             toast("Bu istifadəçi üçün Admin QR təsdiqi icazəsi yoxdur.");
             return;
         }
-        if (!"admin".equals(role)) {
-            toast("Admin QR təsdiqi üçün Admin rejiminə keçilir…");
-            switchMobileRole("admin", false, this::startAdminApprovalQrScanner);
-            return;
-        }
+        // v49: Zal/Mətbəx ekranında olsan belə, istifadəçinin Admin icazəsi varsa
+        // QR scanner birbaşa işləyir; ayrıca Admin roluna keçid edilmir.
         try {
             GmsBarcodeScannerOptions options = new GmsBarcodeScannerOptions.Builder()
                     .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
@@ -1120,36 +1104,11 @@ public class MainActivity extends Activity {
         String qrServer = "";
         String raw = scannedValue == null ? "" : scannedValue.trim();
         try {
-            // v48: intent://...#Intent;S.admin_qr_challenge=...;S.admin_qr_server=...;end
-            // formatı da daxili skanerdən qəbul et.
-            if (raw.toLowerCase(Locale.ROOT).startsWith("intent:")) {
-                java.util.regex.Matcher challengeMatcher = java.util.regex.Pattern
-                        .compile("(?:#Intent;|;)S\\.admin_qr_challenge=([^;]*)(?:;|$)")
-                        .matcher(raw);
-                if (challengeMatcher.find()) {
-                    challenge = Uri.decode(challengeMatcher.group(1)).trim();
-                }
-                java.util.regex.Matcher serverMatcher = java.util.regex.Pattern
-                        .compile("(?:#Intent;|;)S\\.admin_qr_server=([^;]*)(?:;|$)")
-                        .matcher(raw);
-                if (serverMatcher.find()) {
-                    qrServer = normalizeServerBase(Uri.decode(serverMatcher.group(1)).trim());
-                }
-                if (!challenge.isEmpty()) {
-                    // parsed from Intent extras encoded in the URI
-                } else {
-                    Uri link = Uri.parse(raw);
-                    String value = link.getQueryParameter("challenge");
-                    challenge = value == null ? "" : value.trim();
-                    String serverValue = link.getQueryParameter("server");
-                    qrServer = serverValue == null ? qrServer : normalizeServerBase(serverValue.trim());
-                }
-            } else {
             Uri link = Uri.parse(raw);
             String scheme = link.getScheme() == null ? "" : link.getScheme().trim();
             String host = link.getHost() == null ? "" : link.getHost().trim();
             String path = link.getPath() == null ? "" : link.getPath().trim();
-            boolean customApproval = ("marakana".equalsIgnoreCase(scheme) || "intent".equalsIgnoreCase(scheme))
+            boolean customApproval = ("marakana".equalsIgnoreCase(scheme) || "marakanaadmin".equalsIgnoreCase(scheme) || "intent".equalsIgnoreCase(scheme))
                     && "admin-approval".equalsIgnoreCase(host);
             boolean httpApproval = ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
                     && ("/api/mobile/admin/qr/open".equals(path) || "/api/mobile/admin/qr/fallback".equals(path));
@@ -1171,7 +1130,6 @@ public class MainActivity extends Activity {
                 }
                 challenge = obj.optString("challenge", "").trim();
                 qrServer = normalizeServerBase(obj.optString("server", "").trim());
-            }
             }
         } catch (Exception ex) {
             toast("QR Admin təsdiq formatına uyğun deyil.");

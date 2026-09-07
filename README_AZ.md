@@ -1,4 +1,14 @@
-# Marakana Mobile Native v48
+# Marakana Mobile Native v49
+
+## v49 — Chrome/Android Admin QR tətbiq keçidi
+
+- PC v1280-də browser səhifəsində əsas düymə artıq standart Android `intent://` URI istifadə edir.
+- APK `marakana://` və `marakanaadmin://` custom scheme-lərini host məhdudiyyəti olmadan qəbul edir; tətbiq daxilində yalnız `admin-approval` hostu təsdiq edilir.
+- Tətbiq `onResume()` zamanı da pending Admin QR deep-link-i yoxlayır.
+- Məqsəd: Kamera QR-ni browserdə açdıqdan sonra **Marakana Mobile-da aç** düyməsinə toxunanda səhifədə qalmaq əvəzinə APK birbaşa açılsın.
+- `versionCode 49`
+- `versionName 3.4.26-native-v49`
+- Release APK: `MarakanaMobile-v49-release.apk`
 
 ## v48 — Telefon kamerasından Admin QR təsdiqi
 
@@ -52,3 +62,9 @@
 - QR başqa PC-yə aiddirsə səhv serverə təsdiq göndərilmir.
 - Admin icazəsi olan istifadəçi başqa rejimdədirsə Admin QR skaneri özü Admin rejiminə keçir.
 - Sistem Kamera yolu köhnə marakana deep-link, HTTP bridge və explicit Android intent formatları ilə uyğun saxlanılıb.
+
+
+## v48 Admin QR düzəlişi
+- Kamera HTTP səhifəsində Marakana Mobile düyməsi birbaşa custom deep-link açır.
+- APK daxili Admin QR scanner artıq cari Zal/Mətbəx rolundan asılı deyil; real Admin icazəsi serverdə yoxlanır.
+- versionCode 48 / versionName 3.4.25-native-v48.
