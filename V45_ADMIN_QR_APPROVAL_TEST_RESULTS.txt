@@ -1,0 +1,9 @@
+V45 ADMIN QR APPROVAL TEST RESULTS
+===================================
+PASS - Admin QR təsdiqi drawer item only when canAdmin=true
+PASS - scanner accepts only type=marakana_admin_approval
+PASS - scanner sends challenge only; no admin password is transferred
+PASS - approval endpoint uses current authenticated Admin session token
+PASS - non-admin role is switched to admin before scanning
+PASS - versionCode=45 / versionName=3.4.22-native-v45
+PASS - workflow artifact names use v45

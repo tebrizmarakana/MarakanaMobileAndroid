@@ -560,6 +560,14 @@ public class MainActivity extends Activity {
                 holder[0].dismiss();
                 switchMobileRole("admin", false, () -> showRental("active"));
             });
+            addDrawerItem(panel, "Admin QR təsdiqi", () -> {
+                holder[0].dismiss();
+                if ("admin".equals(role)) {
+                    startAdminApprovalQrScanner();
+                } else {
+                    switchMobileRole("admin", false, this::startAdminApprovalQrScanner);
+                }
+            });
         }
 
         View flex = new View(this);
@@ -997,6 +1005,87 @@ public class MainActivity extends Activity {
         } catch (Throwable error) {
             toast("QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın.");
         }
+    }
+
+    private void startAdminApprovalQrScanner() {
+        if (!canAdmin) {
+            toast("Bu istifadəçi üçün Admin QR təsdiqi icazəsi yoxdur.");
+            return;
+        }
+        if (!"admin".equals(role)) {
+            toast("Admin sessiyası tələb olunur.");
+            return;
+        }
+        try {
+            GmsBarcodeScannerOptions options = new GmsBarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                    .enableAutoZoom()
+                    .build();
+            GmsBarcodeScanner scanner = GmsBarcodeScanning.getClient(this, options);
+            toast("Admin QR kodunu oxudun…");
+            scanner.startScan()
+                    .addOnSuccessListener(barcode -> {
+                        String scanned = barcode == null ? "" : barcode.getRawValue();
+                        if (scanned == null || scanned.trim().isEmpty()) {
+                            toast("QR kodda məlumat tapılmadı.");
+                            return;
+                        }
+                        approveAdminQrChallenge(scanned);
+                    })
+                    .addOnCanceledListener(() -> toast("Admin QR oxunması ləğv edildi."))
+                    .addOnFailureListener(error -> {
+                        String detail = error == null || error.getMessage() == null ? "" : error.getMessage().trim();
+                        toast(detail.isEmpty()
+                                ? "QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın."
+                                : "QR oxuyucu açıla bilmədi: " + detail);
+                    });
+        } catch (Throwable error) {
+            toast("QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın.");
+        }
+    }
+
+    private void approveAdminQrChallenge(String scannedValue) {
+        String challenge = "";
+        try {
+            JSONObject obj = new JSONObject(scannedValue == null ? "" : scannedValue.trim());
+            String type = obj.optString("type", "").trim();
+            if (!"marakana_admin_approval".equals(type)) {
+                toast("Bu QR Admin təsdiq kodu deyil.");
+                return;
+            }
+            challenge = obj.optString("challenge", "").trim();
+        } catch (Exception ex) {
+            toast("QR Admin təsdiq formatına uyğun deyil.");
+            return;
+        }
+        if (challenge.isEmpty()) {
+            toast("QR təsdiq kodu boşdur.");
+            return;
+        }
+        if (serverBase == null || serverBase.trim().isEmpty() || sessionToken == null || sessionToken.trim().isEmpty()) {
+            toast("Əvvəlcə PC serverinə daxil olun.");
+            return;
+        }
+        final String challengeToApprove = challenge;
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("challenge", challengeToApprove);
+                JSONObject result = request(serverBase, "/api/mobile/admin/qr/approve", "POST", payload, sessionToken);
+                if (!result.optBoolean("approved", false)) {
+                    throw new RuntimeException("QR təsdiqi qəbul edilmədi.");
+                }
+                String approvedBy = result.optString("approved_by", "").trim();
+                runOnUiThread(() -> toast(approvedBy.isEmpty()
+                        ? "Admin QR təsdiqi göndərildi."
+                        : "Admin QR təsdiqi göndərildi: " + approvedBy));
+            } catch (Exception ex) {
+                showError(ex);
+            } finally {
+                setBusy(false);
+            }
+        });
     }
 
     private void connectToScannedServer(String scannedValue) {
