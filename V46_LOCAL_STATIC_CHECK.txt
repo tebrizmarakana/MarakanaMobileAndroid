@@ -1,0 +1,5 @@
+Gradle executable is not available in this Linux container.
+PASS - AndroidManifest.xml parses successfully.
+PASS - deep-link intent filter marakana://admin-approval exists.
+PASS - MainActivity handles cold-start and onNewIntent deep links.
+PASS - versionCode 46 / versionName 3.4.23-native-v46.

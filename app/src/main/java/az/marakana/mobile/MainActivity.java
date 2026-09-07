@@ -133,6 +133,8 @@ public class MainActivity extends Activity {
     private boolean canHall = false;
     private boolean canKitchen = false;
     private boolean canAdmin = false;
+    // v46: telefonun sistem Kamerasından gələn Admin QR deep-link-i login tamamlanana qədər saxla.
+    private String pendingAdminApprovalDeepLink = "";
     private final Map<String, LinkedHashMap<String, OrderCartItem>> orderCarts = new HashMap<>();
     private FrameLayout activeOrderCartButton = null;
     private String activeOrderCartStation = "";
@@ -164,6 +166,7 @@ public class MainActivity extends Activity {
         username = prefs.getString(KEY_USERNAME, "");
         role = prefs.getString(KEY_ROLE, "hall");
         adminDebtOnly = prefs.getBoolean(KEY_ADMIN_DEBT_ONLY, false);
+        captureAdminApprovalDeepLink(getIntent());
         boolean openKitchenFromNotification = getIntent() != null && getIntent().getBooleanExtra("open_kitchen", false);
         if ("kitchen".equals(role) && hasKitchenBackgroundPassword()) {
             startKitchenBackgroundService();
@@ -184,6 +187,49 @@ public class MainActivity extends Activity {
             }
         } else {
             showLogin();
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (captureAdminApprovalDeepLink(intent)) {
+            handlePendingAdminApprovalDeepLink();
+        }
+    }
+
+    private boolean captureAdminApprovalDeepLink(Intent intent) {
+        if (intent == null) return false;
+        Uri data = intent.getData();
+        if (data == null) return false;
+        String scheme = data.getScheme() == null ? "" : data.getScheme().trim();
+        String host = data.getHost() == null ? "" : data.getHost().trim();
+        if (!"marakana".equalsIgnoreCase(scheme) || !"admin-approval".equalsIgnoreCase(host)) return false;
+        String challenge = data.getQueryParameter("challenge");
+        if (challenge == null || challenge.trim().isEmpty()) {
+            toast("Admin QR təsdiq kodu boşdur.");
+            return true;
+        }
+        pendingAdminApprovalDeepLink = data.toString();
+        return true;
+    }
+
+    private void handlePendingAdminApprovalDeepLink() {
+        if (pendingAdminApprovalDeepLink == null || pendingAdminApprovalDeepLink.trim().isEmpty()) return;
+        if (sessionToken == null || sessionToken.trim().isEmpty()) return;
+        if (!canAdmin) {
+            pendingAdminApprovalDeepLink = "";
+            toast("Bu istifadəçi üçün Admin QR təsdiqi icazəsi yoxdur.");
+            return;
+        }
+        final String approvalLink = pendingAdminApprovalDeepLink;
+        pendingAdminApprovalDeepLink = "";
+        if ("admin".equals(role)) {
+            approveAdminQrChallenge(approvalLink);
+        } else {
+            toast("Admin QR təsdiqi üçün Admin rejiminə keçilir…");
+            switchMobileRole("admin", false, () -> approveAdminQrChallenge(approvalLink));
         }
     }
 
@@ -869,6 +915,7 @@ public class MainActivity extends Activity {
                     if (role.equals("kitchen")) showKitchen();
                     else if (role.equals("admin") && adminDebtOnly) showDebt("İşçi");
                     else showTerminals();
+                    handlePendingAdminApprovalDeepLink();
                 });
             } catch (Exception ex) {
                 if (!showLoginOnFailure) {
@@ -1046,14 +1093,24 @@ public class MainActivity extends Activity {
 
     private void approveAdminQrChallenge(String scannedValue) {
         String challenge = "";
+        String raw = scannedValue == null ? "" : scannedValue.trim();
         try {
-            JSONObject obj = new JSONObject(scannedValue == null ? "" : scannedValue.trim());
-            String type = obj.optString("type", "").trim();
-            if (!"marakana_admin_approval".equals(type)) {
-                toast("Bu QR Admin təsdiq kodu deyil.");
-                return;
+            Uri deepLink = Uri.parse(raw);
+            String scheme = deepLink.getScheme() == null ? "" : deepLink.getScheme().trim();
+            String host = deepLink.getHost() == null ? "" : deepLink.getHost().trim();
+            if ("marakana".equalsIgnoreCase(scheme) && "admin-approval".equalsIgnoreCase(host)) {
+                String value = deepLink.getQueryParameter("challenge");
+                challenge = value == null ? "" : value.trim();
+            } else {
+                // v45 ilə yaradılmış köhnə JSON QR-lar da işləməyə davam etsin.
+                JSONObject obj = new JSONObject(raw);
+                String type = obj.optString("type", "").trim();
+                if (!"marakana_admin_approval".equals(type)) {
+                    toast("Bu QR Admin təsdiq kodu deyil.");
+                    return;
+                }
+                challenge = obj.optString("challenge", "").trim();
             }
-            challenge = obj.optString("challenge", "").trim();
         } catch (Exception ex) {
             toast("QR Admin təsdiq formatına uyğun deyil.");
             return;

@@ -1,0 +1,9 @@
+V46 CAMERA DEEPLINK ADMIN QR TEST RESULTS
+=========================================
+PASS - Manifest registers marakana://admin-approval VIEW/BROWSABLE deep link
+PASS - MainActivity uses singleTask and handles onNewIntent
+PASS - Cold start stores pending QR until login completes
+PASS - Non-admin active role automatically switches to admin if user has permission
+PASS - Deep-link QR and legacy JSON QR are both accepted
+PASS - server still validates one-time challenge; no password in QR
+PASS - versionCode=46 / versionName=3.4.23-native-v46
