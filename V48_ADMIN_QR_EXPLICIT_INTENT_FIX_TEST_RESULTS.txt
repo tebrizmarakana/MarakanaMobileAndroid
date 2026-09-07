@@ -1,0 +1,8 @@
+V48 ADMIN QR EXPLICIT INTENT FIX TEST RESULTS
+=============================================
+PASS - versionCode 48
+PASS - versionName 3.4.25-native-v48
+PASS - MainActivity accepts explicit Intent extras admin_qr_challenge/admin_qr_server
+PASS - MainActivity keeps marakana:// and HTTP QR compatibility
+PASS - Internal scanner accepts intent:// QR extras as well as HTTP/custom/JSON formats
+PASS - Existing v47 functions preserved

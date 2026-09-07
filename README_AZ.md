@@ -1,6 +1,6 @@
-# Marakana Mobile Native v47
+# Marakana Mobile Native v48
 
-## v47 — Telefon kamerasından Admin QR təsdiqi
+## v48 — Telefon kamerasından Admin QR təsdiqi
 
 - PC v1276 Admin QR kodunu `marakana://admin-approval?...` deep-link kimi yaradır.
 - Telefonun standart Kamera/QR tətbiqi kodu oxuduqda Marakana Mobile ilə açmaq mümkündür.
@@ -10,8 +10,8 @@
 - Köhnə v45 JSON QR-ları da daxili scanner ilə işləməyə davam edir.
 
 - `versionCode 46`
-- `versionName 3.4.23-native-v47`
-- Release APK: `MarakanaMobile-v47-release.apk`
+- `versionName 3.4.23-native-v48`
+- Release APK: `MarakanaMobile-v48-release.apk`
 
 
 ## v45 — İcarə yaradılarkən gözləmə popupı
@@ -46,7 +46,7 @@
 - Uğurlu oxunuşdan sonra PC pəncərəsi şifrə yazılmadan təsdiqlənir.
 
 
-## v47 Admin QR kamera + daxili skaner düzəlişi
+## v48 Admin QR kamera + daxili skaner düzəlişi
 - PC v1278 HTTP QR-ni APK daxilindəki Admin QR skaneri birbaşa tanıyır.
 - HTTP QR-dan challenge və PC server ünvanı oxunur.
 - QR başqa PC-yə aiddirsə səhv serverə təsdiq göndərilmir.
