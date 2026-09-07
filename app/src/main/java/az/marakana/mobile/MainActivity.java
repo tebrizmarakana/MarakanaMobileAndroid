@@ -133,7 +133,7 @@ public class MainActivity extends Activity {
     private boolean canHall = false;
     private boolean canKitchen = false;
     private boolean canAdmin = false;
-    // v46: telefonun sistem Kamerasından gələn Admin QR deep-link-i login tamamlanana qədər saxla.
+    // v47: Kamera/deep-link/HTTP Admin QR keçidini login tamamlanana qədər saxla.
     private String pendingAdminApprovalDeepLink = "";
     private final Map<String, LinkedHashMap<String, OrderCartItem>> orderCarts = new HashMap<>();
     private FrameLayout activeOrderCartButton = null;
@@ -205,7 +205,12 @@ public class MainActivity extends Activity {
         if (data == null) return false;
         String scheme = data.getScheme() == null ? "" : data.getScheme().trim();
         String host = data.getHost() == null ? "" : data.getHost().trim();
-        if (!"marakana".equalsIgnoreCase(scheme) || !"admin-approval".equalsIgnoreCase(host)) return false;
+        String path = data.getPath() == null ? "" : data.getPath().trim();
+        boolean customApproval = ("marakana".equalsIgnoreCase(scheme) || "intent".equalsIgnoreCase(scheme))
+                && "admin-approval".equalsIgnoreCase(host);
+        boolean httpApproval = ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                && ("/api/mobile/admin/qr/open".equals(path) || "/api/mobile/admin/qr/fallback".equals(path));
+        if (!customApproval && !httpApproval) return false;
         String challenge = data.getQueryParameter("challenge");
         if (challenge == null || challenge.trim().isEmpty()) {
             toast("Admin QR təsdiq kodu boşdur.");
@@ -1060,7 +1065,8 @@ public class MainActivity extends Activity {
             return;
         }
         if (!"admin".equals(role)) {
-            toast("Admin sessiyası tələb olunur.");
+            toast("Admin QR təsdiqi üçün Admin rejiminə keçilir…");
+            switchMobileRole("admin", false, this::startAdminApprovalQrScanner);
             return;
         }
         try {
@@ -1093,14 +1099,25 @@ public class MainActivity extends Activity {
 
     private void approveAdminQrChallenge(String scannedValue) {
         String challenge = "";
+        String qrServer = "";
         String raw = scannedValue == null ? "" : scannedValue.trim();
         try {
-            Uri deepLink = Uri.parse(raw);
-            String scheme = deepLink.getScheme() == null ? "" : deepLink.getScheme().trim();
-            String host = deepLink.getHost() == null ? "" : deepLink.getHost().trim();
-            if ("marakana".equalsIgnoreCase(scheme) && "admin-approval".equalsIgnoreCase(host)) {
-                String value = deepLink.getQueryParameter("challenge");
+            Uri link = Uri.parse(raw);
+            String scheme = link.getScheme() == null ? "" : link.getScheme().trim();
+            String host = link.getHost() == null ? "" : link.getHost().trim();
+            String path = link.getPath() == null ? "" : link.getPath().trim();
+            boolean customApproval = ("marakana".equalsIgnoreCase(scheme) || "intent".equalsIgnoreCase(scheme))
+                    && "admin-approval".equalsIgnoreCase(host);
+            boolean httpApproval = ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    && ("/api/mobile/admin/qr/open".equals(path) || "/api/mobile/admin/qr/fallback".equals(path));
+            if (customApproval || httpApproval) {
+                String value = link.getQueryParameter("challenge");
                 challenge = value == null ? "" : value.trim();
+                String serverValue = link.getQueryParameter("server");
+                qrServer = serverValue == null ? "" : normalizeServerBase(serverValue.trim());
+                if (qrServer.isEmpty() && httpApproval && link.getAuthority() != null && !link.getAuthority().trim().isEmpty()) {
+                    qrServer = normalizeServerBase(scheme + "://" + link.getAuthority().trim());
+                }
             } else {
                 // v45 ilə yaradılmış köhnə JSON QR-lar da işləməyə davam etsin.
                 JSONObject obj = new JSONObject(raw);
@@ -1110,6 +1127,7 @@ public class MainActivity extends Activity {
                     return;
                 }
                 challenge = obj.optString("challenge", "").trim();
+                qrServer = normalizeServerBase(obj.optString("server", "").trim());
             }
         } catch (Exception ex) {
             toast("QR Admin təsdiq formatına uyğun deyil.");
@@ -1123,13 +1141,19 @@ public class MainActivity extends Activity {
             toast("Əvvəlcə PC serverinə daxil olun.");
             return;
         }
+        String currentServer = normalizeServerBase(serverBase);
+        if (!qrServer.isEmpty() && !normalizeServerBase(qrServer).equalsIgnoreCase(currentServer)) {
+            toast("Bu Admin QR başqa PC serverinə aiddir. Mobil tətbiqi həmin PC serverinə qoşun.");
+            return;
+        }
         final String challengeToApprove = challenge;
+        final String approvalServer = qrServer.isEmpty() ? currentServer : normalizeServerBase(qrServer);
         setBusy(true);
         io.execute(() -> {
             try {
                 JSONObject payload = new JSONObject();
                 payload.put("challenge", challengeToApprove);
-                JSONObject result = request(serverBase, "/api/mobile/admin/qr/approve", "POST", payload, sessionToken);
+                JSONObject result = request(approvalServer, "/api/mobile/admin/qr/approve", "POST", payload, sessionToken);
                 if (!result.optBoolean("approved", false)) {
                     throw new RuntimeException("QR təsdiqi qəbul edilmədi.");
                 }

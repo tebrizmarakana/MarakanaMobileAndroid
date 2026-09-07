@@ -1,0 +1,9 @@
+V47 ADMIN QR CAMERA + INTERNAL SCANNER FIX
+==========================================
+PASS - internal Admin QR scanner accepts marakana:// links
+PASS - internal Admin QR scanner accepts intent:// links
+PASS - internal Admin QR scanner accepts PC HTTP /api/mobile/admin/qr/open links
+PASS - internal Admin QR scanner derives/validates PC server base
+PASS - system deep-link capture accepts marakana/intent/http bridge formats
+PASS - admin-capable users auto-switch to admin before scanning
+PASS - versionCode=47 / versionName=3.4.24-native-v47
