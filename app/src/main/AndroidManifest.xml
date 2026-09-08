@@ -46,7 +46,7 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- v49: Chrome/Android intent handoff üçün custom scheme-ləri hostdan asılı
+            <!-- v50: Chrome/Android intent handoff üçün custom scheme-ləri hostdan asılı
                  olmadan MainActivity-yə yönləndir. MainActivity özü yalnız admin-approval
                  hostunu qəbul edir, yəni təhlükəsizlik yoxlaması tətbiq daxilində qalır. -->
             <intent-filter>

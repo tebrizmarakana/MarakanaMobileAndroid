@@ -1,4 +1,18 @@
-# Marakana Mobile Native v49
+# Marakana Mobile Native v50
+
+## v50 — Filiala görə avtomatik Admin QR server keçidi
+
+- Admin QR hansı filialın PC-sindən yaradılıbsa, mobil tətbiq QR-dakı `server` / `IP:port` ünvanını əsas götürür.
+- Mobil başqa filiala qoşulu olsa belə artıq `Bu Admin QR başqa PC serverinə aiddir` xətası ilə bloklanmır.
+- QR serveri fərqlidirsə əvvəl `/api/mobile/ping` ilə həmin PC yoxlanılır, sonra cari istifadəçi/şifrə ilə həmin filialda avtomatik sessiya yaradılır.
+- Avtomatik giriş uğurludursa mobilin cari serveri və sessiyası həmin filiala keçirilir və Admin QR həmin PC-də təsdiqlənir.
+- Həmin filialda şifrə fərqlidirsə tətbiq QR serverinə keçir, giriş ekranını açır və pending QR-ni saxlayır; girişdən sonra təsdiq avtomatik davam edir.
+- Telefon Kamera → browser → Marakana Mobile və tətbiqdaxili `Admin QR təsdiqi` skaneri eyni filial-avtomatik-keçid məntiqindən istifadə edir.
+- QR-dakı PC əlçatan deyilsə cari işlək filial sessiyası korlanmır.
+- `versionCode 50`
+- `versionName 3.4.27-native-v50`
+- Release APK: `MarakanaMobile-v50-release.apk`
+
 
 ## v49 — Chrome/Android Admin QR tətbiq keçidi
 

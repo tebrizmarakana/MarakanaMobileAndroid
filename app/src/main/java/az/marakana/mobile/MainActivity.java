@@ -133,7 +133,7 @@ public class MainActivity extends Activity {
     private boolean canHall = false;
     private boolean canKitchen = false;
     private boolean canAdmin = false;
-    // v49: Kamera/deep-link/HTTP Admin QR keçidini login tamamlanana qədər saxla.
+    // v50: Kamera/deep-link/HTTP Admin QR keçidini login tamamlanana qədər saxla.
     private String pendingAdminApprovalDeepLink = "";
     private final Map<String, LinkedHashMap<String, OrderCartItem>> orderCarts = new HashMap<>();
     private FrameLayout activeOrderCartButton = null;
@@ -167,6 +167,9 @@ public class MainActivity extends Activity {
         role = prefs.getString(KEY_ROLE, "hall");
         adminDebtOnly = prefs.getBoolean(KEY_ADMIN_DEBT_ONLY, false);
         captureAdminApprovalDeepLink(getIntent());
+        // v50: Tətbiq QR/deep-link ilə soyuq start olarsa əvvəlcədən yadda qalan
+        // filialı yox, QR-ın aid olduğu PC serverini giriş hədəfi et.
+        preparePendingAdminApprovalServerForLogin();
         boolean openKitchenFromNotification = getIntent() != null && getIntent().getBooleanExtra("open_kitchen", false);
         if ("kitchen".equals(role) && hasKitchenBackgroundPassword()) {
             startKitchenBackgroundService();
@@ -195,6 +198,13 @@ public class MainActivity extends Activity {
         super.onNewIntent(intent);
         setIntent(intent);
         if (captureAdminApprovalDeepLink(intent)) {
+            String previousServer = normalizeServerBase(serverBase);
+            preparePendingAdminApprovalServerForLogin();
+            if ((sessionToken == null || sessionToken.trim().isEmpty())
+                    && !normalizeServerBase(serverBase).equalsIgnoreCase(previousServer)) {
+                showLogin();
+                toast("Filial serveri QR-a uyğun seçildi.");
+            }
             handlePendingAdminApprovalDeepLink();
         }
     }
@@ -223,22 +233,52 @@ public class MainActivity extends Activity {
     private void handlePendingAdminApprovalDeepLink() {
         if (pendingAdminApprovalDeepLink == null || pendingAdminApprovalDeepLink.trim().isEmpty()) return;
         if (sessionToken == null || sessionToken.trim().isEmpty()) return;
-        if (!canAdmin) {
-            pendingAdminApprovalDeepLink = "";
-            toast("Bu istifadəçi üçün Admin QR təsdiqi icazəsi yoxdur.");
-            return;
-        }
         final String approvalLink = pendingAdminApprovalDeepLink;
         pendingAdminApprovalDeepLink = "";
-        // v49: QR təsdiqi üçün ekrandakı rolu dəyişməyə ehtiyac yoxdur.
-        // PC istifadəçinin real Admin icazəsini server tərəfdə yoxlayır.
+        // v50: Cari filialdakı lokal canAdmin göstəricisi başqa filial üçün qərar vermir.
+        // QR hansı PC-yə aiddirsə, həmin serverdə istifadəçinin real Admin icazəsi
+        // /api/mobile/admin/qr/approve tərəfindən yoxlanılır.
         approveAdminQrChallenge(approvalLink);
+    }
+
+    private String extractAdminApprovalServerQuietly(String rawValue) {
+        String raw = rawValue == null ? "" : rawValue.trim();
+        if (raw.isEmpty()) return "";
+        try {
+            Uri link = Uri.parse(raw);
+            String scheme = link.getScheme() == null ? "" : link.getScheme().trim();
+            String path = link.getPath() == null ? "" : link.getPath().trim();
+            boolean httpApproval = ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    && ("/api/mobile/admin/qr/open".equals(path) || "/api/mobile/admin/qr/fallback".equals(path));
+            String serverValue = link.getQueryParameter("server");
+            String target = serverValue == null ? "" : normalizeServerBase(serverValue.trim());
+            if (target.isEmpty() && httpApproval && link.getAuthority() != null && !link.getAuthority().trim().isEmpty()) {
+                target = normalizeServerBase(scheme + "://" + link.getAuthority().trim());
+            }
+            if (!target.isEmpty()) return target;
+        } catch (Exception ignored) {}
+        try {
+            JSONObject obj = new JSONObject(raw);
+            return normalizeServerBase(obj.optString("server", "").trim());
+        } catch (Exception ignored) {}
+        return "";
+    }
+
+    private void preparePendingAdminApprovalServerForLogin() {
+        if (sessionToken != null && !sessionToken.trim().isEmpty()) return;
+        if (pendingAdminApprovalDeepLink == null || pendingAdminApprovalDeepLink.trim().isEmpty()) return;
+        String target = extractAdminApprovalServerQuietly(pendingAdminApprovalDeepLink);
+        if (target.isEmpty()) return;
+        String current = normalizeServerBase(serverBase);
+        if (target.equalsIgnoreCase(current)) return;
+        serverBase = target;
+        prefs.edit().putString(KEY_SERVER, target).apply();
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        // v49: Chrome-dan tətbiqə keçid zamanı intent artıq tutulubsa, sessiya hazır olan
+        // v50: Chrome-dan tətbiqə keçid zamanı intent artıq tutulubsa, sessiya hazır olan
         // kimi pending Admin QR təsdiqini yenidən işlət.
         handlePendingAdminApprovalDeepLink();
     }
@@ -1065,12 +1105,8 @@ public class MainActivity extends Activity {
     }
 
     private void startAdminApprovalQrScanner() {
-        if (!canAdmin) {
-            toast("Bu istifadəçi üçün Admin QR təsdiqi icazəsi yoxdur.");
-            return;
-        }
-        // v49: Zal/Mətbəx ekranında olsan belə, istifadəçinin Admin icazəsi varsa
-        // QR scanner birbaşa işləyir; ayrıca Admin roluna keçid edilmir.
+        // v50: QR başqa filiala aid ola bilər. Buna görə skan etməzdən əvvəl cari
+        // filialın canAdmin nəticəsi ilə bloklamırıq; real icazə QR serverində yoxlanılır.
         try {
             GmsBarcodeScannerOptions options = new GmsBarcodeScannerOptions.Builder()
                     .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
@@ -1144,12 +1180,14 @@ public class MainActivity extends Activity {
             return;
         }
         String currentServer = normalizeServerBase(serverBase);
-        if (!qrServer.isEmpty() && !normalizeServerBase(qrServer).equalsIgnoreCase(currentServer)) {
-            toast("Bu Admin QR başqa PC serverinə aiddir. Mobil tətbiqi həmin PC serverinə qoşun.");
-            return;
-        }
         final String challengeToApprove = challenge;
         final String approvalServer = qrServer.isEmpty() ? currentServer : normalizeServerBase(qrServer);
+
+        if (!approvalServer.isEmpty() && !approvalServer.equalsIgnoreCase(currentServer)) {
+            approveAdminQrOnDifferentServer(raw, challengeToApprove, approvalServer);
+            return;
+        }
+
         setBusy(true);
         io.execute(() -> {
             try {
@@ -1169,6 +1207,170 @@ public class MainActivity extends Activity {
                 setBusy(false);
             }
         });
+    }
+
+    private void approveAdminQrOnDifferentServer(String rawApproval, String challenge, String targetServer) {
+        final String target = normalizeServerBase(targetServer);
+        final String oldServer = normalizeServerBase(serverBase);
+        final String oldToken = sessionToken == null ? "" : sessionToken.trim();
+        final String loginUser = username == null ? "" : username.trim();
+        String password = sessionPassword == null ? "" : sessionPassword;
+        if (password.isEmpty()) password = loadSavedPassword();
+        final String loginPassword = password;
+
+        if (target.isEmpty()) {
+            toast("QR kodda filial serverinin ünvanı tapılmadı.");
+            return;
+        }
+
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                // Əvvəlcə QR-dakı PC-nin həqiqətən Marakana Mobile serveri kimi
+                // cavab verdiyini yoxla. Əlçatmaz IP-yə sessiyanı kor-koranə keçirmirik.
+                request(target, "/api/mobile/ping", "GET", null, "");
+            } catch (Exception pingError) {
+                runOnUiThread(() -> toast("Bu filialın PC serverinə qoşulmaq mümkün olmadı: " + target));
+                setBusy(false);
+                return;
+            }
+
+            if (loginUser.isEmpty() || loginPassword.isEmpty()) {
+                runOnUiThread(() -> moveToApprovalServerForManualLogin(target, rawApproval, oldServer, oldToken));
+                setBusy(false);
+                return;
+            }
+
+            JSONObject loginResult = null;
+            String loggedRole = "";
+            List<String> candidates = new ArrayList<>();
+            String preferredRole = role == null ? "hall" : role.trim().toLowerCase(Locale.ROOT);
+            if (!preferredRole.equals("hall") && !preferredRole.equals("kitchen") && !preferredRole.equals("admin")) {
+                preferredRole = "hall";
+            }
+            candidates.add(preferredRole);
+            for (String candidate : new String[]{"hall", "kitchen", "admin"}) {
+                if (!candidates.contains(candidate)) candidates.add(candidate);
+            }
+
+            for (String candidate : candidates) {
+                try {
+                    JSONObject loginPayload = new JSONObject();
+                    loginPayload.put("username", loginUser);
+                    loginPayload.put("password", loginPassword);
+                    loginPayload.put("role", candidate);
+                    JSONObject candidateResult = request(target, "/api/mobile/login", "POST", loginPayload, "");
+                    String candidateToken = candidateResult.optString("token", "").trim();
+                    if (candidateToken.isEmpty()) throw new RuntimeException("Mobil sessiya yaradılmadı.");
+                    loginResult = candidateResult;
+                    loggedRole = candidate;
+                    break;
+                } catch (Exception ignored) {}
+            }
+
+            if (loginResult == null) {
+                runOnUiThread(() -> moveToApprovalServerForManualLogin(target, rawApproval, oldServer, oldToken));
+                setBusy(false);
+                return;
+            }
+
+            String newToken = loginResult.optString("token", "").trim();
+            String newUsername = loginResult.optString("username", loginUser).trim();
+            String newRole = loginResult.optString("role", loggedRole).trim().toLowerCase(Locale.ROOT);
+            if (newRole.isEmpty()) newRole = loggedRole;
+            String newRoleLabel = loginResult.optString("role_label", newRole);
+
+            // Yeni filial sessiyası uğurla yaranandan sonra cari bağlantını atomik dəyiş.
+            serverBase = target;
+            sessionToken = newToken;
+            username = newUsername;
+            role = newRole;
+            roleLabel = newRoleLabel;
+            sessionPassword = loginPassword;
+            adminDebtOnly = "admin".equals(role) && adminDebtOnly;
+            prefs.edit()
+                    .putString(KEY_SERVER, target)
+                    .putString(KEY_USERNAME, username)
+                    .putString(KEY_ROLE, role)
+                    .putBoolean(KEY_ADMIN_DEBT_ONLY, adminDebtOnly)
+                    .apply();
+
+            try {
+                // Challenge qısaömürlüdür; əlavə rol probe-larından əvvəl təsdiqi dərhal göndər.
+                JSONObject payload = new JSONObject();
+                payload.put("challenge", challenge);
+                JSONObject result = request(target, "/api/mobile/admin/qr/approve", "POST", payload, sessionToken);
+                if (!result.optBoolean("approved", false)) {
+                    throw new RuntimeException("QR təsdiqi qəbul edilmədi.");
+                }
+                String approvedBy = result.optString("approved_by", "").trim();
+
+                // Təsdiqdən sonra yeni filialın menyu icazələrini yenilə.
+                refreshAllowedMobileRoles(username, loginPassword, role);
+
+                if (!oldToken.isEmpty() && !oldServer.isEmpty() && !oldServer.equalsIgnoreCase(target)) {
+                    try { request(oldServer, "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
+                    catch (Exception ignored) {}
+                }
+
+                runOnUiThread(() -> {
+                    updateKitchenBackgroundServiceForRole(loginPassword);
+                    reopenCurrentRoleHome();
+                    toast(approvedBy.isEmpty()
+                            ? "Filial avtomatik dəyişdirildi və Admin QR təsdiqləndi."
+                            : "Filial avtomatik dəyişdirildi. Admin QR təsdiqləndi: " + approvedBy);
+                });
+            } catch (Exception approvalError) {
+                // Server keçidi uğurludur; təsdiq rədd olunsa belə yeni filialın real
+                // icazələrini yenilə ki menyu köhnə filialdan qalmasın.
+                refreshAllowedMobileRoles(username, loginPassword, role);
+                if (!oldToken.isEmpty() && !oldServer.isEmpty() && !oldServer.equalsIgnoreCase(target)) {
+                    try { request(oldServer, "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
+                    catch (Exception ignored) {}
+                }
+                runOnUiThread(() -> {
+                    updateKitchenBackgroundServiceForRole(loginPassword);
+                    reopenCurrentRoleHome();
+                });
+                showError(approvalError);
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    private void moveToApprovalServerForManualLogin(String target, String rawApproval, String oldServer, String oldToken) {
+        serverBase = normalizeServerBase(target);
+        prefs.edit().putString(KEY_SERVER, serverBase).apply();
+        pendingAdminApprovalDeepLink = rawApproval == null ? "" : rawApproval.trim();
+        sessionToken = "";
+        sessionPassword = "";
+        canHall = false;
+        canKitchen = false;
+        canAdmin = false;
+        stopKitchenBackgroundService(false);
+
+        if (oldToken != null && !oldToken.trim().isEmpty()
+                && oldServer != null && !oldServer.trim().isEmpty()
+                && !normalizeServerBase(oldServer).equalsIgnoreCase(serverBase)) {
+            io.execute(() -> {
+                try { request(normalizeServerBase(oldServer), "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
+                catch (Exception ignored) {}
+            });
+        }
+
+        showLogin();
+        toast("Filial serveri QR-a uyğun dəyişdirildi. Bu filial üçün daxil olun; QR təsdiqi girişdən sonra davam edəcək.");
+    }
+
+    private void reopenCurrentRoleHome() {
+        if ("kitchen".equals(role)) {
+            showKitchen();
+        } else if ("admin".equals(role) && adminDebtOnly) {
+            showDebt("İşçi");
+        } else {
+            showTerminals();
+        }
     }
 
     private void connectToScannedServer(String scannedValue) {

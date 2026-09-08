@@ -1,0 +1,35 @@
+V50 ADMIN QR BRANCH AUTO SERVER SWITCH
+=======================================
+
+STATIC / LOGIC CHECKS
+---------------------
+PASS - versionCode=50
+PASS - versionName=3.4.27-native-v50
+PASS - old hard block text "Bu Admin QR başqa PC serverinə aiddir" removed
+PASS - cold-start camera/deep-link reads QR server before auto-login
+PASS - active-session QR for another PC routes to approveAdminQrOnDifferentServer
+PASS - target PC is checked with /api/mobile/ping before active-session switch
+PASS - same username/password is tried against target branch using allowed mobile roles
+PASS - successful target login persists target KEY_SERVER and new target session token
+PASS - Admin approval is sent to target branch before extra role probes
+PASS - target branch permissions are refreshed after switching
+PASS - old branch session is logged out best-effort after successful switch
+PASS - if target branch password differs, target server is selected and pending QR is retained for manual login
+PASS - after manual login, pending QR approval resumes automatically
+PASS - camera/browser deep-link and in-app Admin QR scanner share the same branch-switch logic
+PASS - unreachable target PC does not overwrite the active branch session
+PASS - Java delimiter/brace lexical balance check OK
+PASS - javac parse reached normal missing-Android-dependency errors; no syntax-like parser errors detected
+PASS - GitHub Actions workflow artifact/version names updated to v50
+
+PHYSICAL DEVICE CHECK
+---------------------
+Required after installing the built v50 APK:
+1. Connect phone to Branch A and log in.
+2. At Branch B, scan Branch B Admin QR either with the in-app scanner or phone Camera -> browser -> Marakana Mobile.
+3. Expected: app detects Branch B IP:port, reaches Branch B server, logs in automatically if credentials match, and approves that Branch B challenge.
+4. If Branch B uses a different password, expected: app switches to Branch B login screen and approval continues after login while the challenge is still valid.
+
+NOTE
+----
+The sandbox does not contain the Android SDK/Gradle dependencies, so a full Android assembleRelease build was not run here. The project workflow is prepared to build the signed v50 APK in GitHub Actions.
