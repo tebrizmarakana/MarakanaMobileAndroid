@@ -1,4 +1,10 @@
-# Marakana Mobile Native v51
+# Marakana Mobile Native v52
+
+## v52 — Hesab Satışı build düzəlişi
+
+- `MainActivity` daxilində təkrar yaranmış `money(double)` helper-i silindi.
+- GitHub Actions `compileReleaseJavaWithJavac` mərhələsindəki `method money(double) is already defined` xətası aradan qaldırıldı.
+- v51-dəki WordPress Hesab Satışı native mobil modulu olduğu kimi saxlanılıb.
 
 ## v51 — WordPress Hesab Satışı native mobil modulu
 
@@ -8,9 +14,9 @@
 - Yeni hesab əlavə etmək, mövcud hesabı düzəltmək/silmək, müştəri alışlarını görmək və plugin ayarlarını dəyişmək mümkündür.
 - İlk girişdə WordPress ünvanı və plugin Ayarlarındakı **Mobil API açarı** yazılır; API açarı Android Keystore ilə şifrəli saxlanılır.
 - WordPress companion plugin faylı `v1.0.71` mobil REST API dəstəyi verir.
-- `versionCode 51`
-- `versionName 3.4.28-native-v51`
-- Release APK: `MarakanaMobile-v51-release.apk`
+- `versionCode 52`
+- `versionName 3.4.29-native-v52`
+- Release APK: `MarakanaMobile-v52-release.apk`
 
 ---
 

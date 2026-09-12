@@ -1,0 +1,18 @@
+Marakana Mobile v52 - Hesab Satışı build fix
+
+Düzəliş:
+- MainActivity.java daxilində eyni imzalı ikinci money(double) metodu silindi.
+- Mövcud əsas money(double value) metodu saxlanıldı və Hesab Satışı daxil olmaqla bütün çağırışlar onu istifadə edir.
+- versionCode: 52
+- versionName: 3.4.29-native-v52
+- GitHub Actions artifact adı: MarakanaMobile-v52-release.apk
+
+Yoxlamalar:
+- MainActivity.java daxilində `private String money(double` sayı: 1
+- Java mötərizə balansı: PASS
+- build.gradle v52 metadata: PASS
+- .github/workflows/main.yml v52 artifact metadata: PASS
+- build-apk.yml v52 artifact metadata: PASS
+- ZIP integrity: ayrıca yoxlanıldı
+
+Qeyd: lokal Linux konteynerində Android SDK/Gradle toolchain olmadığı üçün tam assembleRelease burada icra edilməyib. GitHub Actions tam build üçün nəzərdə tutulub.

@@ -4388,7 +4388,6 @@ public class MainActivity extends Activity {
 
     private TextView empty(String msg) { TextView e=text(msg,14,MUTED,true);e.setGravity(Gravity.CENTER);e.setBackground(bg(CARD,16,BORDER));e.setPadding(dp(12),dp(20),dp(12),dp(20));return e; }
     private void spacer(LinearLayout l,int h){View v=new View(this);l.addView(v,new LinearLayout.LayoutParams(1,dp(h)));}
-    private String money(double v){return String.format(Locale.US,"%.2f AZN",v);}
     private void toast(String s){runOnUiThread(()->Toast.makeText(this,s,Toast.LENGTH_LONG).show());}
     private String urlEncode(String s){try{return java.net.URLEncoder.encode(s,"UTF-8");}catch(Exception e){return s;}}
 
