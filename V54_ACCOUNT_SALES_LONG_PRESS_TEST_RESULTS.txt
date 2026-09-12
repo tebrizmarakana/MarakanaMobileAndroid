@@ -1,0 +1,21 @@
+Marakana Mobile v54 - Hesab Satışı: Satılmayanlar + 3 saniyə basılı saxla menyusu
+
+15/15 PASS
+
+PASS - Footer label Stok -> Satılmayanlar.
+PASS - Hesab kartlarında görünən Düzəliş düyməsi yoxdur.
+PASS - Hesab kartlarında görünən Sil düyməsi yoxdur.
+PASS - 3 saniyəlik (3000 ms) hold timer var.
+PASS - Barmaq hərəkət həddini keçəndə pending hold ləğv olunur.
+PASS - ACTION_UP hold timer-i ləğv edir.
+PASS - ACTION_CANCEL hold timer-i ləğv edir.
+PASS - 3 saniyədən sonra Düzənlə / Sil menyusu açılır.
+PASS - Düzənlə mövcud edit formunu açır.
+PASS - Sil mövcud təsdiqli silmə axınını istifadə edir.
+PASS - versionCode 54.
+PASS - versionName 3.4.31-native-v54.
+PASS - GitHub Actions v54 artifact metadata.
+PASS - MainActivity Java brace/string/comment balansı düzgündür.
+PASS - money(double) yalnız bir dəfə müəyyən edilib.
+
+Qeyd: Lokal konteynerdə Android SDK/Gradle olmadığı üçün tam assembleRelease burada icra edilməyib. GitHub Actions workflow build üçün hazırlanıb.

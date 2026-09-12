@@ -1,3 +1,16 @@
+# Marakana Mobile Native v54
+
+## v54 — Hesab Satışı: Satılmayanlar + 3 saniyə basılı saxla menyusu
+- Alt paneldə `Stok` adı `Satılmayanlar` olaraq dəyişdirildi.
+- Hesablar / Satılan / Satılmayanlar siyahılarında görünən `Düzəliş` və `Sil` düymələri ləğv edildi.
+- Hesab kartının üzərində 3 saniyə basılı saxlayanda `Düzənlə` və `Sil` seçimləri açılır.
+- Barmaqla sürüşdürmə başladıqda 3 saniyəlik seçim ləğv olunur ki, siyahı normal scroll işləsin.
+- `versionCode 54`
+- `versionName 3.4.31-native-v54`
+- Release APK: `MarakanaMobile-v54-release.apk`
+
+## Əvvəlki versiyalar
+
 # Marakana Mobile Native v53
 
 ## v53 — Hesab Satışı naviqasiya düzəlişi

@@ -3196,7 +3196,7 @@ public class MainActivity extends Activity {
         footer.setPadding(dp(4), dp(8), dp(4), dp(8));
         footer.setBackground(bg(Color.WHITE, 22, BORDER));
         footer.setElevation(dp(12));
-        String[] labels = {"Hesablar", "Satılan", "Stok", "Müştəri"};
+        String[] labels = {"Hesablar", "Satılan", "Satılmayanlar", "Müştəri"};
         String[] icons = {"🎮", "✓", "○", "👥"};
         String[] targets = {"accounts", "sold", "unsold", "customers"};
         for (int i = 0; i < targets.length; i++) {
@@ -3269,21 +3269,58 @@ public class MainActivity extends Activity {
         String payment = row.optString("payment_type", "").trim();
         if (!saleDate.isEmpty() || !payment.isEmpty()) c.addView(text((saleDate.isEmpty() ? "—" : saleDate) + (payment.isEmpty() ? "" : "  •  " + payment), 12, MUTED, false));
         spacer(c, 8);
-
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        Button edit = button("Düzəliş", CARD, TEXT);
-        edit.setTextSize(13);
-        actions.addView(edit, new LinearLayout.LayoutParams(0, dp(44), 1f));
-        edit.setOnClickListener(v -> showAccountSalesForm(row, settings));
-        Button del = button("Sil", Color.rgb(255, 242, 242), Color.rgb(176, 54, 54));
-        del.setTextSize(13);
-        LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(0, dp(44), 1f);
-        delLp.setMargins(dp(8), 0, 0, 0);
-        actions.addView(del, delLp);
-        del.setOnClickListener(v -> confirmDeleteAccountSale(row));
-        c.addView(actions);
+        installAccountSalesRecordHoldActions(c, row, settings);
         return c;
+    }
+
+    private void installAccountSalesRecordHoldActions(View card, JSONObject row, JSONObject settings) {
+        final Handler holdHandler = new Handler(Looper.getMainLooper());
+        final float[] down = new float[2];
+        final boolean[] fired = {false};
+        final int moveTolerance = dp(12);
+        final Runnable openActions = () -> {
+            fired[0] = true;
+            showAccountSalesRecordActions(row, settings);
+        };
+
+        card.setClickable(true);
+        card.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    down[0] = event.getX();
+                    down[1] = event.getY();
+                    fired[0] = false;
+                    holdHandler.removeCallbacks(openActions);
+                    holdHandler.postDelayed(openActions, 3000L);
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(event.getX() - down[0]) > moveTolerance || Math.abs(event.getY() - down[1]) > moveTolerance) {
+                        holdHandler.removeCallbacks(openActions);
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    holdHandler.removeCallbacks(openActions);
+                    return true;
+                default:
+                    return true;
+            }
+        });
+    }
+
+    private void showAccountSalesRecordActions(JSONObject row, JSONObject settings) {
+        String title = row.optString("game_name", "Hesab");
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setItems(new String[]{"Düzənlə", "Sil"}, (dialog, which) -> {
+                    if (which == 0) {
+                        showAccountSalesForm(row, settings);
+                    } else if (which == 1) {
+                        confirmDeleteAccountSale(row);
+                    }
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
     }
 
     private void confirmDeleteAccountSale(JSONObject row) {
