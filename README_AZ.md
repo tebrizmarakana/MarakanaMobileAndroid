@@ -1,4 +1,16 @@
-# Marakana Mobile Native v52
+# Marakana Mobile Native v53
+
+## v53 — Hesab Satışı naviqasiya düzəlişi
+
+- Hesab Satışı ekranının yuxarı hissəsindəki **Bağlantı** düyməsi ləğv edildi.
+- Alt paneldəki **Ayarlar** düyməsi yuxarı hissəyə, əvvəlki Bağlantı düyməsinin yerinə keçirildi.
+- Alt panel indi yalnız **Hesablar / Satılan / Stok / Müştəri** bölmələrini göstərir.
+- WordPress ünvanı və API açarını dəyişmək yenə **Ayarlar → Mobil bağlantı** hissəsindən mümkündür.
+- **Yenilə** düyməsi yuxarı hissədə əvvəlki kimi qalır.
+- `versionCode 53`
+- `versionName 3.4.30-native-v53`
+- Release APK: `MarakanaMobile-v53-release.apk`
+
 
 ## v52 — Hesab Satışı build düzəlişi
 

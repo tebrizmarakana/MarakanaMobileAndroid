@@ -1,4 +1,4 @@
-name: Build Marakana Mobile Native v52 RELEASE APK
+name: Build Marakana Mobile Native v53 RELEASE APK
 
 on:
   workflow_dispatch:
@@ -54,17 +54,17 @@ jobs:
         run: gradle --no-daemon :app:assembleRelease
 
       - name: Prepare versioned APK
-        run: cp app/build/outputs/apk/release/app-release.apk MarakanaMobile-v52-release.apk
+        run: cp app/build/outputs/apk/release/app-release.apk MarakanaMobile-v53-release.apk
 
       - name: Verify APK signature
         shell: bash
         run: |
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)
-          "$APKSIGNER" verify --print-certs MarakanaMobile-v52-release.apk
+          "$APKSIGNER" verify --print-certs MarakanaMobile-v53-release.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: MarakanaMobile-v52-permanent-update-apk
-          path: MarakanaMobile-v52-release.apk
+          name: MarakanaMobile-v53-permanent-update-apk
+          path: MarakanaMobile-v53-release.apk
           if-no-files-found: error

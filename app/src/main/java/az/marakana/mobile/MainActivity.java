@@ -3112,10 +3112,10 @@ public class MainActivity extends Activity {
 
         LinearLayout topActions = new LinearLayout(this);
         topActions.setOrientation(LinearLayout.HORIZONTAL);
-        Button connection = button("⚙ Bağlantı", CARD, TEXT);
-        connection.setTextSize(13);
-        topActions.addView(connection, new LinearLayout.LayoutParams(0, dp(48), 1f));
-        connection.setOnClickListener(v -> showAccountSalesConnection());
+        Button settingsButton = button("⚙ Ayarlar", CARD, TEXT);
+        settingsButton.setTextSize(13);
+        topActions.addView(settingsButton, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        settingsButton.setOnClickListener(v -> showAccountSales("settings"));
         Button refresh = button("↻ Yenilə", CARD, TEXT);
         refresh.setTextSize(13);
         LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dp(48), 1f);
@@ -3196,10 +3196,11 @@ public class MainActivity extends Activity {
         footer.setPadding(dp(4), dp(8), dp(4), dp(8));
         footer.setBackground(bg(Color.WHITE, 22, BORDER));
         footer.setElevation(dp(12));
-        String[] labels = {"Hesablar", "Satılan", "Stok", "Müştəri", "Ayarlar"};
-        String[] icons = {"🎮", "✓", "○", "👥", "⚙"};
-        for (int i = 0; i < ACCOUNT_SALES_SECTIONS.length; i++) {
-            final String target = ACCOUNT_SALES_SECTIONS[i];
+        String[] labels = {"Hesablar", "Satılan", "Stok", "Müştəri"};
+        String[] icons = {"🎮", "✓", "○", "👥"};
+        String[] targets = {"accounts", "sold", "unsold", "customers"};
+        for (int i = 0; i < targets.length; i++) {
+            final String target = targets[i];
             LinearLayout tab = buildRentalFooterTab(icons[i], labels[i], target.equals(activeSection));
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
             if (i > 0) lp.setMargins(dp(3), 0, 0, 0);

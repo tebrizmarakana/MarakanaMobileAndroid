@@ -1,0 +1,23 @@
+Marakana Mobile v53 - Hesab Satışı naviqasiya düzəlişi
+
+Dəyişikliklər:
+- Hesab Satışı yuxarı action hissəsindəki "Bağlantı" düyməsi ləğv edildi.
+- Həmin yerə "Ayarlar" düyməsi keçirildi; settings bölməsini açır.
+- Alt paneldən "Ayarlar" çıxarıldı.
+- Alt panel: Hesablar / Satılan / Stok / Müştəri.
+- Ayarlar daxilində "WordPress / API açarını dəyiş" bağlantı idarəetməsi saxlanılıb.
+- Yenilə düyməsi saxlanılıb.
+- versionCode 53 / versionName 3.4.30-native-v53.
+
+İcra edilmiş yoxlamalar:
+- MainActivity Java brace/string/comment lexical balance: PASS
+- Header Bağlantı button declaration absent: PASS
+- Header Ayarlar button + settings target: PASS
+- Footer exactly 4 targets/labels: PASS
+- Ayarlar daxilində connection management remains: PASS
+- money(double) helper count = 1: PASS
+- build.gradle v53 metadata: PASS
+- GitHub Actions / build-apk v53 artifact metadata: PASS
+- ZIP integrity: packaging sonrası yoxlanılır.
+
+Qeyd: layihədə Gradle wrapper/Android SDK olmadığı üçün lokal compileReleaseJavaWithJavac icra edilməyib; GitHub Actions build üçün workflow hazırdır.
