@@ -3174,7 +3174,11 @@ public class MainActivity extends Activity {
             addCustomer.setEnabled(true);
             addCustomer.setOnClickListener(v -> showAccountSalesNewCustomer());
 
-            renderAccountSalesSummary(summaryHost, result.optJSONObject("stats"));
+            if ("settings".equals(section)) {
+                renderAccountSalesSummary(summaryHost, result.optJSONObject("stats"));
+            } else {
+                summaryHost.removeAllViews();
+            }
             if ("customers".equals(section)) {
                 JSONArray customers = result.optJSONArray("customers");
                 if (customers == null) customers = new JSONArray();
@@ -3238,7 +3242,7 @@ public class MainActivity extends Activity {
         LinearLayout c = card();
         c.addView(text("Göstəricilər", 13, MUTED, true));
         String line1 = "Hesab: " + stats.optInt("total", 0) + "  •  Satılanlar: " + stats.optInt("sold", 0) + "  •  Satılmayanlar: " + stats.optInt("unsold", 0);
-        String line2 = "Cəmi: " + money(stats.optDouble("total_amount", 0)) + "  •  Nağd: " + money(stats.optDouble("cash_amount", 0)) + "  •  Nisyə: " + money(stats.optDouble("credit_amount", 0));
+        String line2 = "Cəmi: " + money(stats.optDouble("total_amount", 0));
         c.addView(text(line1, 15, TEXT, true));
         TextView totals = text(line2, 12, MUTED, false);
         totals.setPadding(0, dp(4), 0, 0);
@@ -3314,8 +3318,7 @@ public class MainActivity extends Activity {
         if (!customer.isEmpty() || !phone.isEmpty()) c.addView(text((customer.isEmpty() ? "—" : customer) + (phone.isEmpty() ? "" : "  •  " + phone), 12, MUTED, false));
         String saleDate = row.optString("sale_date", "").trim();
         String saleDateDisplay = accountSalesDateForDisplay(saleDate);
-        String payment = row.optString("payment_type", "").trim();
-        if (!saleDateDisplay.isEmpty() || !payment.isEmpty()) c.addView(text((saleDateDisplay.isEmpty() ? "—" : saleDateDisplay) + (payment.isEmpty() ? "" : "  •  " + payment), 12, MUTED, false));
+        if (!saleDateDisplay.isEmpty()) c.addView(text(saleDateDisplay, 12, MUTED, false));
         spacer(c, 8);
         installAccountSalesRecordHoldActions(c, row, settings);
         return c;
@@ -3434,9 +3437,7 @@ public class MainActivity extends Activity {
         String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
         EditText date = accountField(body, "Satış tarixi", "DD-MM-YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
 
-        String defaultPayment = settings == null ? "Nağd" : settings.optString("default_payment_type", "Nağd");
         String defaultStock = settings == null ? "Satılıb" : settings.optString("default_stock_status", "Satılıb");
-        Spinner payment = accountSpinnerField(body, "Ödəniş növü *", new String[]{"Nağd", "Nisyə"}, record.optString("payment_type", defaultPayment));
         Spinner stock = accountSpinnerField(body, "Stok *", new String[]{"Satılıb", "Satılmayıb"}, record.optString("stock_status", defaultStock));
 
         TextView note = text("Satılıb seçilərsə ad soyad, telefon və satış tarixi məcburidir.", 12, MUTED, false);
@@ -3457,7 +3458,9 @@ public class MainActivity extends Activity {
                 payload.put("customer_name", customer.getText().toString());
                 payload.put("phone", phone.getText().toString());
                 payload.put("sale_date", accountSalesDateForApi(date.getText().toString()));
-                payload.put("payment_type", String.valueOf(payment.getSelectedItem()));
+                // Ödəniş növü artıq UI-da yoxdur. Mövcud dəyəri yalnız köhnə WordPress
+                // validasiyası ilə uyğunluq üçün səssiz saxlayırıq; istifadəçiyə göstərilmir/seçdirilmir.
+                payload.put("payment_type", record.optString("payment_type", "Nağd"));
                 payload.put("stock_status", String.valueOf(stock.getSelectedItem()));
             } catch (Exception ignored) {}
             postAccountSalesJson("/save", payload, result -> {
@@ -4176,9 +4179,7 @@ public class MainActivity extends Activity {
             c.addView(text(customer.optString("phone", ""), 13, MUTED, false));
             String detail = customer.optInt("game_count", 0) + " alış  •  " + customer.optString("total_amount_formatted", money(customer.optDouble("total_amount", 0)));
             c.addView(text(detail, 12, TEXT, true));
-            String payment = "Nağd: " + customer.optString("cash_amount_formatted", money(customer.optDouble("cash_amount", 0))) +
-                    "  •  Nisyə: " + customer.optString("credit_amount_formatted", money(customer.optDouble("credit_amount", 0)));
-            c.addView(text(payment, 12, MUTED, false));
+
             c.setClickable(true);
             c.setOnClickListener(v -> showAccountSalesCustomerDetail(customer));
             host.addView(c);
@@ -4225,7 +4226,6 @@ public class MainActivity extends Activity {
         spacer(c, 6);
         EditText currency = accountField(c, "Pul vahidi", "AZN", settings.optString("currency", "AZN"), InputType.TYPE_CLASS_TEXT);
         Spinner stock = accountSpinnerField(c, "Default stok", new String[]{"Satılıb", "Satılmayıb"}, settings.optString("default_stock_status", "Satılıb"));
-        Spinner payment = accountSpinnerField(c, "Default ödəniş", new String[]{"Nağd", "Nisyə"}, settings.optString("default_payment_type", "Nağd"));
         CheckBox phoneFormat = new CheckBox(this);
         phoneFormat.setText("Telefon formatlama aktivdir");
         phoneFormat.setTextColor(TEXT);
@@ -4239,7 +4239,8 @@ public class MainActivity extends Activity {
             try {
                 payload.put("currency", currency.getText().toString());
                 payload.put("default_stock_status", String.valueOf(stock.getSelectedItem()));
-                payload.put("default_payment_type", String.valueOf(payment.getSelectedItem()));
+                // Ödəniş seçimi UI-dan ləğv edilib; köhnə server ayarını dəyişmədən saxla.
+                payload.put("default_payment_type", settings.optString("default_payment_type", "Nağd"));
                 payload.put("phone_format_enabled", phoneFormat.isChecked());
             } catch (Exception ignored) {}
             postAccountSalesJson("/settings", payload, result -> {

@@ -1,7 +1,7 @@
-Marakana Mobile v61 GitHub upload
+Marakana Mobile v62 GitHub upload
 
 1) Daimi signing üçün əvvəlcədən yaratdığın GitHub Secret-lər olduğu kimi qalır.
 2) Bu TAM layihənin içindəkiləri repo kökünə yüklə və köhnə faylların üstünə yaz.
 3) Commit changes et.
-4) Actions -> Build Marakana Mobile Native v61 RELEASE APK -> Run workflow.
-5) Artifact: MarakanaMobile-v61-permanent-update-apk
+4) Actions -> Build Marakana Mobile Native v62 RELEASE APK -> Run workflow.
+5) Artifact: MarakanaMobile-v62-permanent-update-apk

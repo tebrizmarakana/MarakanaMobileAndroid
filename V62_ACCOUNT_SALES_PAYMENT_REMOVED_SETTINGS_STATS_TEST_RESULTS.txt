@@ -1,0 +1,17 @@
+Marakana Mobile v62 — Hesab Satışı payment UI removal + Settings-only stats
+
+Expected behavior:
+1. Hesab Satışı UI-da Nağd/Nisyə seçimləri yoxdur.
+2. Hesab kartlarında payment_type görünmür.
+3. Edit formda Ödəniş növü spinner-i yoxdur.
+4. Müştəri kartlarında Nağd/Nisyə bölgüsü yoxdur.
+5. Ayarlarda Default ödəniş spinner-i yoxdur.
+6. Göstəricilər yalnız Ayarlar bölməsində render olunur.
+7. Göstəricilər Nağd/Nisyə breakdown göstərmir.
+8. Backend compatibility üçün mövcud payment_type/default_payment_type səssiz qorunur.
+9. Rental/İcarə ödəniş sistemi bu dəyişiklikdən təsirlənmir.
+10. v61 Bundle və account sort funksiyaları saxlanılıb.
+
+Verification: 20/20 static/behavior/metadata checks PASS.
+Javac syntax probe: PASS (Android SDK symbols unavailable in container are ignored).
+Workflow YAML parse: PASS.
