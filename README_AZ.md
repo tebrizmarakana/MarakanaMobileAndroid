@@ -1,5 +1,15 @@
-# Marakana Mobile Native v56
+# Marakana Mobile Native v57
 
+## v57 — Hesab Satışı: göstərici adı və alt panel ikonları
+- `Göstəricilər` hissəsində `Stok` adı `Satılmayanlar` olaraq dəyişdirildi.
+- `Satılan` göstəricisi `Satılanlar` kimi uyğunlaşdırıldı.
+- Alt paneldə `Satılanlar` üçün ✅, `Satılmayanlar` üçün 📦 ikonları istifadə olunur.
+- Hesablar/Müştəri ikonları və əvvəlki Hesab Satışı funksiyaları saxlanılıb.
+- `versionCode 57`
+- `versionName 3.4.34-native-v57`
+- Release APK: `MarakanaMobile-v57-release.apk`
+
+---
 
 ## v56 — Hesab Satışı: Yeni müştəri yarat
 

@@ -1,0 +1,24 @@
+Marakana Mobile v57 - Hesab Satışı göstərici adı + alt panel ikonları
+
+PASS: footer labels use Satılanlar/Satılmayanlar
+PASS: footer icons sold/unsold suitable
+PASS: footer targets unchanged
+PASS: summary has Satılmayanlar
+PASS: summary no Stok for unsold
+PASS: summary sold label pluralized
+PASS: new customer button preserved
+PASS: 1-second hold preserved
+PASS: edit/delete long-press actions preserved
+PASS: settings header action preserved
+PASS: money helper unique
+PASS: versionCode 57
+PASS: versionName v57
+PASS: workflow v57 main
+PASS: workflow v57 backup
+PASS: WordPress companion remains v1.0.72
+PASS: Java brace balance
+PASS: Java paren balance
+PASS: Java bracket balance
+
+RESULT: 19/19 PASS
+Qeyd: Android SDK/Gradle wrapper bu Linux konteynerdə yoxdur; tam assembleRelease lokal icra edilməyib. GitHub Actions workflow v57 üçün hazırdır.

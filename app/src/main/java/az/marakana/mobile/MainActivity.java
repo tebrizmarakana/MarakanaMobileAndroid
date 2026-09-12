@@ -3208,8 +3208,8 @@ public class MainActivity extends Activity {
         footer.setPadding(dp(4), dp(8), dp(4), dp(8));
         footer.setBackground(bg(Color.WHITE, 22, BORDER));
         footer.setElevation(dp(12));
-        String[] labels = {"Hesablar", "Satılan", "Satılmayanlar", "Müştəri"};
-        String[] icons = {"🎮", "✓", "○", "👥"};
+        String[] labels = {"Hesablar", "Satılanlar", "Satılmayanlar", "Müştəri"};
+        String[] icons = {"🎮", "✅", "📦", "👥"};
         String[] targets = {"accounts", "sold", "unsold", "customers"};
         for (int i = 0; i < targets.length; i++) {
             final String target = targets[i];
@@ -3228,7 +3228,7 @@ public class MainActivity extends Activity {
         if (stats == null) return;
         LinearLayout c = card();
         c.addView(text("Göstəricilər", 13, MUTED, true));
-        String line1 = "Hesab: " + stats.optInt("total", 0) + "  •  Satılan: " + stats.optInt("sold", 0) + "  •  Stok: " + stats.optInt("unsold", 0);
+        String line1 = "Hesab: " + stats.optInt("total", 0) + "  •  Satılanlar: " + stats.optInt("sold", 0) + "  •  Satılmayanlar: " + stats.optInt("unsold", 0);
         String line2 = "Cəmi: " + money(stats.optDouble("total_amount", 0)) + "  •  Nağd: " + money(stats.optDouble("cash_amount", 0)) + "  •  Nisyə: " + money(stats.optDouble("credit_amount", 0));
         c.addView(text(line1, 15, TEXT, true));
         TextView totals = text(line2, 12, MUTED, false);
