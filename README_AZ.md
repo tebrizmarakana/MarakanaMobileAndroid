@@ -1,17 +1,16 @@
-# Marakana Mobile Native v59
+# Marakana Mobile Native v60
 
-## v59 — Hesab yaratma axını
+## v60 — Oyun adı kataloqu və toplu rename
 
-- Əsas Hesab Satışı səhifəsində **Yeni hesab satışı** düyməsi **Yeni hesab yarat** olaraq dəyişdirildi.
-- Yeni hesab yarat ekranında yalnız hesabın öz məlumatları var: Oyunun adı, E-mail, Qiymət və Konsol.
-- Müştəri, telefon, satış tarixi, ödəniş növü, stok və növ sahələri yeni hesab yarat ekranından çıxarıldı.
-- **Hesabı əlavə et** düyməsinə basanda Online / Universal / Offline çoxlu seçim pəncərəsi açılır.
-- Bir, iki və ya hər üç növ seçilə bilər; seçilən hər növ ayrıca hesab kimi yaradılır.
-- Yeni yaradılan bütün hesablar avtomatik **Satılmayıb** kimi saxlanılır.
-- Mövcud hesabı Düzənlə axını əvvəlki satış/müştəri sahələrini saxlayır.
-- WordPress companion API v1.0.73-də `/create-accounts` endpoint-i əlavə olunub.
+- **Yeni hesab yarat → Oyunun adı** sahəsinə klik edəndə bütün oyun adları açılır və yazaraq axtarmaq olur.
+- Axtarılan ad dəqiq tapılmırsa **Yeni oyun yarat** düyməsi görünür.
+- Yeni oyun adı hesab yaratmadan əvvəl ayrıca oyun kataloquna əlavə edilir.
+- Tapılan oyun adının üzərində **1 saniyə basılı saxlayanda → Düzənlə** açılır.
+- Oyun adını düzəltdikdə həmin adla olan əvvəlki **Satılan və Satılmayan bütün hesabların** oyun adı da yeni adla dəyişir.
+- v59-dakı Yeni hesab yarat + Online/Universal/Offline çoxlu seçim axını saxlanılıb.
+- WordPress companion API **v1.0.74**: `/game/save` endpoint-i və ayrıca oyun kataloqu əlavə olunub.
 
 Build:
-- `versionCode 59`
-- `versionName 3.4.36-native-v59`
-- Release APK: `MarakanaMobile-v59-release.apk`
+- `versionCode 60`
+- `versionName 3.4.37-native-v60`
+- Release APK: `MarakanaMobile-v60-release.apk`

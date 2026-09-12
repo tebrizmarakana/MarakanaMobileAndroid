@@ -3,7 +3,7 @@
  * Plugin Name: Marakana Playstation Hesab Satışı
  * Plugin URI: https://marakana.local/
  * Description: Playstation oyun hesablarının satışı, stok, müştəri, ödəniş və geniş axtarış idarəetməsi üçün professional Marakana plugin.
- * Version: 1.0.73
+ * Version: 1.0.74
  * Author: Marakana
  * Text Domain: marakana-playstation-hesab-satisi
  * Requires PHP: 7.4
@@ -16,13 +16,14 @@ if (!defined('ABSPATH')) {
 if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
     final class Marakana_Playstation_Hesab_Satisi_100
     {
-        const VERSION = '1.0.73';
+        const VERSION = '1.0.74';
         const DB_VERSION = '1.0.4';
         const OPTION_KEY = 'mara_account_sale_settings';
         const DB_OPTION_KEY = 'mara_account_sale_db_version';
         const LEGACY_IMPORT_OPTION_KEY = 'mara_account_sale_legacy_pdf_import_v54';
         const MOBILE_API_KEY_OPTION_KEY = 'mara_account_sale_mobile_api_key_v1';
         const CUSTOMER_CONTACTS_OPTION_KEY = 'mara_account_sale_customer_contacts_v1';
+        const GAME_CATALOG_OPTION_KEY = 'mara_account_sale_game_catalog_v1';
 
         private static $instance = null;
 
@@ -375,6 +376,142 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             return implode(', ', $names);
         }
 
+        private function game_name_key($value)
+        {
+            $value = trim((string) $value);
+            return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+        }
+
+        private function get_game_catalog()
+        {
+            $raw = get_option(self::GAME_CATALOG_OPTION_KEY, array());
+            if (!is_array($raw)) {
+                return array();
+            }
+            $result = array();
+            foreach ($raw as $entry) {
+                if (is_array($entry)) {
+                    $name = isset($entry['game_name']) ? trim((string) $entry['game_name']) : '';
+                    $updated_at = isset($entry['updated_at']) ? (string) $entry['updated_at'] : '';
+                } else {
+                    $name = trim((string) $entry);
+                    $updated_at = '';
+                }
+                if ($name === '') {
+                    continue;
+                }
+                $key = $this->game_name_key($name);
+                $result[$key] = array(
+                    'game_name' => $name,
+                    'updated_at' => $updated_at,
+                );
+            }
+            return $result;
+        }
+
+        private function save_game_catalog($catalog)
+        {
+            $clean = array();
+            if (is_array($catalog)) {
+                foreach ($catalog as $entry) {
+                    if (!is_array($entry)) {
+                        continue;
+                    }
+                    $name = isset($entry['game_name']) ? trim(sanitize_text_field((string) $entry['game_name'])) : '';
+                    if ($name === '') {
+                        continue;
+                    }
+                    $key = $this->game_name_key($name);
+                    $clean[$key] = array(
+                        'game_name' => $name,
+                        'updated_at' => isset($entry['updated_at']) && $entry['updated_at'] !== '' ? (string) $entry['updated_at'] : current_time('mysql'),
+                    );
+                }
+            }
+            update_option(self::GAME_CATALOG_OPTION_KEY, array_values($clean), false);
+        }
+
+        private function remember_game_name($value)
+        {
+            $catalog = $this->get_game_catalog();
+            $now = current_time('mysql');
+            foreach ($this->split_game_names($value) as $name) {
+                $name = trim(sanitize_text_field((string) $name));
+                if ($name === '') {
+                    continue;
+                }
+                $catalog[$this->game_name_key($name)] = array(
+                    'game_name' => $name,
+                    'updated_at' => $now,
+                );
+            }
+            $this->save_game_catalog($catalog);
+        }
+
+        private function rename_game_name_everywhere($old_name, $new_name, &$error = '')
+        {
+            global $wpdb;
+            $old_name = trim(sanitize_text_field((string) $old_name));
+            $new_name = trim(sanitize_text_field((string) $new_name));
+            if ($old_name === '' || $new_name === '') {
+                $error = 'Köhnə və yeni oyun adı boş ola bilməz.';
+                return false;
+            }
+
+            $old_key = $this->game_name_key($old_name);
+            $new_key = $this->game_name_key($new_name);
+            if ($old_key === $new_key && $old_name === $new_name) {
+                $this->remember_game_name($new_name);
+                return 0;
+            }
+
+            $table = $this->table_name();
+            $rows = $wpdb->get_results("SELECT id, game_name FROM {$table} WHERE game_name <> ''", ARRAY_A);
+            if (!is_array($rows)) {
+                $rows = array();
+            }
+
+            $now = current_time('mysql');
+            $updated_count = 0;
+            $wpdb->query('START TRANSACTION');
+            foreach ($rows as $row) {
+                $parts = $this->split_game_names(isset($row['game_name']) ? $row['game_name'] : '');
+                $changed = false;
+                foreach ($parts as $index => $part) {
+                    if ($this->game_name_key($part) === $old_key) {
+                        $parts[$index] = $new_name;
+                        $changed = true;
+                    }
+                }
+                if (!$changed) {
+                    continue;
+                }
+                $new_value = $this->normalize_game_names(implode(', ', $parts));
+                $result = $wpdb->update(
+                    $table,
+                    array('game_name' => $new_value, 'updated_at' => $now),
+                    array('id' => isset($row['id']) ? (int) $row['id'] : 0),
+                    array('%s', '%s'),
+                    array('%d')
+                );
+                if ($result === false) {
+                    $wpdb->query('ROLLBACK');
+                    $error = 'Oyun adı hesablar üzərində yenilənərkən xəta baş verdi.';
+                    return false;
+                }
+                $updated_count++;
+            }
+            $wpdb->query('COMMIT');
+
+            $catalog = $this->get_game_catalog();
+            if (isset($catalog[$old_key])) {
+                unset($catalog[$old_key]);
+            }
+            $catalog[$new_key] = array('game_name' => $new_name, 'updated_at' => $now);
+            $this->save_game_catalog($catalog);
+            return $updated_count;
+        }
+
         private function get_game_name_rows()
         {
             global $wpdb;
@@ -388,10 +525,21 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             );
 
             $games = array();
+            foreach ($this->get_game_catalog() as $key => $entry) {
+                $games[$key] = array(
+                    'game_name' => isset($entry['game_name']) ? (string) $entry['game_name'] : '',
+                    'use_count' => 0,
+                    'last_used' => isset($entry['updated_at']) ? (string) $entry['updated_at'] : '',
+                );
+            }
+
+            if (!is_array($rows)) {
+                $rows = array();
+            }
             foreach ($rows as $row) {
                 $last_used = isset($row['updated_at']) ? $row['updated_at'] : '';
                 foreach ($this->split_game_names(isset($row['game_name']) ? $row['game_name'] : '') as $game_name) {
-                    $key = function_exists('mb_strtolower') ? mb_strtolower($game_name, 'UTF-8') : strtolower($game_name);
+                    $key = $this->game_name_key($game_name);
                     if (!isset($games[$key])) {
                         $games[$key] = array(
                             'game_name' => $game_name,
@@ -406,7 +554,9 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 }
             }
 
-            $games = array_values($games);
+            $games = array_values(array_filter($games, function ($game) {
+                return isset($game['game_name']) && trim((string) $game['game_name']) !== '';
+            }));
             usort($games, function ($a, $b) {
                 if ($a['last_used'] === $b['last_used']) {
                     return strcasecmp($a['game_name'], $b['game_name']);
@@ -1169,6 +1319,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 if ($updated === false) {
                     $this->redirect_with_message('error', $return_tab, 'Düzəliş zamanı xəta baş verdi.');
                 }
+                $this->remember_game_name(isset($data['game_name']) ? $data['game_name'] : '');
                 $this->redirect_with_message('updated', 'accounts');
             }
 
@@ -1180,6 +1331,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             }
 
             $auto_universal_created = $this->maybe_create_auto_universal_account($data, $base_formats, $now);
+            $this->remember_game_name(isset($data['game_name']) ? $data['game_name'] : '');
             $this->redirect_with_message($auto_universal_created ? 'saved_auto_universal' : 'saved', 'accounts');
         }
 
@@ -1280,6 +1432,11 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             register_rest_route($namespace, '/create-accounts', array(
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => array($this, 'rest_mobile_create_accounts'),
+                'permission_callback' => array($this, 'rest_mobile_permission'),
+            ));
+            register_rest_route($namespace, '/game/save', array(
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => array($this, 'rest_mobile_save_game'),
                 'permission_callback' => array($this, 'rest_mobile_permission'),
             ));
             register_rest_route($namespace, '/delete', array(
@@ -1580,12 +1737,53 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 $auto_universal_created = $this->maybe_create_auto_universal_account($data, $base_formats, $now);
             }
 
+            $this->remember_game_name(isset($data['game_name']) ? $data['game_name'] : '');
             $record = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id), ARRAY_A);
             return rest_ensure_response(array(
                 'ok' => true,
                 'id' => $id,
                 'record' => is_array($record) ? $this->mobile_record_payload($record) : null,
                 'auto_universal_created' => $auto_universal_created ? 1 : 0,
+            ));
+        }
+
+        public function rest_mobile_save_game($request)
+        {
+            $input = $request->get_json_params();
+            if (!is_array($input)) {
+                $input = array();
+            }
+            $old_name = isset($input['old_name']) ? trim(sanitize_text_field((string) $input['old_name'])) : '';
+            $new_name = isset($input['new_name']) ? trim(sanitize_text_field((string) $input['new_name'])) : '';
+            if ($new_name === '' && isset($input['game_name'])) {
+                $new_name = trim(sanitize_text_field((string) $input['game_name']));
+            }
+            if ($new_name === '') {
+                return new WP_Error('mara_account_sale_mobile_game_required', 'Oyun adı boş ola bilməz.', array('status' => 400));
+            }
+
+            $updated_count = 0;
+            if ($old_name !== '') {
+                $error = '';
+                $updated = $this->rename_game_name_everywhere($old_name, $new_name, $error);
+                if ($updated === false) {
+                    return new WP_Error(
+                        'mara_account_sale_mobile_game_rename_failed',
+                        $error !== '' ? $error : 'Oyun adı yenilənmədi.',
+                        array('status' => 500)
+                    );
+                }
+                $updated_count = (int) $updated;
+            } else {
+                $this->remember_game_name($new_name);
+            }
+
+            return rest_ensure_response(array(
+                'ok' => true,
+                'game_name' => $new_name,
+                'old_name' => $old_name,
+                'updated_records' => $updated_count,
+                'game_names' => $this->get_game_name_rows(),
             ));
         }
 
@@ -1654,6 +1852,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             }
 
             $wpdb->query('COMMIT');
+            $this->remember_game_name(isset($input['game_name']) ? $input['game_name'] : '');
             return rest_ensure_response(array(
                 'ok' => true,
                 'created_count' => count($created_ids),

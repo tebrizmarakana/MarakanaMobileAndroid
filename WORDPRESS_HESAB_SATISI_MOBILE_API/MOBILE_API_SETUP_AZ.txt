@@ -2,7 +2,7 @@ Marakana Hesab Satışı — Mobil APK bağlantısı
 =============================================
 
 1) Bu paketdəki `marakana-playstation-hesab-satisi.php` faylı mövcud WordPress plugininin
-   əsas PHP faylının mobil API dəstəyi əlavə edilmiş v1.0.72 variantıdır.
+   əsas PHP faylının mobil API dəstəyi əlavə edilmiş v1.0.74 variantıdır.
 
 2) Mövcud plugin qovluğunda Plugin Name: "Marakana Playstation Hesab Satışı" olan əsas PHP
    faylını bu faylla əvəz et. CSS/JS/assets qovluqlarını silmə və dəyişmə.
@@ -10,10 +10,10 @@ Marakana Hesab Satışı — Mobil APK bağlantısı
 3) WordPress Admin → Hesab Satışı → Ayarlar → "Mobil APK bağlantısı" bölməsinə gir.
    Orada WordPress ünvanı və Mobil API açarı görünəcək.
 
-4) Marakana Mobile v51-də Admin kimi daxil ol → sol menyu → Hesab Satışı.
+4) Marakana Mobile v60-da Admin kimi daxil ol → sol menyu → Hesab Satışı.
    İlk dəfə WordPress ünvanını və həmin API açarını yaz → "Bağlantını yoxla və yadda saxla".
 
-5) Bundan sonra Hesablar / Satılan / Stok / Müştəri / Ayarlar native Android ekranında işləyəcək.
+5) Bundan sonra Hesablar / Satılanlar / Satılmayanlar / Müştəri native Android ekranında işləyəcək.
 
 Təhlükəsizlik:
 - HTTPS istifadə etmək tövsiyə olunur.
@@ -25,3 +25,6 @@ v1.0.72: Mobil APK üçün POST /wp-json/marakana-account-sales/v1/customer/save
 
 
 v1.0.73: Mobil Yeni hesab yarat axını üçün POST /wp-json/marakana-account-sales/v1/create-accounts əlavə edildi. Seçilən Online/Universal/Offline növlərini ayrıca və Satılmayıb kimi yaradır.
+
+
+v1.0.74: Mobil oyun kataloqu əlavə edildi. POST /wp-json/marakana-account-sales/v1/game/save ilə yeni oyun adı ayrıca yaradıla və mövcud oyun adı dəyişdirilə bilər. Rename zamanı həmin adla olan bütün əvvəlki Satılan/Satılmayan hesablar da yenilənir.

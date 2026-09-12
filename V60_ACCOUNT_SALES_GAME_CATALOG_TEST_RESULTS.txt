@@ -1,0 +1,20 @@
+Marakana Mobile v60 — Oyun kataloqu / oyun adı düzəlişi test nəticələri
+
+38/38 statik/inteqrasiya yoxlaması PASS.
+PHP lint PASS.
+WordPress mock test PASS: rename eyni oyun adı olan 2 ayrı hesabı, o cümlədən Satılıb və Satılmayıb sətirlərini yenilədi.
+GitHub Actions YAML parse PASS.
+MainActivity Java brace/paren/bracket/string-comment balansı PASS.
+
+Yoxlanılan əsas davranışlar:
+- Yeni hesab yarat → Oyunun adı axtarışı.
+- Exact nəticə yoxdursa “Yeni oyun yarat”.
+- POST /game/save ilə ayrıca oyun kataloquna əlavə etmə.
+- Mövcud oyun adına 1 saniyə basılı saxla → Düzənlə.
+- old_name/new_name rename axını.
+- Rename zamanı bütün əvvəlki Satılan + Satılmayan hesabların game_name sahəsinin yenilənməsi.
+- /create-accounts çoxlu növ axınının saxlanılması.
+- DD-MM-YYYY və müştəri picker funksiyalarının saxlanılması.
+- versionCode 60 / versionName 3.4.37-native-v60.
+
+Qeyd: Android SDK/Gradle wrapper bu Linux build mühitində olmadığı üçün lokal assembleRelease icra edilməyib; GitHub Actions workflow hazırdır.

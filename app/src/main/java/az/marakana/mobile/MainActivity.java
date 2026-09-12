@@ -3518,52 +3518,198 @@ public class MainActivity extends Activity {
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(list);
-        box.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(330)));
+        box.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(360)));
 
         final AlertDialog[] dialogHolder = new AlertDialog[1];
-        Runnable render = () -> {
+        final Runnable[] renderHolder = new Runnable[1];
+        renderHolder[0] = () -> {
             list.removeAllViews();
-            String q = search.getText().toString().trim().toLowerCase(Locale.ROOT);
+            String typed = search.getText().toString().trim();
+            String q = typed.toLowerCase(Locale.ROOT);
             int count = 0;
+            boolean exactMatch = false;
             for (int i = 0; i < accountSalesGameChoices.length(); i++) {
                 JSONObject row = accountSalesGameChoices.optJSONObject(i);
                 String name = row == null ? accountSalesGameChoices.optString(i, "") : row.optString("game_name", "");
                 name = name.trim();
                 if (name.isEmpty() || (!q.isEmpty() && !name.toLowerCase(Locale.ROOT).contains(q))) continue;
+                if (!typed.isEmpty() && name.equalsIgnoreCase(typed)) exactMatch = true;
                 count++;
                 Button choose = button(name, CARD, TEXT);
                 choose.setTextSize(14);
                 final String selected = name;
-                choose.setOnClickListener(v -> {
-                    target.setText(selected);
-                    if (dialogHolder[0] != null) dialogHolder[0].dismiss();
-                });
+                installAccountSalesGameHoldActions(choose, selected, target, search, dialogHolder, renderHolder);
                 list.addView(choose, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
                 spacer(list, 4);
             }
-            if (count == 0) list.addView(empty(q.isEmpty() ? "Oyun siyahısı boşdur." : "Uyğun oyun tapılmadı. Yazdığın adı istifadə edə bilərsən."));
+            if (count == 0) {
+                list.addView(empty(typed.isEmpty() ? "Oyun siyahısı boşdur." : "Uyğun oyun tapılmadı."));
+            }
+            if (!typed.isEmpty() && !exactMatch) {
+                spacer(list, 6);
+                Button createGame = button("＋ Yeni oyun yarat", GREEN, Color.WHITE);
+                createGame.setTextSize(14);
+                createGame.setOnClickListener(v -> showAccountSalesCreateGameDialog(typed, target, dialogHolder[0]));
+                list.addView(createGame, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
+            }
         };
-        search.addTextChangedListener(new SimpleTextWatcher(render));
+        search.addTextChangedListener(new SimpleTextWatcher(renderHolder[0]));
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Oyunun adı")
                 .setView(box)
                 .setNegativeButton("Bağla", null)
-                .setPositiveButton("Yazdığımı istifadə et", null)
                 .create();
         dialogHolder[0] = dialog;
-        dialog.setOnShowListener(d -> {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
-                String typed = search.getText().toString().trim();
-                if (typed.isEmpty()) {
-                    toast("Oyunun adını yaz və ya siyahıdan seç.");
-                    return;
-                }
-                target.setText(typed);
-                dialog.dismiss();
-            });
-            render.run();
+        dialog.setOnShowListener(d -> renderHolder[0].run());
+        dialog.show();
+    }
+
+    private void installAccountSalesGameHoldActions(Button gameButton, String gameName, EditText target,
+                                                     EditText search, AlertDialog[] pickerDialog,
+                                                     Runnable[] rerender) {
+        final Handler holdHandler = new Handler(Looper.getMainLooper());
+        final float[] down = new float[2];
+        final boolean[] holdFired = {false};
+        final int moveTolerance = dp(12);
+        final Runnable openActions = () -> {
+            holdFired[0] = true;
+            showAccountSalesGameActions(gameName, target, search,
+                    pickerDialog != null && pickerDialog.length > 0 ? pickerDialog[0] : null,
+                    rerender != null && rerender.length > 0 ? rerender[0] : null);
+        };
+
+        gameButton.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    down[0] = event.getX();
+                    down[1] = event.getY();
+                    holdFired[0] = false;
+                    holdHandler.removeCallbacks(openActions);
+                    holdHandler.postDelayed(openActions, 1000L);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(event.getX() - down[0]) > moveTolerance || Math.abs(event.getY() - down[1]) > moveTolerance) {
+                        holdHandler.removeCallbacks(openActions);
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                    holdHandler.removeCallbacks(openActions);
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    holdHandler.removeCallbacks(openActions);
+                    holdFired[0] = false;
+                    break;
+                default:
+                    break;
+            }
+            return false;
         });
+        gameButton.setOnClickListener(v -> {
+            if (holdFired[0]) {
+                holdFired[0] = false;
+                return;
+            }
+            target.setText(gameName);
+            if (pickerDialog != null && pickerDialog.length > 0 && pickerDialog[0] != null) {
+                pickerDialog[0].dismiss();
+            }
+        });
+    }
+
+    private void showAccountSalesGameActions(String gameName, EditText target, EditText search,
+                                             AlertDialog pickerDialog, Runnable rerender) {
+        new AlertDialog.Builder(this)
+                .setTitle(gameName)
+                .setItems(new String[]{"Düzənlə"}, (dialog, which) -> {
+                    if (which == 0) {
+                        showAccountSalesRenameGameDialog(gameName, target, search, pickerDialog, rerender);
+                    }
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
+    }
+
+    private void showAccountSalesCreateGameDialog(String initialName, EditText target, AlertDialog pickerDialog) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        EditText name = input("Yeni oyun adı");
+        name.setText(initialName == null ? "" : initialName.trim());
+        name.setSelection(name.getText().length());
+        box.addView(name);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Yeni oyun yarat")
+                .setView(box)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yarat", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String newName = name.getText().toString().trim();
+            if (newName.isEmpty()) {
+                toast("Oyun adını daxil et.");
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try { payload.put("game_name", newName); } catch (Exception ignored) {}
+            postAccountSalesJson("/game/save", payload, result -> {
+                JSONArray refreshed = result.optJSONArray("game_names");
+                if (refreshed != null) accountSalesGameChoices = refreshed;
+                String savedName = result.optString("game_name", newName).trim();
+                target.setText(savedName.isEmpty() ? newName : savedName);
+                toast("Yeni oyun adı əlavə edildi.");
+                dialog.dismiss();
+                if (pickerDialog != null) pickerDialog.dismiss();
+            });
+        }));
+        dialog.show();
+    }
+
+    private void showAccountSalesRenameGameDialog(String oldName, EditText target, EditText search,
+                                                   AlertDialog pickerDialog, Runnable rerender) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        EditText name = input("Düzgün oyun adı");
+        name.setText(oldName == null ? "" : oldName);
+        name.setSelection(name.getText().length());
+        box.addView(name);
+        TextView note = text("Bu dəyişiklik həmin oyun adı ilə olan əvvəlki Satılan və Satılmayan bütün hesablara tətbiq ediləcək.", 12, MUTED, false);
+        note.setPadding(0, dp(8), 0, 0);
+        box.addView(note);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Oyun adını düzəlt")
+                .setView(box)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yadda saxla", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String newName = name.getText().toString().trim();
+            if (newName.isEmpty()) {
+                toast("Oyun adı boş ola bilməz.");
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("old_name", oldName == null ? "" : oldName);
+                payload.put("new_name", newName);
+            } catch (Exception ignored) {}
+            postAccountSalesJson("/game/save", payload, result -> {
+                JSONArray refreshed = result.optJSONArray("game_names");
+                if (refreshed != null) accountSalesGameChoices = refreshed;
+                String savedName = result.optString("game_name", newName).trim();
+                if (target.getText().toString().trim().equalsIgnoreCase(oldName == null ? "" : oldName)) {
+                    target.setText(savedName.isEmpty() ? newName : savedName);
+                }
+                int changed = result.optInt("updated_records", 0);
+                toast("Oyun adı düzəldildi. " + changed + " əvvəlki hesab yeniləndi.");
+                dialog.dismiss();
+                if (search != null) search.setText(savedName.isEmpty() ? newName : savedName);
+                if (rerender != null) rerender.run();
+            });
+        }));
         dialog.show();
     }
 
