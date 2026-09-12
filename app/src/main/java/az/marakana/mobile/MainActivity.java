@@ -3187,6 +3187,9 @@ public class MainActivity extends Activity {
             } else {
                 JSONArray records = result.optJSONArray("records");
                 if (records == null) records = new JSONArray();
+                if ("accounts".equals(section)) {
+                    records = sortAccountSalesRecordsNewestFirst(records);
+                }
                 final JSONArray finalRecords = records;
                 Runnable render = () -> renderAccountSalesRecords(recordsHost, finalRecords, search.getText().toString(), finalSettings);
                 search.addTextChangedListener(new SimpleTextWatcher(render));
@@ -3245,6 +3248,32 @@ public class MainActivity extends Activity {
 
     private String money(double value) {
         return String.format(Locale.US, "%.2f AZN", value);
+    }
+
+    private JSONArray sortAccountSalesRecordsNewestFirst(JSONArray records) {
+        ArrayList<JSONObject> rows = new ArrayList<>();
+        if (records != null) {
+            for (int i = 0; i < records.length(); i++) {
+                JSONObject row = records.optJSONObject(i);
+                if (row != null) rows.add(row);
+            }
+        }
+        for (int i = 0; i < rows.size(); i++) {
+            int best = i;
+            for (int j = i + 1; j < rows.size(); j++) {
+                if (rows.get(j).optInt("id", 0) > rows.get(best).optInt("id", 0)) {
+                    best = j;
+                }
+            }
+            if (best != i) {
+                JSONObject tmp = rows.get(i);
+                rows.set(i, rows.get(best));
+                rows.set(best, tmp);
+            }
+        }
+        JSONArray sorted = new JSONArray();
+        for (JSONObject row : rows) sorted.put(row);
+        return sorted;
     }
 
     private void renderAccountSalesRecords(LinearLayout host, JSONArray records, String query, JSONObject settings) {
@@ -3366,7 +3395,7 @@ public class MainActivity extends Activity {
         EditText game = accountField(body, "Oyunun adı *", "Kliklə seç və ya axtar", editing ? record.optString("game_name", "") : "", InputType.TYPE_CLASS_TEXT);
         game.setFocusable(false);
         game.setClickable(true);
-        game.setOnClickListener(v -> showAccountSalesGamePicker(game));
+        game.setOnClickListener(v -> showAccountSalesGamePicker(game, !editing));
         EditText email = accountField(body, "E-mail *", "example@mail.com", editing ? record.optString("email", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         EditText price = accountField(body, "Qiymət *", "35.50", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         Spinner console = accountSpinnerField(body, "Konsol *", new String[]{"PS4", "PS5", "PS4/PS5"}, editing ? record.optString("console", "PS5") : "PS5");
@@ -3507,21 +3536,106 @@ public class MainActivity extends Activity {
         return s;
     }
 
-    private void showAccountSalesGamePicker(EditText target) {
+    private ArrayList<String> parseAccountSalesGameSelection(String value) {
+        ArrayList<String> selected = new ArrayList<>();
+        String raw = value == null ? "" : value.trim();
+        if (raw.isEmpty()) return selected;
+        String[] parts = raw.split("\\s*(?:,|;|\\n|\\s+\\+\\s+|·)\\s*");
+        for (String part : parts) {
+            String name = part == null ? "" : part.trim();
+            if (name.isEmpty()) continue;
+            boolean exists = false;
+            for (String current : selected) {
+                if (current.equalsIgnoreCase(name)) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) selected.add(name);
+        }
+        return selected;
+    }
+
+    private boolean accountSalesGameSelectionContains(ArrayList<String> selected, String gameName) {
+        if (selected == null || gameName == null) return false;
+        for (String name : selected) {
+            if (name != null && name.equalsIgnoreCase(gameName.trim())) return true;
+        }
+        return false;
+    }
+
+    private void toggleAccountSalesGameSelection(ArrayList<String> selected, String gameName) {
+        if (selected == null || gameName == null) return;
+        String wanted = gameName.trim();
+        if (wanted.isEmpty()) return;
+        for (int i = 0; i < selected.size(); i++) {
+            if (selected.get(i).equalsIgnoreCase(wanted)) {
+                selected.remove(i);
+                return;
+            }
+        }
+        selected.add(wanted);
+    }
+
+    private String joinAccountSalesGameSelection(ArrayList<String> selected) {
+        if (selected == null || selected.isEmpty()) return "";
+        StringBuilder out = new StringBuilder();
+        for (String name : selected) {
+            String clean = name == null ? "" : name.trim();
+            if (clean.isEmpty()) continue;
+            if (out.length() > 0) out.append(", ");
+            out.append(clean);
+        }
+        return out.toString();
+    }
+
+    private void showAccountSalesGamePicker(EditText target, boolean allowBundle) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(18), dp(8), dp(18), 0);
+
+        LinearLayout searchRow = new LinearLayout(this);
+        searchRow.setOrientation(LinearLayout.HORIZONTAL);
+        searchRow.setGravity(Gravity.CENTER_VERTICAL);
+        Button bundle = button("Bundle", CARD, TEXT);
+        bundle.setTextSize(13);
+        bundle.setVisibility(allowBundle ? View.VISIBLE : View.GONE);
+        if (allowBundle) {
+            searchRow.addView(bundle, new LinearLayout.LayoutParams(dp(108), dp(48)));
+        }
         EditText search = input("Oyunun adını yazıb axtar");
-        box.addView(search);
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        if (allowBundle) searchLp.setMargins(dp(8), 0, 0, 0);
+        searchRow.addView(search, searchLp);
+        box.addView(searchRow);
         spacer(box, 8);
+
         ScrollView scroll = new ScrollView(this);
         LinearLayout list = new LinearLayout(this);
         list.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(list);
-        box.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(360)));
+        box.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(330)));
 
+        Button applyBundle = button("Seçilənləri təsdiqlə", GREEN, Color.WHITE);
+        applyBundle.setTextSize(14);
+        applyBundle.setVisibility(View.GONE);
+        LinearLayout.LayoutParams applyLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        applyLp.setMargins(0, dp(8), 0, 0);
+        box.addView(applyBundle, applyLp);
+
+        final boolean[] bundleMode = {allowBundle && parseAccountSalesGameSelection(target.getText().toString()).size() > 1};
+        final ArrayList<String> selectedGames = parseAccountSalesGameSelection(target.getText().toString());
         final AlertDialog[] dialogHolder = new AlertDialog[1];
         final Runnable[] renderHolder = new Runnable[1];
+
+        Runnable updateBundleUi = () -> {
+            bundle.setText(bundleMode[0] ? "✓ Bundle" : "Bundle");
+            bundle.setBackground(bg(bundleMode[0] ? GREEN : CARD, 12, bundleMode[0] ? GREEN : BORDER));
+            bundle.setTextColor(bundleMode[0] ? Color.WHITE : TEXT);
+            applyBundle.setVisibility(bundleMode[0] ? View.VISIBLE : View.GONE);
+            applyBundle.setText("Seçilənləri təsdiqlə (" + selectedGames.size() + ")");
+        };
+
         renderHolder[0] = () -> {
             list.removeAllViews();
             String typed = search.getText().toString().trim();
@@ -3535,10 +3649,15 @@ public class MainActivity extends Activity {
                 if (name.isEmpty() || (!q.isEmpty() && !name.toLowerCase(Locale.ROOT).contains(q))) continue;
                 if (!typed.isEmpty() && name.equalsIgnoreCase(typed)) exactMatch = true;
                 count++;
-                Button choose = button(name, CARD, TEXT);
+                boolean isSelected = bundleMode[0] && accountSalesGameSelectionContains(selectedGames, name);
+                Button choose = button((isSelected ? "☑ " : "") + name, isSelected ? GREEN : CARD, isSelected ? Color.WHITE : TEXT);
                 choose.setTextSize(14);
                 final String selected = name;
-                installAccountSalesGameHoldActions(choose, selected, target, search, dialogHolder, renderHolder);
+                if (bundleMode[0]) {
+                    installAccountSalesBundleGameHoldActions(choose, selected, target, search, dialogHolder, renderHolder, selectedGames, updateBundleUi);
+                } else {
+                    installAccountSalesGameHoldActions(choose, selected, target, search, dialogHolder, renderHolder);
+                }
                 list.addView(choose, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
                 spacer(list, 4);
             }
@@ -3549,11 +3668,42 @@ public class MainActivity extends Activity {
                 spacer(list, 6);
                 Button createGame = button("＋ Yeni oyun yarat", GREEN, Color.WHITE);
                 createGame.setTextSize(14);
-                createGame.setOnClickListener(v -> showAccountSalesCreateGameDialog(typed, target, dialogHolder[0]));
+                createGame.setOnClickListener(v -> {
+                    if (bundleMode[0]) {
+                        showAccountSalesCreateGameDialogForBundle(typed, target, search, dialogHolder[0], selectedGames, renderHolder[0], updateBundleUi);
+                    } else {
+                        showAccountSalesCreateGameDialog(typed, target, dialogHolder[0]);
+                    }
+                });
                 list.addView(createGame, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
             }
+            updateBundleUi.run();
         };
         search.addTextChangedListener(new SimpleTextWatcher(renderHolder[0]));
+
+        if (allowBundle) {
+            bundle.setOnClickListener(v -> {
+                bundleMode[0] = !bundleMode[0];
+                if (bundleMode[0] && selectedGames.isEmpty()) {
+                    selectedGames.addAll(parseAccountSalesGameSelection(target.getText().toString()));
+                }
+                if (!bundleMode[0] && selectedGames.size() > 1) {
+                    String first = selectedGames.get(0);
+                    selectedGames.clear();
+                    selectedGames.add(first);
+                    target.setText(first);
+                }
+                renderHolder[0].run();
+            });
+            applyBundle.setOnClickListener(v -> {
+                if (selectedGames.isEmpty()) {
+                    toast("Bundle üçün ən azı bir oyun seç.");
+                    return;
+                }
+                target.setText(joinAccountSalesGameSelection(selectedGames));
+                if (dialogHolder[0] != null) dialogHolder[0].dismiss();
+            });
+        }
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Oyunun adı")
@@ -3561,7 +3711,170 @@ public class MainActivity extends Activity {
                 .setNegativeButton("Bağla", null)
                 .create();
         dialogHolder[0] = dialog;
-        dialog.setOnShowListener(d -> renderHolder[0].run());
+        dialog.setOnShowListener(d -> {
+            updateBundleUi.run();
+            renderHolder[0].run();
+        });
+        dialog.show();
+    }
+
+    private void installAccountSalesBundleGameHoldActions(Button gameButton, String gameName, EditText target,
+                                                           EditText search, AlertDialog[] pickerDialog,
+                                                           Runnable[] rerender, ArrayList<String> selectedGames,
+                                                           Runnable updateBundleUi) {
+        final Handler holdHandler = new Handler(Looper.getMainLooper());
+        final float[] down = new float[2];
+        final boolean[] holdFired = {false};
+        final int moveTolerance = dp(12);
+        final Runnable openActions = () -> {
+            holdFired[0] = true;
+            showAccountSalesBundleGameActions(gameName, target, search,
+                    pickerDialog != null && pickerDialog.length > 0 ? pickerDialog[0] : null,
+                    rerender != null && rerender.length > 0 ? rerender[0] : null,
+                    selectedGames, updateBundleUi);
+        };
+
+        gameButton.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    down[0] = event.getX();
+                    down[1] = event.getY();
+                    holdFired[0] = false;
+                    holdHandler.removeCallbacks(openActions);
+                    holdHandler.postDelayed(openActions, 1000L);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(event.getX() - down[0]) > moveTolerance || Math.abs(event.getY() - down[1]) > moveTolerance) {
+                        holdHandler.removeCallbacks(openActions);
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                    holdHandler.removeCallbacks(openActions);
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    holdHandler.removeCallbacks(openActions);
+                    holdFired[0] = false;
+                    break;
+                default:
+                    break;
+            }
+            return false;
+        });
+        gameButton.setOnClickListener(v -> {
+            if (holdFired[0]) {
+                holdFired[0] = false;
+                return;
+            }
+            toggleAccountSalesGameSelection(selectedGames, gameName);
+            if (updateBundleUi != null) updateBundleUi.run();
+            if (rerender != null && rerender.length > 0 && rerender[0] != null) rerender[0].run();
+        });
+    }
+
+    private void showAccountSalesBundleGameActions(String gameName, EditText target, EditText search,
+                                                    AlertDialog pickerDialog, Runnable rerender,
+                                                    ArrayList<String> selectedGames, Runnable updateBundleUi) {
+        new AlertDialog.Builder(this)
+                .setTitle(gameName)
+                .setItems(new String[]{"Düzənlə"}, (dialog, which) -> {
+                    if (which == 0) {
+                        showAccountSalesRenameGameDialogForBundle(gameName, target, search, pickerDialog, rerender, selectedGames, updateBundleUi);
+                    }
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
+    }
+
+    private void showAccountSalesCreateGameDialogForBundle(String initialName, EditText target, EditText search,
+                                                           AlertDialog pickerDialog, ArrayList<String> selectedGames,
+                                                           Runnable rerender, Runnable updateBundleUi) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        EditText name = input("Yeni oyun adı");
+        name.setText(initialName == null ? "" : initialName.trim());
+        name.setSelection(name.getText().length());
+        box.addView(name);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Yeni oyun yarat")
+                .setView(box)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yarat və seç", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String newName = name.getText().toString().trim();
+            if (newName.isEmpty()) {
+                toast("Oyun adını daxil et.");
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try { payload.put("game_name", newName); } catch (Exception ignored) {}
+            postAccountSalesJson("/game/save", payload, result -> {
+                JSONArray refreshed = result.optJSONArray("game_names");
+                if (refreshed != null) accountSalesGameChoices = refreshed;
+                String savedName = result.optString("game_name", newName).trim();
+                if (savedName.isEmpty()) savedName = newName;
+                if (!accountSalesGameSelectionContains(selectedGames, savedName)) selectedGames.add(savedName);
+                if (search != null) search.setText("");
+                if (updateBundleUi != null) updateBundleUi.run();
+                if (rerender != null) rerender.run();
+                toast("Yeni oyun əlavə edildi və Bundle-a seçildi.");
+                dialog.dismiss();
+            });
+        }));
+        dialog.show();
+    }
+
+    private void showAccountSalesRenameGameDialogForBundle(String oldName, EditText target, EditText search,
+                                                           AlertDialog pickerDialog, Runnable rerender,
+                                                           ArrayList<String> selectedGames, Runnable updateBundleUi) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        EditText name = input("Düzgün oyun adı");
+        name.setText(oldName == null ? "" : oldName);
+        name.setSelection(name.getText().length());
+        box.addView(name);
+        TextView note = text("Bu dəyişiklik həmin oyun adı ilə olan əvvəlki Satılan və Satılmayan bütün hesablara tətbiq ediləcək.", 12, MUTED, false);
+        note.setPadding(0, dp(8), 0, 0);
+        box.addView(note);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Oyun adını düzəlt")
+                .setView(box)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yadda saxla", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String newName = name.getText().toString().trim();
+            if (newName.isEmpty()) {
+                toast("Oyun adı boş ola bilməz.");
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("old_name", oldName == null ? "" : oldName);
+                payload.put("new_name", newName);
+            } catch (Exception ignored) {}
+            postAccountSalesJson("/game/save", payload, result -> {
+                JSONArray refreshed = result.optJSONArray("game_names");
+                if (refreshed != null) accountSalesGameChoices = refreshed;
+                String savedName = result.optString("game_name", newName).trim();
+                if (savedName.isEmpty()) savedName = newName;
+                for (int i = 0; i < selectedGames.size(); i++) {
+                    if (selectedGames.get(i).equalsIgnoreCase(oldName == null ? "" : oldName)) {
+                        selectedGames.set(i, savedName);
+                    }
+                }
+                int changed = result.optInt("updated_records", 0);
+                toast("Oyun adı düzəldildi. " + changed + " əvvəlki hesab yeniləndi.");
+                dialog.dismiss();
+                if (search != null) search.setText("");
+                if (updateBundleUi != null) updateBundleUi.run();
+                if (rerender != null) rerender.run();
+            });
+        }));
         dialog.show();
     }
 

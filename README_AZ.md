@@ -1,16 +1,15 @@
-# Marakana Mobile Native v60
+# Marakana Mobile Native v61
 
-## v60 — Oyun adı kataloqu və toplu rename
-
-- **Yeni hesab yarat → Oyunun adı** sahəsinə klik edəndə bütün oyun adları açılır və yazaraq axtarmaq olur.
-- Axtarılan ad dəqiq tapılmırsa **Yeni oyun yarat** düyməsi görünür.
-- Yeni oyun adı hesab yaratmadan əvvəl ayrıca oyun kataloquna əlavə edilir.
-- Tapılan oyun adının üzərində **1 saniyə basılı saxlayanda → Düzənlə** açılır.
-- Oyun adını düzəltdikdə həmin adla olan əvvəlki **Satılan və Satılmayan bütün hesabların** oyun adı da yeni adla dəyişir.
-- v59-dakı Yeni hesab yarat + Online/Universal/Offline çoxlu seçim axını saxlanılıb.
-- WordPress companion API **v1.0.74**: `/game/save` endpoint-i və ayrıca oyun kataloqu əlavə olunub.
+## v61 — Bundle oyun seçimi + yeni hesablar ən üstdə
+- Yeni hesab yarat → Oyunun adı pəncərəsində `Bundle` düyməsi var.
+- Bundle aktiv olanda bir hesab üçün çoxlu oyun adı seçmək mümkündür.
+- Seçilən oyunlar `Seçilənləri təsdiqlə (N)` ilə hesab sahəsinə birlikdə yazılır.
+- Bundle rejimində də oyun yaratmaq və oyun adını 1 saniyə basılı saxlayıb düzəltmək işləyir.
+- Yeni yaradılan hesablar `Hesablar` bölməsində ID-yə görə ən üstdə göstərilir.
+- WordPress companion plugin dəyişməyib: v1.0.74.
 
 Build:
-- `versionCode 60`
-- `versionName 3.4.37-native-v60`
-- Release APK: `MarakanaMobile-v60-release.apk`
+- `versionCode 61`
+- `versionName 3.4.38-native-v61`
+- Release APK: `MarakanaMobile-v61-release.apk`
+

@@ -1,0 +1,18 @@
+Marakana Mobile v61 — Bundle oyun seçimi + yeni hesablar ən üstdə test nəticələri
+
+PASS - Yeni hesab yarat oyun picker-ində Bundle düyməsi görünür.
+PASS - Bundle yalnız yeni hesab yarat axınında aktivdir; Düzənlə ekranında normal tək seçim qalır.
+PASS - Bundle aktiv olanda çoxlu oyun seçimi toggle ilə işləyir.
+PASS - Seçilən oyun sayı təsdiq düyməsində göstərilir.
+PASS - Bundle seçimi vergül+boşluq ilə game_name sahəsinə yazılır; WordPress split_game_names/normalize_game_names ilə uyğundur.
+PASS - Bundle rejimində yeni oyun yaratmaq seçilənlərə əlavə edir.
+PASS - Bundle rejimində oyun üzərində 1 saniyə basılı saxlamaq Düzənlə aksiyasını saxlayır.
+PASS - Rename seçilmiş Bundle oyun adını da yeni adla əvəz edir.
+PASS - Hesablar bölməsində records ID DESC sıralanır; yeni yaradılan hesablar ən üstdə görünür.
+PASS - Satılanlar / Satılmayanlar bölmələrinin server sırası dəyişdirilməyib.
+PASS - versionCode 61 / versionName 3.4.38-native-v61.
+PASS - GitHub Actions artifact və APK adları v61.
+
+Static/integration checks: 24/24 PASS.
+Javac parse probe: Android SDK classes missing as expected; syntax-like Java parser errors: 0.
+Local assembleRelease not run because Android SDK/Gradle wrapper is not available in this container; GitHub Actions workflow is prepared.
