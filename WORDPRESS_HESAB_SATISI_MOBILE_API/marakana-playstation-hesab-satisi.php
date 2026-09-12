@@ -3,7 +3,7 @@
  * Plugin Name: Marakana Playstation Hesab Satışı
  * Plugin URI: https://marakana.local/
  * Description: Playstation oyun hesablarının satışı, stok, müştəri, ödəniş və geniş axtarış idarəetməsi üçün professional Marakana plugin.
- * Version: 1.0.71
+ * Version: 1.0.72
  * Author: Marakana
  * Text Domain: marakana-playstation-hesab-satisi
  * Requires PHP: 7.4
@@ -16,12 +16,13 @@ if (!defined('ABSPATH')) {
 if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
     final class Marakana_Playstation_Hesab_Satisi_100
     {
-        const VERSION = '1.0.71';
+        const VERSION = '1.0.72';
         const DB_VERSION = '1.0.4';
         const OPTION_KEY = 'mara_account_sale_settings';
         const DB_OPTION_KEY = 'mara_account_sale_db_version';
         const LEGACY_IMPORT_OPTION_KEY = 'mara_account_sale_legacy_pdf_import_v54';
         const MOBILE_API_KEY_OPTION_KEY = 'mara_account_sale_mobile_api_key_v1';
+        const CUSTOMER_CONTACTS_OPTION_KEY = 'mara_account_sale_customer_contacts_v1';
 
         private static $instance = null;
 
@@ -221,11 +222,50 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             return $records;
         }
 
+        private function get_saved_customer_contacts()
+        {
+            $contacts = get_option(self::CUSTOMER_CONTACTS_OPTION_KEY, array());
+            return is_array($contacts) ? $contacts : array();
+        }
+
+        private function save_customer_contact($customer_name_raw, $phone_raw, &$error = '')
+        {
+            $customer_name = $this->normalize_name(sanitize_text_field((string) $customer_name_raw));
+            if ($customer_name === '') {
+                $error = 'Ad soyad boş ola bilməz.';
+                return null;
+            }
+            if (!preg_match('/^[\p{L}\s]+$/u', $customer_name)) {
+                $error = 'Ad soyad yalnız hərflərdən və boşluqdan ibarət olmalıdır.';
+                return null;
+            }
+
+            $phone_error = '';
+            $phone = $this->normalize_phone(sanitize_text_field((string) $phone_raw), $phone_error);
+            if ($phone === '') {
+                $error = $phone_error !== '' ? $phone_error : 'Telefon boş ola bilməz.';
+                return null;
+            }
+
+            $contacts = $this->get_saved_customer_contacts();
+            $key = md5($phone);
+            $now = current_time('mysql');
+            $created_at = isset($contacts[$key]['created_at']) ? (string) $contacts[$key]['created_at'] : $now;
+            $contacts[$key] = array(
+                'customer_name' => $customer_name,
+                'phone' => $phone,
+                'created_at' => $created_at,
+                'updated_at' => $now,
+            );
+            update_option(self::CUSTOMER_CONTACTS_OPTION_KEY, $contacts, false);
+            return $contacts[$key];
+        }
+
         private function get_customer_rows()
         {
             global $wpdb;
             $table = $this->table_name();
-            return $wpdb->get_results(
+            $rows = $wpdb->get_results(
                 "SELECT phone,
                         MAX(customer_name) AS customer_name,
                         COUNT(*) AS game_count,
@@ -237,10 +277,69 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                         COALESCE(SUM(CASE WHEN payment_type = 'Nisyə' AND stock_status = 'Satılıb' THEN 1 ELSE 0 END), 0) AS credit_count
                  FROM {$table}
                  WHERE phone <> '' AND stock_status = 'Satılıb'
-                 GROUP BY phone
-                 ORDER BY last_sale_date DESC, customer_name ASC",
+                 GROUP BY phone",
                 ARRAY_A
             );
+
+            $merged = array();
+            foreach (is_array($rows) ? $rows : array() as $row) {
+                $phone = isset($row['phone']) ? trim((string) $row['phone']) : '';
+                if ($phone === '') {
+                    continue;
+                }
+                $row['contact_updated_at'] = '';
+                $merged[$phone] = $row;
+            }
+
+            foreach ($this->get_saved_customer_contacts() as $contact) {
+                if (!is_array($contact)) {
+                    continue;
+                }
+                $phone = isset($contact['phone']) ? trim((string) $contact['phone']) : '';
+                $name = isset($contact['customer_name']) ? trim((string) $contact['customer_name']) : '';
+                if ($phone === '' || $name === '') {
+                    continue;
+                }
+                $updated_at = isset($contact['updated_at']) ? (string) $contact['updated_at'] : '';
+                if (isset($merged[$phone])) {
+                    $merged[$phone]['customer_name'] = $name;
+                    $merged[$phone]['contact_updated_at'] = $updated_at;
+                } else {
+                    $merged[$phone] = array(
+                        'phone' => $phone,
+                        'customer_name' => $name,
+                        'game_count' => 0,
+                        'total_amount' => 0,
+                        'last_sale_date' => '',
+                        'cash_amount' => 0,
+                        'credit_amount' => 0,
+                        'cash_count' => 0,
+                        'credit_count' => 0,
+                        'contact_updated_at' => $updated_at,
+                    );
+                }
+            }
+
+            $customers = array_values($merged);
+            usort($customers, function ($a, $b) {
+                $a_sale = isset($a['last_sale_date']) ? (string) $a['last_sale_date'] : '';
+                $b_sale = isset($b['last_sale_date']) ? (string) $b['last_sale_date'] : '';
+                if ($a_sale !== $b_sale) {
+                    if ($a_sale === '') return 1;
+                    if ($b_sale === '') return -1;
+                    return strcmp($b_sale, $a_sale);
+                }
+                $a_updated = isset($a['contact_updated_at']) ? (string) $a['contact_updated_at'] : '';
+                $b_updated = isset($b['contact_updated_at']) ? (string) $b['contact_updated_at'] : '';
+                if ($a_updated !== $b_updated) {
+                    return strcmp($b_updated, $a_updated);
+                }
+                return strcasecmp(
+                    isset($a['customer_name']) ? (string) $a['customer_name'] : '',
+                    isset($b['customer_name']) ? (string) $b['customer_name'] : ''
+                );
+            });
+            return $customers;
         }
 
         private function split_game_names($value)
@@ -1168,6 +1267,11 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'callback' => array($this, 'rest_mobile_customer'),
                 'permission_callback' => array($this, 'rest_mobile_permission'),
             ));
+            register_rest_route($namespace, '/customer/save', array(
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => array($this, 'rest_mobile_save_customer'),
+                'permission_callback' => array($this, 'rest_mobile_permission'),
+            ));
             register_rest_route($namespace, '/save', array(
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => array($this, 'rest_mobile_save'),
@@ -1311,6 +1415,50 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             ));
         }
 
+        public function rest_mobile_save_customer($request)
+        {
+            $input = $request->get_json_params();
+            if (!is_array($input)) {
+                $input = array();
+            }
+            $error = '';
+            $saved = $this->save_customer_contact(
+                isset($input['customer_name']) ? $input['customer_name'] : '',
+                isset($input['phone']) ? $input['phone'] : '',
+                $error
+            );
+            if (!is_array($saved)) {
+                return new WP_Error(
+                    'mara_account_sale_mobile_customer_validation',
+                    $error !== '' ? $error : 'Müştəri yadda saxlanmadı.',
+                    array('status' => 400)
+                );
+            }
+
+            $customer = array(
+                'customer_name' => $saved['customer_name'],
+                'phone' => $saved['phone'],
+                'game_count' => 0,
+                'total_amount' => 0,
+                'last_sale_date' => '',
+                'cash_amount' => 0,
+                'credit_amount' => 0,
+                'cash_count' => 0,
+                'credit_count' => 0,
+            );
+            foreach ($this->get_customer_rows() as $row) {
+                if (isset($row['phone']) && (string) $row['phone'] === (string) $saved['phone']) {
+                    $customer = $row;
+                    break;
+                }
+            }
+
+            return rest_ensure_response(array(
+                'ok' => true,
+                'customer' => $this->mobile_customer_payload($customer),
+            ));
+        }
+
         private function sanitize_mobile_record_data($input, &$errors)
         {
             $input = is_array($input) ? $input : array();
@@ -1391,6 +1539,11 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $data = $this->sanitize_mobile_record_data($input, $errors);
             if (!empty($errors)) {
                 return new WP_Error('mara_account_sale_mobile_validation', implode(' ', $errors), array('status' => 400));
+            }
+
+            if (!empty($data['customer_name']) && !empty($data['phone'])) {
+                $contact_error = '';
+                $this->save_customer_contact($data['customer_name'], $data['phone'], $contact_error);
             }
 
             $table = $this->table_name();

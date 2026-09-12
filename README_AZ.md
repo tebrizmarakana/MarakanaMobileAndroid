@@ -1,3 +1,20 @@
+# Marakana Mobile Native v56
+
+
+## v56 — Hesab Satışı: Yeni müştəri yarat
+
+- `Yeni hesab satışı` düyməsinin yanında `Yeni müştəri yarat` düyməsi əlavə edildi.
+- Yeni müştəri formunda Ad soyad və Telefon daxil edilərək WordPress bazasına yadda saxlanır.
+- Yaradılan müştəri `Müştəri` bölməsində dərhal görünür; alış etməyibsə 0 alış kimi göstərilir.
+- Eyni telefonla sonradan hesab satışı ediləndə həmin müştərinin alış statistikası avtomatik birləşir.
+- WordPress Mobile API companion versiyası: `1.0.72`.
+- `versionCode 56`
+- `versionName 3.4.33-native-v56`
+- Release APK: `MarakanaMobile-v56-release.apk`
+
+
+## Əvvəlki versiyalar
+
 # Marakana Mobile Native v54
 
 ## v54 — Hesab Satışı: Satılmayanlar + 3 saniyə basılı saxla menyusu
@@ -9,7 +26,6 @@
 - `versionName 3.4.31-native-v54`
 - Release APK: `MarakanaMobile-v54-release.apk`
 
-## Əvvəlki versiyalar
 
 # Marakana Mobile Native v53
 

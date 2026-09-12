@@ -3125,12 +3125,22 @@ public class MainActivity extends Activity {
         body.addView(topActions);
         spacer(body, 10);
 
+        LinearLayout createActions = new LinearLayout(this);
+        createActions.setOrientation(LinearLayout.HORIZONTAL);
         Button add = button("＋ Yeni hesab satışı", GREEN, Color.WHITE);
+        add.setTextSize(13);
+        createActions.addView(add, new LinearLayout.LayoutParams(0, dp(52), 1f));
+        Button addCustomer = button("＋ Yeni müştəri yarat", BLUE, Color.WHITE);
+        addCustomer.setTextSize(13);
+        LinearLayout.LayoutParams addCustomerLp = new LinearLayout.LayoutParams(0, dp(52), 1f);
+        addCustomerLp.setMargins(dp(8), 0, 0, 0);
+        createActions.addView(addCustomer, addCustomerLp);
         if (!"settings".equals(section) && !"customers".equals(section)) {
-            body.addView(add);
+            body.addView(createActions);
             spacer(body, 10);
         }
         add.setEnabled(false);
+        addCustomer.setEnabled(false);
 
         EditText search = input("Oyun, e-mail, müştəri və ya telefonla axtar");
         if (!"settings".equals(section)) {
@@ -3155,6 +3165,8 @@ public class MainActivity extends Activity {
             JSONObject finalSettings = settings;
             add.setEnabled(true);
             add.setOnClickListener(v -> showAccountSalesForm(null, finalSettings));
+            addCustomer.setEnabled(true);
+            addCustomer.setOnClickListener(v -> showAccountSalesNewCustomer());
 
             renderAccountSalesSummary(summaryHost, result.optJSONObject("stats"));
             if ("customers".equals(section)) {
@@ -3291,7 +3303,7 @@ public class MainActivity extends Activity {
                     down[1] = event.getY();
                     fired[0] = false;
                     holdHandler.removeCallbacks(openActions);
-                    holdHandler.postDelayed(openActions, 3000L);
+                    holdHandler.postDelayed(openActions, 1000L);
                     return true;
                 case MotionEvent.ACTION_MOVE:
                     if (Math.abs(event.getX() - down[0]) > moveTolerance || Math.abs(event.getY() - down[1]) > moveTolerance) {
@@ -3383,6 +3395,48 @@ public class MainActivity extends Activity {
                 if (result.optInt("auto_universal_created", 0) == 1) toast("Hesab əlavə edildi və Universal versiya avtomatik yaradıldı.");
                 else toast(editing ? "Hesab yeniləndi." : "Hesab əlavə edildi.");
                 showAccountSales("accounts");
+            });
+        });
+    }
+
+    private void showAccountSalesNewCustomer() {
+        ScrollView sv = screenWithBody("Yeni müştəri yarat", true, () -> showAccountSales("accounts"));
+        LinearLayout body = scrollBody(sv);
+
+        LinearLayout c = card();
+        c.addView(text("Yeni müştəri", 18, TEXT, true));
+        TextView info = text("Müştərini hesab satışı etmədən əvvəl yadda saxlaya bilərsən.", 12, MUTED, false);
+        info.setPadding(0, dp(4), 0, dp(10));
+        c.addView(info);
+
+        EditText customerName = accountField(c, "Ad soyad *", "CAN EMRE", "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        EditText customerPhone = accountField(c, "Telefon *", "0705603030", "", InputType.TYPE_CLASS_PHONE);
+
+        Button saveCustomer = button("Müştərini yarat", BLUE, Color.WHITE);
+        c.addView(saveCustomer);
+        body.addView(c);
+
+        saveCustomer.setOnClickListener(v -> {
+            String nameValue = customerName.getText().toString().trim();
+            String phoneValue = customerPhone.getText().toString().trim();
+            if (nameValue.isEmpty()) {
+                toast("Ad soyad boş ola bilməz.");
+                customerName.requestFocus();
+                return;
+            }
+            if (phoneValue.isEmpty()) {
+                toast("Telefon boş ola bilməz.");
+                customerPhone.requestFocus();
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("customer_name", nameValue);
+                payload.put("phone", phoneValue);
+            } catch (Exception ignored) {}
+            postAccountSalesJson("/customer/save", payload, result -> {
+                toast("Müştəri yaradıldı.");
+                showAccountSales("customers");
             });
         });
     }

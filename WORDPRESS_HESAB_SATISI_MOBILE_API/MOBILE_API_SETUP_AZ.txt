@@ -2,7 +2,7 @@ Marakana Hesab Satışı — Mobil APK bağlantısı
 =============================================
 
 1) Bu paketdəki `marakana-playstation-hesab-satisi.php` faylı mövcud WordPress plugininin
-   əsas PHP faylının mobil API dəstəyi əlavə edilmiş v1.0.71 variantıdır.
+   əsas PHP faylının mobil API dəstəyi əlavə edilmiş v1.0.72 variantıdır.
 
 2) Mövcud plugin qovluğunda Plugin Name: "Marakana Playstation Hesab Satışı" olan əsas PHP
    faylını bu faylla əvəz et. CSS/JS/assets qovluqlarını silmə və dəyişmə.
@@ -19,3 +19,6 @@ Təhlükəsizlik:
 - HTTPS istifadə etmək tövsiyə olunur.
 - Mobil API açarı Hesab Satışı bazasında əlavə/düzəliş/silmə icazəsi verir; paylaşma.
 - API açarını WordPress-də yeniləsən, telefondakı Hesab Satışı bağlantısında yeni açarı da yazmalısan.
+
+
+v1.0.72: Mobil APK üçün POST /wp-json/marakana-account-sales/v1/customer/save endpointi əlavə edildi. Yeni müştəri Ad soyad + Telefon ilə ayrıca yadda saxlanır və Müştəri siyahısına düşür.

@@ -1,0 +1,17 @@
+Marakana Mobile v56 - Hesab Satışı: Yeni müştəri yarat
+
+20/20 static/integration checks PASS.
+PHP lint: PASS (No syntax errors detected).
+Java structural braces/strings/comments: PASS.
+Android Gradle/SDK local environment: unavailable, so assembleRelease was not executed locally.
+GitHub Actions release workflow updated to v56.
+
+Checked behavior:
+- Yeni hesab satışı düyməsinin yanında Yeni müştəri yarat düyməsi var.
+- Yeni müştəri formunda Ad soyad və Telefon məcburidir.
+- Mobile POST /customer/save sends customer_name + phone.
+- Successful create opens Müştəri section.
+- WordPress companion version 1.0.72 provides /customer/save.
+- Standalone customers persist separately and merge with sold-account aggregates by phone.
+- Existing account-sale save also syncs customer contact.
+- versionCode 56 / versionName 3.4.33-native-v56.
