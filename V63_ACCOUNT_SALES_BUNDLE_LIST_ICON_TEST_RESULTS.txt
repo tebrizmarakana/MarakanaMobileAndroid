@@ -1,0 +1,29 @@
+Marakana Mobile v63 — Bundle list/icon tests
+
+PASS - versionCode 63
+PASS - versionName v63
+PASS - workflow v63 name
+PASS - workflow v63 apk
+PASS - workflow v63 artifact
+PASS - record card parses game selection
+PASS - bundle cards detected by >1 game
+PASS - bundle game loop
+PASS - bundle icon on each game
+PASS - single game no bundle icon path
+PASS - bundle game column vertical
+PASS - bundle card height wrap content
+PASS - price aligned top
+PASS - same shared record card renderer retained
+PASS - bundle picker retained
+PASS - bundle confirm retained
+PASS - new accounts sort desc retained
+PASS - 1 second record long press retained
+PASS - stats rendered only in settings
+PASS - README v63
+PASS - Java braces balanced
+PASS - Java parens balanced
+PASS - Java brackets balanced
+PASS - Java lexical state closed
+PASS - workflow YAML parse
+
+TOTAL: 25/25 PASS

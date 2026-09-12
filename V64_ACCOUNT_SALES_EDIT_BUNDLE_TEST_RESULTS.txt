@@ -1,0 +1,29 @@
+Marakana Mobile v64 — edit Bundle tests
+
+PASS - versionCode 64
+PASS - versionName v64
+PASS - workflow v64 name
+PASS - workflow v64 apk
+PASS - workflow v64 artifact
+PASS - edit form opens bundle-capable picker
+PASS - old edit bundle restriction removed
+PASS - bundle button retained
+PASS - existing bundle auto-detected
+PASS - existing bundle games preselected
+PASS - bundle add/remove toggle retained
+PASS - bundle selected mark retained
+PASS - bundle confirm retained
+PASS - edit save sends updated game_name
+PASS - new game in bundle retained
+PASS - 1 second bundle game hold retained
+PASS - bundle rename retained
+PASS - v63 bundle list icon retained
+PASS - stats settings-only behavior retained
+PASS - payment UI removal marker retained
+PASS - README v64
+PASS - Java delimiter/string/comment balance
+PASS - workflow YAML parse
+PASS - single account game click wiring
+PASS - WordPress companion remains v1.0.74
+
+TOTAL: 25/25 PASS

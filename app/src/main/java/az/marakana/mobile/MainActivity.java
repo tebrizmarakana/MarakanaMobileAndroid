@@ -3302,13 +3302,32 @@ public class MainActivity extends Activity {
         LinearLayout c = card();
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
-        top.setGravity(Gravity.CENTER_VERTICAL);
-        TextView title = text(row.optString("game_name", "Hesab"), 16, TEXT, true);
-        top.addView(title, new LinearLayout.LayoutParams(0, dp(36), 1f));
+        top.setGravity(Gravity.TOP);
+
+        ArrayList<String> cardGames = parseAccountSalesGameSelection(row.optString("game_name", ""));
+        LinearLayout gameColumn = new LinearLayout(this);
+        gameColumn.setOrientation(LinearLayout.VERTICAL);
+        if (cardGames.size() > 1) {
+            for (String gameName : cardGames) {
+                TextView gameLine = text("🧩 " + gameName, 15, TEXT, true);
+                gameColumn.addView(gameLine, new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                spacer(gameColumn, 2);
+            }
+        } else {
+            String singleGame = cardGames.isEmpty() ? row.optString("game_name", "Hesab") : cardGames.get(0);
+            TextView title = text(singleGame, 16, TEXT, true);
+            gameColumn.addView(title, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+        LinearLayout.LayoutParams gameLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        gameLp.setMargins(0, 0, dp(8), 0);
+        top.addView(gameColumn, gameLp);
+
         String price = row.optString("price_formatted", money(row.optDouble("price", 0)));
         TextView priceView = text(price, 14, GREEN, true);
-        priceView.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        top.addView(priceView, new LinearLayout.LayoutParams(dp(112), dp(36)));
+        priceView.setGravity(Gravity.END | Gravity.TOP);
+        top.addView(priceView, new LinearLayout.LayoutParams(dp(112), ViewGroup.LayoutParams.WRAP_CONTENT));
         c.addView(top);
 
         c.addView(text(row.optString("email", ""), 13, MUTED, false));
@@ -3398,7 +3417,7 @@ public class MainActivity extends Activity {
         EditText game = accountField(body, "Oyunun adı *", "Kliklə seç və ya axtar", editing ? record.optString("game_name", "") : "", InputType.TYPE_CLASS_TEXT);
         game.setFocusable(false);
         game.setClickable(true);
-        game.setOnClickListener(v -> showAccountSalesGamePicker(game, !editing));
+        game.setOnClickListener(v -> showAccountSalesGamePicker(game, true));
         EditText email = accountField(body, "E-mail *", "example@mail.com", editing ? record.optString("email", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         EditText price = accountField(body, "Qiymət *", "35.50", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         Spinner console = accountSpinnerField(body, "Konsol *", new String[]{"PS4", "PS5", "PS4/PS5"}, editing ? record.optString("console", "PS5") : "PS5");

@@ -1,18 +1,17 @@
-# Marakana Mobile Native v62
+# Marakana Mobile Native v64
 
-## v62 — Hesab Satışı ödəniş seçimi ləğvi + Göstəricilər yalnız Ayarlarda
-- Hesab Satışı modulunda Nağd/Nisyə seçimi və görünüşləri UI-dan tam çıxarıldı.
-- Hesab kartlarında ödəniş növü artıq göstərilmir.
-- Hesab düzəlişində ödəniş növü seçimi yoxdur.
-- Müştəri kartlarında Nağd/Nisyə bölgüsü göstərilmir.
-- Ayarlarda `Default ödəniş` seçimi yoxdur.
-- `Göstəricilər` kartı yalnız `Ayarlar` bölməsində görünür; Hesablar/Satılanlar/Satılmayanlar/Müştəri bölmələrində görünmür.
-- Göstəricilərdə yalnız Hesab/Satılanlar/Satılmayanlar və Cəmi məbləğ göstərilir.
-- Köhnə WordPress API ilə uyğunluq üçün payment_type/default_payment_type serverə səssiz olaraq qorunur; mobil UI-da seçim və görünüş yoxdur.
-- v61 Bundle oyun seçimi və yeni hesabların Hesablar bölməsində ən üstdə görünməsi saxlanılıb.
+## v64 — Düzənlə rejimində Bundle idarəsi
+- Hesabın `Düzənlə` ekranında Oyunun adı picker-i artıq Yeni hesab yarat ekranı ilə eyni Bundle rejimini göstərir.
+- Mövcud Bundle hesabı düzənləyərkən seçilmiş oyunlar əvvəlcədən işarəli açılır.
+- Bundle-a yeni oyun əlavə etmək və mövcud oyunu seçimdən çıxarmaq mümkündür.
+- `Seçilənləri təsdiqlə (N)` ilə yenilənmiş Bundle siyahısı hesaba yazılır və `Dəyişiklikləri yadda saxla` ilə serverə göndərilir.
+- Tək oyunlu hesabı da Düzənlə içindən Bundle-a çevirmək mümkündür.
+- Oyun yaratma və 1 saniyə basılı saxlayıb oyun adını Düzənlə funksiyaları Bundle rejimində saxlanılıb.
+- v63-dəki Bundle oyunlarının Hesablar / Satılanlar / Satılmayanlarda alt-alta `🧩` ikonla göstərilməsi saxlanılıb.
+- v62-dəki ödəniş növünün UI-dan ləğvi və Göstəricilərin yalnız Ayarlarda görünməsi saxlanılıb.
 - WordPress companion plugin dəyişməyib: v1.0.74.
 
 Build:
-- `versionCode 62`
-- `versionName 3.4.39-native-v62`
-- Release APK: `MarakanaMobile-v62-release.apk`
+- `versionCode 64`
+- `versionName 3.4.41-native-v64`
+- Release APK: `MarakanaMobile-v64-release.apk`
