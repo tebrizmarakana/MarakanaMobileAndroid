@@ -112,6 +112,8 @@ public class MainActivity extends Activity {
     private static final String ACCOUNT_SALES_DEFAULT_SITE = "https://marakana.az";
     private static final String ACCOUNT_SALES_API_PATH = "/wp-json/marakana-account-sales/v1";
     private static final String[] ACCOUNT_SALES_SECTIONS = {"accounts", "sold", "unsold", "customers", "settings"};
+    private JSONArray accountSalesGameChoices = new JSONArray();
+    private JSONArray accountSalesCustomerChoices = new JSONArray();
 
     private static final int BG = Color.rgb(240, 245, 250);
     private static final int CARD = Color.WHITE;
@@ -3162,6 +3164,10 @@ public class MainActivity extends Activity {
         loadAccountSalesJson("/overview?section=" + urlEncode(section), result -> {
             JSONObject settings = result.optJSONObject("settings");
             if (settings == null) settings = new JSONObject();
+            JSONArray gameChoices = result.optJSONArray("game_names");
+            JSONArray customerChoices = result.optJSONArray("customers");
+            accountSalesGameChoices = gameChoices == null ? new JSONArray() : gameChoices;
+            accountSalesCustomerChoices = customerChoices == null ? new JSONArray() : customerChoices;
             JSONObject finalSettings = settings;
             add.setEnabled(true);
             add.setOnClickListener(v -> showAccountSalesForm(null, finalSettings));
@@ -3278,8 +3284,9 @@ public class MainActivity extends Activity {
         String phone = row.optString("phone", "").trim();
         if (!customer.isEmpty() || !phone.isEmpty()) c.addView(text((customer.isEmpty() ? "—" : customer) + (phone.isEmpty() ? "" : "  •  " + phone), 12, MUTED, false));
         String saleDate = row.optString("sale_date", "").trim();
+        String saleDateDisplay = accountSalesDateForDisplay(saleDate);
         String payment = row.optString("payment_type", "").trim();
-        if (!saleDate.isEmpty() || !payment.isEmpty()) c.addView(text((saleDate.isEmpty() ? "—" : saleDate) + (payment.isEmpty() ? "" : "  •  " + payment), 12, MUTED, false));
+        if (!saleDateDisplay.isEmpty() || !payment.isEmpty()) c.addView(text((saleDateDisplay.isEmpty() ? "—" : saleDateDisplay) + (payment.isEmpty() ? "" : "  •  " + payment), 12, MUTED, false));
         spacer(c, 8);
         installAccountSalesRecordHoldActions(c, row, settings);
         return c;
@@ -3356,15 +3363,31 @@ public class MainActivity extends Activity {
         ScrollView sv = screenWithBody(editing ? "Hesabı düzəlt" : "Yeni hesab satışı", true, () -> showAccountSales("accounts"));
         LinearLayout body = scrollBody(sv);
 
-        EditText game = accountField(body, "Oyunun adı *", "FIFA 25, FC 26", editing ? record.optString("game_name", "") : "", InputType.TYPE_CLASS_TEXT);
+        EditText game = accountField(body, "Oyunun adı *", "Kliklə seç və ya axtar", editing ? record.optString("game_name", "") : "", InputType.TYPE_CLASS_TEXT);
+        game.setFocusable(false);
+        game.setClickable(true);
+        game.setOnClickListener(v -> showAccountSalesGamePicker(game));
         Spinner type = accountSpinnerField(body, "Növ *", new String[]{"Online", "Universal", "Offline"}, editing ? record.optString("account_type", "Online") : "Online");
         EditText email = accountField(body, "E-mail *", "example@mail.com", editing ? record.optString("email", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         EditText price = accountField(body, "Qiymət *", "35.50", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         Spinner console = accountSpinnerField(body, "Konsol *", new String[]{"PS4", "PS5", "PS4/PS5"}, editing ? record.optString("console", "PS5") : "PS5");
-        EditText customer = accountField(body, "Ad soyad", "CAN EMRE", editing ? record.optString("customer_name", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        EditText customer = accountField(body, "Ad soyad", "Kliklə müştəri seç və ya axtar", editing ? record.optString("customer_name", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         EditText phone = accountField(body, "Telefon", "0705603030", editing ? record.optString("phone", "") : "", InputType.TYPE_CLASS_PHONE);
-        String defaultDate = LocalDate.now().toString();
-        EditText date = accountField(body, "Satış tarixi", "YYYY-MM-DD", editing ? record.optString("sale_date", defaultDate) : defaultDate, InputType.TYPE_CLASS_DATETIME);
+        customer.setFocusable(false);
+        customer.setClickable(true);
+        customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone));
+        String defaultDate = accountSalesDateForDisplay(LocalDate.now().toString());
+        String initialDate = editing ? accountSalesDateForDisplay(record.optString("sale_date", LocalDate.now().toString())) : defaultDate;
+        EditText date = accountField(body, "Satış tarixi", "DD-MM-YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
+
+        if (accountSalesGameChoices.length() == 0 || accountSalesCustomerChoices.length() == 0) {
+            loadAccountSalesJson("/overview?section=settings", result -> {
+                JSONArray loadedGames = result.optJSONArray("game_names");
+                JSONArray loadedCustomers = result.optJSONArray("customers");
+                if (loadedGames != null) accountSalesGameChoices = loadedGames;
+                if (loadedCustomers != null) accountSalesCustomerChoices = loadedCustomers;
+            });
+        }
         String defaultPayment = settings == null ? "Nağd" : settings.optString("default_payment_type", "Nağd");
         String defaultStock = settings == null ? "Satılıb" : settings.optString("default_stock_status", "Satılıb");
         Spinner payment = accountSpinnerField(body, "Ödəniş növü *", new String[]{"Nağd", "Nisyə"}, editing ? record.optString("payment_type", defaultPayment) : defaultPayment);
@@ -3387,7 +3410,7 @@ public class MainActivity extends Activity {
                 payload.put("console", String.valueOf(console.getSelectedItem()));
                 payload.put("customer_name", customer.getText().toString());
                 payload.put("phone", phone.getText().toString());
-                payload.put("sale_date", date.getText().toString());
+                payload.put("sale_date", accountSalesDateForApi(date.getText().toString()));
                 payload.put("payment_type", String.valueOf(payment.getSelectedItem()));
                 payload.put("stock_status", String.valueOf(stock.getSelectedItem()));
             } catch (Exception ignored) {}
@@ -3397,6 +3420,148 @@ public class MainActivity extends Activity {
                 showAccountSales("accounts");
             });
         });
+    }
+
+    private String accountSalesDateForDisplay(String value) {
+        String s = value == null ? "" : value.trim();
+        if (s.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            return s.substring(8, 10) + "-" + s.substring(5, 7) + "-" + s.substring(0, 4);
+        }
+        return s;
+    }
+
+    private String accountSalesDateForApi(String value) {
+        String s = value == null ? "" : value.trim();
+        if (s.matches("\\d{2}-\\d{2}-\\d{4}")) {
+            return s.substring(6, 10) + "-" + s.substring(3, 5) + "-" + s.substring(0, 2);
+        }
+        return s;
+    }
+
+    private void showAccountSalesGamePicker(EditText target) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(8), dp(18), 0);
+        EditText search = input("Oyunun adını yazıb axtar");
+        box.addView(search);
+        spacer(box, 8);
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(list);
+        box.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(330)));
+
+        final AlertDialog[] dialogHolder = new AlertDialog[1];
+        Runnable render = () -> {
+            list.removeAllViews();
+            String q = search.getText().toString().trim().toLowerCase(Locale.ROOT);
+            int count = 0;
+            for (int i = 0; i < accountSalesGameChoices.length(); i++) {
+                JSONObject row = accountSalesGameChoices.optJSONObject(i);
+                String name = row == null ? accountSalesGameChoices.optString(i, "") : row.optString("game_name", "");
+                name = name.trim();
+                if (name.isEmpty() || (!q.isEmpty() && !name.toLowerCase(Locale.ROOT).contains(q))) continue;
+                count++;
+                Button choose = button(name, CARD, TEXT);
+                choose.setTextSize(14);
+                final String selected = name;
+                choose.setOnClickListener(v -> {
+                    target.setText(selected);
+                    if (dialogHolder[0] != null) dialogHolder[0].dismiss();
+                });
+                list.addView(choose, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+                spacer(list, 4);
+            }
+            if (count == 0) list.addView(empty(q.isEmpty() ? "Oyun siyahısı boşdur." : "Uyğun oyun tapılmadı. Yazdığın adı istifadə edə bilərsən."));
+        };
+        search.addTextChangedListener(new SimpleTextWatcher(render));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Oyunun adı")
+                .setView(box)
+                .setNegativeButton("Bağla", null)
+                .setPositiveButton("Yazdığımı istifadə et", null)
+                .create();
+        dialogHolder[0] = dialog;
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                String typed = search.getText().toString().trim();
+                if (typed.isEmpty()) {
+                    toast("Oyunun adını yaz və ya siyahıdan seç.");
+                    return;
+                }
+                target.setText(typed);
+                dialog.dismiss();
+            });
+            render.run();
+        });
+        dialog.show();
+    }
+
+    private void showAccountSalesCustomerPicker(EditText nameTarget, EditText phoneTarget) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(8), dp(18), 0);
+        EditText search = input("Ad soyad və ya telefonla axtar");
+        box.addView(search);
+        spacer(box, 8);
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(list);
+        box.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(330)));
+
+        final AlertDialog[] dialogHolder = new AlertDialog[1];
+        Runnable render = () -> {
+            list.removeAllViews();
+            String q = search.getText().toString().trim().toLowerCase(Locale.ROOT);
+            int count = 0;
+            for (int i = 0; i < accountSalesCustomerChoices.length(); i++) {
+                JSONObject row = accountSalesCustomerChoices.optJSONObject(i);
+                if (row == null) continue;
+                String name = row.optString("customer_name", "").trim();
+                String phone = row.optString("phone", "").trim();
+                String haystack = (name + " " + phone).toLowerCase(Locale.ROOT);
+                if (name.isEmpty() || (!q.isEmpty() && !haystack.contains(q))) continue;
+                count++;
+                String label = phone.isEmpty() ? name : name + "  •  " + phone;
+                Button choose = button(label, CARD, TEXT);
+                choose.setTextSize(14);
+                final String selectedName = name;
+                final String selectedPhone = phone;
+                choose.setOnClickListener(v -> {
+                    nameTarget.setText(selectedName);
+                    phoneTarget.setText(selectedPhone);
+                    if (dialogHolder[0] != null) dialogHolder[0].dismiss();
+                });
+                list.addView(choose, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+                spacer(list, 4);
+            }
+            if (count == 0) list.addView(empty(q.isEmpty() ? "Müştəri siyahısı boşdur." : "Uyğun müştəri tapılmadı. Yazdığın adı istifadə edə bilərsən."));
+        };
+        search.addTextChangedListener(new SimpleTextWatcher(render));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Ad soyad")
+                .setView(box)
+                .setNegativeButton("Bağla", null)
+                .setPositiveButton("Yazdığımı istifadə et", null)
+                .create();
+        dialogHolder[0] = dialog;
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                String typed = search.getText().toString().trim();
+                if (typed.isEmpty()) {
+                    toast("Ad soyad yaz və ya siyahıdan seç.");
+                    return;
+                }
+                nameTarget.setText(typed);
+                phoneTarget.setText("");
+                dialog.dismiss();
+            });
+            render.run();
+        });
+        dialog.show();
     }
 
     private void showAccountSalesNewCustomer() {

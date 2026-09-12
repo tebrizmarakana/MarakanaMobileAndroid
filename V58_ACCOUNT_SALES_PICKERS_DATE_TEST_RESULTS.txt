@@ -1,0 +1,30 @@
+Marakana Mobile v58 — Hesab Satışı oyun/müştəri seçimi + tarix formatı
+
+PASS 32/32 static/integration checks
+
+Yoxlanılan əsas məqamlar:
+- versionCode 58 / versionName 3.4.35-native-v58
+- GitHub Actions v58 artifact adları
+- WordPress overview cavabındakı game_names mobil cache-ə alınır
+- WordPress overview cavabındakı customers mobil cache-ə alınır
+- Oyunun adı sahəsinə klik -> bütün oyunların siyahısı
+- oyun siyahısında yazaraq axtarış
+- oyun siyahısından seçim
+- siyahıda olmayan oyun adını əl ilə yazıb istifadə etmək
+- Ad soyad sahəsinə klik -> bütün müştərilərin siyahısı
+- müştəridə ad və telefonla axtarış
+- müştəri seçəndə telefonun avtomatik dolması
+- əl ilə yeni müştəri adı yazılanda köhnə telefonun təmizlənməsi
+- Satış tarixi UI formatı DD-MM-YYYY
+- WordPress save üçün tarix avtomatik YYYY-MM-DD çevrilir
+- hesab kartlarında tarix DD-MM-YYYY görünür
+- companion WordPress plugin 1.0.72 game_names/customers/customer-save API saxlanılıb
+- 1 saniyə long press Düzənlə/Sil saxlanılıb
+- Satılanlar/Satılmayanlar alt panel ikonları saxlanılıb
+- Yeni müştəri yarat saxlanılıb
+- money(double) yalnız 1 dəfədir
+- MainActivity brace/paren/bracket/string/comment struktur balansı PASS
+- yeni helper metodlar yalnız 1 dəfə müəyyən edilib
+- workflow YAML parse PASS
+
+Qeyd: bu konteynerdə Android SDK/Gradle qurulmadığı üçün assembleRelease lokal icra edilməyib. GitHub Actions workflow build üçün hazırdır.
