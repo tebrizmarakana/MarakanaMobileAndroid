@@ -1,4 +1,19 @@
-# Marakana Mobile Native v50
+# Marakana Mobile Native v51
+
+## v51 — WordPress Hesab Satışı native mobil modulu
+
+- Admin sol menyusuna **Hesab Satışı** əlavə edildi.
+- Modul WordPress-dəki `Marakana Playstation Hesab Satışı` plugininin eyni bazası ilə REST API üzərindən işləyir.
+- Hesablar, Satılan, Stok, Müştərilər və Ayarlar bölmələri native Android UI ilə açılır.
+- Yeni hesab əlavə etmək, mövcud hesabı düzəltmək/silmək, müştəri alışlarını görmək və plugin ayarlarını dəyişmək mümkündür.
+- İlk girişdə WordPress ünvanı və plugin Ayarlarındakı **Mobil API açarı** yazılır; API açarı Android Keystore ilə şifrəli saxlanılır.
+- WordPress companion plugin faylı `v1.0.71` mobil REST API dəstəyi verir.
+- `versionCode 51`
+- `versionName 3.4.28-native-v51`
+- Release APK: `MarakanaMobile-v51-release.apk`
+
+---
+
 
 ## v50 — Filiala görə avtomatik Admin QR server keçidi
 
@@ -82,3 +97,10 @@
 - Kamera HTTP səhifəsində Marakana Mobile düyməsi birbaşa custom deep-link açır.
 - APK daxili Admin QR scanner artıq cari Zal/Mətbəx rolundan asılı deyil; real Admin icazəsi serverdə yoxlanır.
 - versionCode 48 / versionName 3.4.25-native-v48.
+
+## v51 Hesab Satışı bağlantısını aktivləşdirmək
+
+1. `WORDPRESS_HESAB_SATISI_MOBILE_API/marakana-playstation-hesab-satisi.php` faylını mövcud WordPress Hesab Satışı plugininin əsas PHP faylı ilə əvəz et.
+2. WordPress Admin → Hesab Satışı → Ayarlar → Mobil APK bağlantısı bölməsindən API açarını götür.
+3. Mobil APK-da Admin → Hesab Satışı → WordPress ünvanı + API açarı yaz.
+4. API açarı telefonda Android Keystore ilə şifrəli saxlanılır.

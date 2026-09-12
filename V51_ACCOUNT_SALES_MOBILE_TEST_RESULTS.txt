@@ -1,0 +1,15 @@
+Marakana Mobile v51 — Hesab Satışı native modulu
+====================================================
+
+Statik/inteqrasiya yoxlamaları: 30/30 PASS
+PHP lint: PASS
+Java parser-pattern check: PASS (syntax-pattern error tapılmadı)
+Tam Android assembleRelease: bu Linux container-də Android SDK/Gradle olmadığı üçün icra edilmədi; GitHub Actions v51 workflow hazırdır.
+
+Yoxlanıldı:
+- Admin sol menyuda Hesab Satışı
+- Native Hesablar/Satılan/Stok/Müştəri/Ayarlar
+- WordPress REST ping/overview/customer/save/delete/settings
+- AES/GCM şifrəli API açarı
+- WordPress v1.0.71 companion API
+- GitHub Actions v51 artifact adı

@@ -78,6 +78,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.time.LocalDate;
 
 /**
  * Marakana Mobile Native v2.
@@ -105,6 +106,12 @@ public class MainActivity extends Activity {
     private static final int REQUEST_NOTIFICATION_PERMISSION = 7301;
     private static final int REQUEST_KITCHEN_SOUND = 7302;
     private static final String KEYSTORE_ALIAS = "marakana_mobile_login_key";
+    private static final String KEY_ACCOUNT_SALES_SITE = "account_sales_site";
+    private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
+    private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
+    private static final String ACCOUNT_SALES_DEFAULT_SITE = "https://marakana.az";
+    private static final String ACCOUNT_SALES_API_PATH = "/wp-json/marakana-account-sales/v1";
+    private static final String[] ACCOUNT_SALES_SECTIONS = {"accounts", "sold", "unsold", "customers", "settings"};
 
     private static final int BG = Color.rgb(240, 245, 250);
     private static final int CARD = Color.WHITE;
@@ -655,6 +662,10 @@ public class MainActivity extends Activity {
             addDrawerItem(panel, "İcarə Paneli", () -> {
                 holder[0].dismiss();
                 switchMobileRole("admin", false, () -> showRental("active"));
+            });
+            addDrawerItem(panel, "Hesab Satışı", () -> {
+                holder[0].dismiss();
+                switchMobileRole("admin", false, () -> showAccountSales("accounts"));
             });
             addDrawerItem(panel, "Admin QR təsdiqi", () -> {
                 holder[0].dismiss();
@@ -2933,6 +2944,618 @@ public class MainActivity extends Activity {
         title.setMaxLines(2);
         tab.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
         return tab;
+    }
+
+    // v51: WordPress "Marakana Playstation Hesab Satışı" plugininin native mobil paneli.
+    // Məlumatlar WordPress REST API-dən gəlir; mobil API açarı Android Keystore ilə şifrəli saxlanılır.
+    private String normalizeWordPressBase(String raw) {
+        String value = raw == null ? "" : raw.trim();
+        if (value.isEmpty()) return "";
+        if (!value.toLowerCase(Locale.ROOT).startsWith("http://") && !value.toLowerCase(Locale.ROOT).startsWith("https://")) {
+            value = "https://" + value;
+        }
+        while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
+        String lower = value.toLowerCase(Locale.ROOT);
+        int wpJson = lower.indexOf("/wp-json/");
+        if (wpJson > 0) value = value.substring(0, wpJson);
+        lower = value.toLowerCase(Locale.ROOT);
+        if (lower.endsWith("/wp-admin")) value = value.substring(0, value.length() - 9);
+        while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
+        return value;
+    }
+
+    private void saveAccountSalesApiKey(String apiKey) {
+        try {
+            String value = apiKey == null ? "" : apiKey.trim();
+            if (value.isEmpty()) {
+                clearAccountSalesApiKey();
+                return;
+            }
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateLoginKey());
+            byte[] encrypted = cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
+            prefs.edit()
+                    .putString(KEY_ACCOUNT_SALES_API_KEY_ENC, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                    .putString(KEY_ACCOUNT_SALES_API_KEY_IV, Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP))
+                    .apply();
+        } catch (Exception ex) {
+            clearAccountSalesApiKey();
+        }
+    }
+
+    private String loadAccountSalesApiKey() {
+        String enc = prefs.getString(KEY_ACCOUNT_SALES_API_KEY_ENC, "");
+        String iv = prefs.getString(KEY_ACCOUNT_SALES_API_KEY_IV, "");
+        if (enc.isEmpty() || iv.isEmpty()) return "";
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec spec = new GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP));
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateLoginKey(), spec);
+            byte[] raw = cipher.doFinal(Base64.decode(enc, Base64.NO_WRAP));
+            return new String(raw, StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            clearAccountSalesApiKey();
+            return "";
+        }
+    }
+
+    private void clearAccountSalesApiKey() {
+        prefs.edit().remove(KEY_ACCOUNT_SALES_API_KEY_ENC).remove(KEY_ACCOUNT_SALES_API_KEY_IV).apply();
+    }
+
+    private String getAccountSalesSite() {
+        String site = normalizeWordPressBase(prefs.getString(KEY_ACCOUNT_SALES_SITE, ACCOUNT_SALES_DEFAULT_SITE));
+        return site.isEmpty() ? ACCOUNT_SALES_DEFAULT_SITE : site;
+    }
+
+    private boolean hasAccountSalesConnection() {
+        return !getAccountSalesSite().isEmpty() && !loadAccountSalesApiKey().isEmpty();
+    }
+
+    private String normalizeAccountSalesSection(String section) {
+        String value = section == null ? "accounts" : section.trim().toLowerCase(Locale.ROOT);
+        for (String candidate : ACCOUNT_SALES_SECTIONS) if (candidate.equals(value)) return value;
+        return "accounts";
+    }
+
+    private void showAccountSalesConnection() {
+        ScrollView sv = screenWithBody("Hesab Satışı • Bağlantı", false, null);
+        LinearLayout body = scrollBody(sv);
+
+        LinearLayout info = card();
+        info.addView(text("WordPress bağlantısı", 18, TEXT, true));
+        TextView help = text("WordPress-də Hesab Satışı → Ayarlar → Mobil APK bağlantısı bölməsindəki API açarını buraya yaz. Bu açar telefonda şifrəli saxlanılır.", 13, MUTED, false);
+        help.setPadding(0, dp(6), 0, dp(4));
+        info.addView(help);
+        body.addView(info);
+
+        TextView siteLabel = text("WordPress ünvanı", 13, MUTED, true);
+        body.addView(siteLabel);
+        EditText site = input("https://marakana.az");
+        site.setText(getAccountSalesSite());
+        site.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        body.addView(site);
+        spacer(body, 10);
+
+        TextView keyLabel = text("Mobil API açarı", 13, MUTED, true);
+        body.addView(keyLabel);
+        EditText key = input("Plugin ayarlarındakı API açarı");
+        key.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        String existing = loadAccountSalesApiKey();
+        if (!existing.isEmpty()) key.setText(existing);
+        body.addView(key);
+        spacer(body, 14);
+
+        Button save = button("Bağlantını yoxla və yadda saxla", BLUE, Color.WHITE);
+        body.addView(save);
+        save.setOnClickListener(v -> {
+            String candidateSite = normalizeWordPressBase(site.getText().toString());
+            String candidateKey = key.getText().toString().trim();
+            if (candidateSite.isEmpty() || candidateKey.isEmpty()) {
+                toast("WordPress ünvanı və API açarı boş qala bilməz.");
+                return;
+            }
+            setBusy(true);
+            io.execute(() -> {
+                try {
+                    JSONObject result = accountSalesRequest(candidateSite, "/ping", "GET", null, candidateKey);
+                    if (!result.optBoolean("ok", false)) throw new Exception("Plugin cavabı düzgün deyil.");
+                    prefs.edit().putString(KEY_ACCOUNT_SALES_SITE, candidateSite).apply();
+                    saveAccountSalesApiKey(candidateKey);
+                    runOnUiThread(() -> {
+                        setBusy(false);
+                        toast("Hesab Satışı bağlantısı hazırdır.");
+                        showAccountSales("accounts");
+                    });
+                } catch (Exception ex) {
+                    runOnUiThread(() -> {
+                        setBusy(false);
+                        toast(accountSalesErrorMessage(ex));
+                    });
+                }
+            });
+        });
+
+        if (hasAccountSalesConnection()) {
+            spacer(body, 10);
+            Button cancel = button("Geri qayıt", CARD, TEXT);
+            body.addView(cancel);
+            cancel.setOnClickListener(v -> showAccountSales("accounts"));
+        }
+    }
+
+    private void showAccountSales(String requestedSection) {
+        if (!canAdmin && !"admin".equals(role)) {
+            toast("Hesab Satışı yalnız Admin üçün açıqdır.");
+            return;
+        }
+        if (!hasAccountSalesConnection()) {
+            showAccountSalesConnection();
+            return;
+        }
+        final String section = normalizeAccountSalesSection(requestedSection);
+        currentBackAction = null;
+        clear();
+
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(8), dp(10), dp(8), 0);
+        content.addView(shell, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        shell.addView(buildMainHeader("Hesab Satışı", false, null));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        installGlobalDrawerSwipe(scroll);
+        shell.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        LinearLayout body = scrollBody(scroll);
+        body.setPadding(0, dp(4), 0, dp(92));
+
+        LinearLayout topActions = new LinearLayout(this);
+        topActions.setOrientation(LinearLayout.HORIZONTAL);
+        Button connection = button("⚙ Bağlantı", CARD, TEXT);
+        connection.setTextSize(13);
+        topActions.addView(connection, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        connection.setOnClickListener(v -> showAccountSalesConnection());
+        Button refresh = button("↻ Yenilə", CARD, TEXT);
+        refresh.setTextSize(13);
+        LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        refreshLp.setMargins(dp(8), 0, 0, 0);
+        topActions.addView(refresh, refreshLp);
+        refresh.setOnClickListener(v -> showAccountSales(section));
+        body.addView(topActions);
+        spacer(body, 10);
+
+        Button add = button("＋ Yeni hesab satışı", GREEN, Color.WHITE);
+        if (!"settings".equals(section) && !"customers".equals(section)) {
+            body.addView(add);
+            spacer(body, 10);
+        }
+        add.setEnabled(false);
+
+        EditText search = input("Oyun, e-mail, müştəri və ya telefonla axtar");
+        if (!"settings".equals(section)) {
+            body.addView(search);
+            spacer(body, 10);
+        }
+
+        LinearLayout summaryHost = new LinearLayout(this);
+        summaryHost.setOrientation(LinearLayout.VERTICAL);
+        body.addView(summaryHost);
+        LinearLayout recordsHost = new LinearLayout(this);
+        recordsHost.setOrientation(LinearLayout.VERTICAL);
+        recordsHost.addView(empty("Hesab məlumatları yüklənir..."));
+        body.addView(recordsHost);
+
+        LinearLayout footer = buildAccountSalesFooter(section);
+        shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(86)));
+
+        loadAccountSalesJson("/overview?section=" + urlEncode(section), result -> {
+            JSONObject settings = result.optJSONObject("settings");
+            if (settings == null) settings = new JSONObject();
+            JSONObject finalSettings = settings;
+            add.setEnabled(true);
+            add.setOnClickListener(v -> showAccountSalesForm(null, finalSettings));
+
+            renderAccountSalesSummary(summaryHost, result.optJSONObject("stats"));
+            if ("customers".equals(section)) {
+                JSONArray customers = result.optJSONArray("customers");
+                if (customers == null) customers = new JSONArray();
+                final JSONArray finalCustomers = customers;
+                Runnable render = () -> renderAccountSalesCustomers(recordsHost, finalCustomers, search.getText().toString());
+                search.addTextChangedListener(new SimpleTextWatcher(render));
+                render.run();
+            } else if ("settings".equals(section)) {
+                renderAccountSalesSettings(recordsHost, finalSettings);
+            } else {
+                JSONArray records = result.optJSONArray("records");
+                if (records == null) records = new JSONArray();
+                final JSONArray finalRecords = records;
+                Runnable render = () -> renderAccountSalesRecords(recordsHost, finalRecords, search.getText().toString(), finalSettings);
+                search.addTextChangedListener(new SimpleTextWatcher(render));
+                render.run();
+            }
+        }, message -> {
+            summaryHost.removeAllViews();
+            recordsHost.removeAllViews();
+            LinearLayout c = card();
+            c.addView(text("Hesab Satışı məlumatları yüklənmədi", 16, Color.rgb(180, 55, 55), true));
+            TextView detail = text(message, 12, MUTED, false);
+            detail.setPadding(0, dp(6), 0, dp(10));
+            c.addView(detail);
+            Button setup = button("Bağlantını düzəlt", BLUE, Color.WHITE);
+            setup.setOnClickListener(v -> showAccountSalesConnection());
+            c.addView(setup);
+            recordsHost.addView(c);
+        });
+    }
+
+    private LinearLayout buildAccountSalesFooter(String activeSection) {
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(dp(4), dp(8), dp(4), dp(8));
+        footer.setBackground(bg(Color.WHITE, 22, BORDER));
+        footer.setElevation(dp(12));
+        String[] labels = {"Hesablar", "Satılan", "Stok", "Müştəri", "Ayarlar"};
+        String[] icons = {"🎮", "✓", "○", "👥", "⚙"};
+        for (int i = 0; i < ACCOUNT_SALES_SECTIONS.length; i++) {
+            final String target = ACCOUNT_SALES_SECTIONS[i];
+            LinearLayout tab = buildRentalFooterTab(icons[i], labels[i], target.equals(activeSection));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+            if (i > 0) lp.setMargins(dp(3), 0, 0, 0);
+            tab.setLayoutParams(lp);
+            tab.setOnClickListener(v -> showAccountSales(target));
+            footer.addView(tab);
+        }
+        return footer;
+    }
+
+    private void renderAccountSalesSummary(LinearLayout host, JSONObject stats) {
+        host.removeAllViews();
+        if (stats == null) return;
+        LinearLayout c = card();
+        c.addView(text("Göstəricilər", 13, MUTED, true));
+        String line1 = "Hesab: " + stats.optInt("total", 0) + "  •  Satılan: " + stats.optInt("sold", 0) + "  •  Stok: " + stats.optInt("unsold", 0);
+        String line2 = "Cəmi: " + money(stats.optDouble("total_amount", 0)) + "  •  Nağd: " + money(stats.optDouble("cash_amount", 0)) + "  •  Nisyə: " + money(stats.optDouble("credit_amount", 0));
+        c.addView(text(line1, 15, TEXT, true));
+        TextView totals = text(line2, 12, MUTED, false);
+        totals.setPadding(0, dp(4), 0, 0);
+        c.addView(totals);
+        host.addView(c);
+    }
+
+    private String money(double value) {
+        return String.format(Locale.US, "%.2f AZN", value);
+    }
+
+    private void renderAccountSalesRecords(LinearLayout host, JSONArray records, String query, JSONObject settings) {
+        host.removeAllViews();
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        int visible = 0;
+        for (int i = 0; i < records.length(); i++) {
+            JSONObject row = records.optJSONObject(i);
+            if (row == null) continue;
+            String haystack = row.optString("game_name", "") + " " + row.optString("email", "") + " " +
+                    row.optString("customer_name", "") + " " + row.optString("phone", "") + " " +
+                    row.optString("console", "") + " " + row.optString("account_type", "") + " " +
+                    row.optString("stock_status", "");
+            if (!q.isEmpty() && !haystack.toLowerCase(Locale.ROOT).contains(q)) continue;
+            visible++;
+            host.addView(buildAccountSalesRecordCard(row, settings));
+        }
+        if (visible == 0) host.addView(empty(q.isEmpty() ? "Hesab yoxdur." : "Axtarışa uyğun hesab tapılmadı."));
+    }
+
+    private LinearLayout buildAccountSalesRecordCard(JSONObject row, JSONObject settings) {
+        LinearLayout c = card();
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title = text(row.optString("game_name", "Hesab"), 16, TEXT, true);
+        top.addView(title, new LinearLayout.LayoutParams(0, dp(36), 1f));
+        String price = row.optString("price_formatted", money(row.optDouble("price", 0)));
+        TextView priceView = text(price, 14, GREEN, true);
+        priceView.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        top.addView(priceView, new LinearLayout.LayoutParams(dp(112), dp(36)));
+        c.addView(top);
+
+        c.addView(text(row.optString("email", ""), 13, MUTED, false));
+        c.addView(text(row.optString("account_type", "") + "  •  " + row.optString("console", "") + "  •  " + row.optString("stock_status", ""), 12, TEXT, true));
+        String customer = row.optString("customer_name", "").trim();
+        String phone = row.optString("phone", "").trim();
+        if (!customer.isEmpty() || !phone.isEmpty()) c.addView(text((customer.isEmpty() ? "—" : customer) + (phone.isEmpty() ? "" : "  •  " + phone), 12, MUTED, false));
+        String saleDate = row.optString("sale_date", "").trim();
+        String payment = row.optString("payment_type", "").trim();
+        if (!saleDate.isEmpty() || !payment.isEmpty()) c.addView(text((saleDate.isEmpty() ? "—" : saleDate) + (payment.isEmpty() ? "" : "  •  " + payment), 12, MUTED, false));
+        spacer(c, 8);
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        Button edit = button("Düzəliş", CARD, TEXT);
+        edit.setTextSize(13);
+        actions.addView(edit, new LinearLayout.LayoutParams(0, dp(44), 1f));
+        edit.setOnClickListener(v -> showAccountSalesForm(row, settings));
+        Button del = button("Sil", Color.rgb(255, 242, 242), Color.rgb(176, 54, 54));
+        del.setTextSize(13);
+        LinearLayout.LayoutParams delLp = new LinearLayout.LayoutParams(0, dp(44), 1f);
+        delLp.setMargins(dp(8), 0, 0, 0);
+        actions.addView(del, delLp);
+        del.setOnClickListener(v -> confirmDeleteAccountSale(row));
+        c.addView(actions);
+        return c;
+    }
+
+    private void confirmDeleteAccountSale(JSONObject row) {
+        String title = row.optString("game_name", "Hesab");
+        new AlertDialog.Builder(this)
+                .setTitle("Hesabı sil")
+                .setMessage(title + " silinsin?")
+                .setNegativeButton("Xeyr", null)
+                .setPositiveButton("Sil", (d, w) -> {
+                    JSONObject payload = new JSONObject();
+                    try { payload.put("id", row.optInt("id", 0)); } catch (Exception ignored) {}
+                    postAccountSalesJson("/delete", payload, result -> {
+                        toast("Hesab silindi.");
+                        showAccountSales("accounts");
+                    });
+                }).show();
+    }
+
+    private void showAccountSalesForm(JSONObject record, JSONObject settings) {
+        final boolean editing = record != null && record.optInt("id", 0) > 0;
+        ScrollView sv = screenWithBody(editing ? "Hesabı düzəlt" : "Yeni hesab satışı", true, () -> showAccountSales("accounts"));
+        LinearLayout body = scrollBody(sv);
+
+        EditText game = accountField(body, "Oyunun adı *", "FIFA 25, FC 26", editing ? record.optString("game_name", "") : "", InputType.TYPE_CLASS_TEXT);
+        Spinner type = accountSpinnerField(body, "Növ *", new String[]{"Online", "Universal", "Offline"}, editing ? record.optString("account_type", "Online") : "Online");
+        EditText email = accountField(body, "E-mail *", "example@mail.com", editing ? record.optString("email", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        EditText price = accountField(body, "Qiymət *", "35.50", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        Spinner console = accountSpinnerField(body, "Konsol *", new String[]{"PS4", "PS5", "PS4/PS5"}, editing ? record.optString("console", "PS5") : "PS5");
+        EditText customer = accountField(body, "Ad soyad", "CAN EMRE", editing ? record.optString("customer_name", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        EditText phone = accountField(body, "Telefon", "0705603030", editing ? record.optString("phone", "") : "", InputType.TYPE_CLASS_PHONE);
+        String defaultDate = LocalDate.now().toString();
+        EditText date = accountField(body, "Satış tarixi", "YYYY-MM-DD", editing ? record.optString("sale_date", defaultDate) : defaultDate, InputType.TYPE_CLASS_DATETIME);
+        String defaultPayment = settings == null ? "Nağd" : settings.optString("default_payment_type", "Nağd");
+        String defaultStock = settings == null ? "Satılıb" : settings.optString("default_stock_status", "Satılıb");
+        Spinner payment = accountSpinnerField(body, "Ödəniş növü *", new String[]{"Nağd", "Nisyə"}, editing ? record.optString("payment_type", defaultPayment) : defaultPayment);
+        Spinner stock = accountSpinnerField(body, "Stok *", new String[]{"Satılıb", "Satılmayıb"}, editing ? record.optString("stock_status", defaultStock) : defaultStock);
+
+        TextView note = text("Satılıb seçilərsə ad soyad, telefon və satış tarixi məcburidir.", 12, MUTED, false);
+        note.setPadding(dp(4), dp(4), dp(4), dp(10));
+        body.addView(note);
+
+        Button save = button(editing ? "Dəyişiklikləri yadda saxla" : "Hesabı əlavə et", GREEN, Color.WHITE);
+        body.addView(save);
+        save.setOnClickListener(v -> {
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("id", editing ? record.optInt("id", 0) : 0);
+                payload.put("game_name", game.getText().toString());
+                payload.put("account_type", String.valueOf(type.getSelectedItem()));
+                payload.put("email", email.getText().toString());
+                payload.put("price", price.getText().toString());
+                payload.put("console", String.valueOf(console.getSelectedItem()));
+                payload.put("customer_name", customer.getText().toString());
+                payload.put("phone", phone.getText().toString());
+                payload.put("sale_date", date.getText().toString());
+                payload.put("payment_type", String.valueOf(payment.getSelectedItem()));
+                payload.put("stock_status", String.valueOf(stock.getSelectedItem()));
+            } catch (Exception ignored) {}
+            postAccountSalesJson("/save", payload, result -> {
+                if (result.optInt("auto_universal_created", 0) == 1) toast("Hesab əlavə edildi və Universal versiya avtomatik yaradıldı.");
+                else toast(editing ? "Hesab yeniləndi." : "Hesab əlavə edildi.");
+                showAccountSales("accounts");
+            });
+        });
+    }
+
+    private EditText accountField(LinearLayout body, String label, String hint, String value, int inputType) {
+        TextView l = text(label, 13, MUTED, true);
+        body.addView(l);
+        EditText e = input(hint);
+        e.setInputType(inputType);
+        e.setText(value == null ? "" : value);
+        body.addView(e);
+        spacer(body, 10);
+        return e;
+    }
+
+    private Spinner accountSpinnerField(LinearLayout body, String label, String[] options, String selected) {
+        TextView l = text(label, 13, MUTED, true);
+        body.addView(l);
+        Spinner spinner = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, options);
+        spinner.setAdapter(adapter);
+        spinner.setBackground(bg(CARD, 14, BORDER));
+        spinner.setPadding(dp(10), 0, dp(10), 0);
+        int index = 0;
+        for (int i = 0; i < options.length; i++) if (options[i].equals(selected)) { index = i; break; }
+        spinner.setSelection(index);
+        body.addView(spinner, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        spacer(body, 10);
+        return spinner;
+    }
+
+    private void renderAccountSalesCustomers(LinearLayout host, JSONArray customers, String query) {
+        host.removeAllViews();
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        int visible = 0;
+        for (int i = 0; i < customers.length(); i++) {
+            JSONObject customer = customers.optJSONObject(i);
+            if (customer == null) continue;
+            String haystack = customer.optString("customer_name", "") + " " + customer.optString("phone", "");
+            if (!q.isEmpty() && !haystack.toLowerCase(Locale.ROOT).contains(q)) continue;
+            visible++;
+            LinearLayout c = card();
+            c.addView(text(customer.optString("customer_name", "Müştəri"), 16, TEXT, true));
+            c.addView(text(customer.optString("phone", ""), 13, MUTED, false));
+            String detail = customer.optInt("game_count", 0) + " alış  •  " + customer.optString("total_amount_formatted", money(customer.optDouble("total_amount", 0)));
+            c.addView(text(detail, 12, TEXT, true));
+            String payment = "Nağd: " + customer.optString("cash_amount_formatted", money(customer.optDouble("cash_amount", 0))) +
+                    "  •  Nisyə: " + customer.optString("credit_amount_formatted", money(customer.optDouble("credit_amount", 0)));
+            c.addView(text(payment, 12, MUTED, false));
+            c.setClickable(true);
+            c.setOnClickListener(v -> showAccountSalesCustomerDetail(customer));
+            host.addView(c);
+        }
+        if (visible == 0) host.addView(empty(q.isEmpty() ? "Müştəri yoxdur." : "Axtarışa uyğun müştəri tapılmadı."));
+    }
+
+    private void showAccountSalesCustomerDetail(JSONObject customer) {
+        String phone = customer.optString("phone", "");
+        ScrollView sv = screenWithBody("Müştəri • " + customer.optString("customer_name", ""), true, () -> showAccountSales("customers"));
+        LinearLayout body = scrollBody(sv);
+        LinearLayout summary = card();
+        summary.addView(text(customer.optString("customer_name", "Müştəri"), 18, TEXT, true));
+        summary.addView(text(phone, 13, MUTED, false));
+        summary.addView(text(customer.optInt("game_count", 0) + " alış  •  " + customer.optString("total_amount_formatted", ""), 13, TEXT, true));
+        body.addView(summary);
+        LinearLayout host = new LinearLayout(this);
+        host.setOrientation(LinearLayout.VERTICAL);
+        host.addView(empty("Alışlar yüklənir..."));
+        body.addView(host);
+        loadAccountSalesJson("/customer?phone=" + urlEncode(phone), result -> {
+            host.removeAllViews();
+            JSONArray records = result.optJSONArray("records");
+            if (records == null || records.length() == 0) {
+                host.addView(empty("Alış tarixçəsi yoxdur."));
+                return;
+            }
+            JSONObject emptySettings = new JSONObject();
+            for (int i = 0; i < records.length(); i++) {
+                JSONObject row = records.optJSONObject(i);
+                if (row == null) continue;
+                host.addView(buildAccountSalesRecordCard(row, emptySettings));
+            }
+        }, message -> {
+            host.removeAllViews();
+            host.addView(empty(message));
+        });
+    }
+
+    private void renderAccountSalesSettings(LinearLayout host, JSONObject settings) {
+        host.removeAllViews();
+        LinearLayout c = card();
+        c.addView(text("Plugin ayarları", 17, TEXT, true));
+        spacer(c, 6);
+        EditText currency = accountField(c, "Pul vahidi", "AZN", settings.optString("currency", "AZN"), InputType.TYPE_CLASS_TEXT);
+        Spinner stock = accountSpinnerField(c, "Default stok", new String[]{"Satılıb", "Satılmayıb"}, settings.optString("default_stock_status", "Satılıb"));
+        Spinner payment = accountSpinnerField(c, "Default ödəniş", new String[]{"Nağd", "Nisyə"}, settings.optString("default_payment_type", "Nağd"));
+        CheckBox phoneFormat = new CheckBox(this);
+        phoneFormat.setText("Telefon formatlama aktivdir");
+        phoneFormat.setTextColor(TEXT);
+        phoneFormat.setChecked("1".equals(settings.optString("phone_format_enabled", "1")) || settings.optBoolean("phone_format_enabled", false));
+        c.addView(phoneFormat);
+        spacer(c, 8);
+        Button save = button("Ayarları saxla", BLUE, Color.WHITE);
+        c.addView(save);
+        save.setOnClickListener(v -> {
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("currency", currency.getText().toString());
+                payload.put("default_stock_status", String.valueOf(stock.getSelectedItem()));
+                payload.put("default_payment_type", String.valueOf(payment.getSelectedItem()));
+                payload.put("phone_format_enabled", phoneFormat.isChecked());
+            } catch (Exception ignored) {}
+            postAccountSalesJson("/settings", payload, result -> {
+                toast("Hesab Satışı ayarları yadda saxlandı.");
+                showAccountSales("settings");
+            });
+        });
+        host.addView(c);
+
+        LinearLayout connection = card();
+        connection.addView(text("Mobil bağlantı", 16, TEXT, true));
+        connection.addView(text(getAccountSalesSite(), 12, MUTED, false));
+        Button change = button("WordPress / API açarını dəyiş", CARD, TEXT);
+        connection.addView(change);
+        change.setOnClickListener(v -> showAccountSalesConnection());
+        host.addView(connection);
+    }
+
+    private interface AccountSalesFailure { void accept(String message); }
+
+    private void loadAccountSalesJson(String path, JsonConsumer success, AccountSalesFailure failure) {
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject result = accountSalesRequest(getAccountSalesSite(), path, "GET", null, loadAccountSalesApiKey());
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    success.accept(result);
+                });
+            } catch (Exception ex) {
+                String message = accountSalesErrorMessage(ex);
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    if (failure != null) failure.accept(message);
+                    else toast(message);
+                });
+            }
+        });
+    }
+
+    private void loadAccountSalesJson(String path, JsonConsumer success) {
+        loadAccountSalesJson(path, success, null);
+    }
+
+    private void postAccountSalesJson(String path, JSONObject payload, JsonConsumer success) {
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject result = accountSalesRequest(getAccountSalesSite(), path, "POST", payload, loadAccountSalesApiKey());
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    success.accept(result);
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    toast(accountSalesErrorMessage(ex));
+                });
+            }
+        });
+    }
+
+    private String accountSalesErrorMessage(Exception ex) {
+        String message = ex == null || ex.getMessage() == null ? "WordPress bağlantı xətası" : ex.getMessage();
+        if (message.contains("401")) return "Hesab Satışı API açarı yanlışdır və ya yenilənib.";
+        if (message.contains("404")) return "WordPress-də Hesab Satışı mobil API-si tapılmadı. Pluginin mobil API versiyasını quraşdır.";
+        return message;
+    }
+
+    private JSONObject accountSalesRequest(String site, String path, String method, JSONObject payload, String apiKey) throws Exception {
+        String base = normalizeWordPressBase(site);
+        String suffix = path == null ? "" : path.trim();
+        if (!suffix.startsWith("/")) suffix = "/" + suffix;
+        URL url = new URL(base + ACCOUNT_SALES_API_PATH + suffix);
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(8000);
+        c.setReadTimeout(30000);
+        c.setInstanceFollowRedirects(true);
+        c.setRequestMethod(method);
+        c.setRequestProperty("Accept", "application/json");
+        c.setRequestProperty("X-Marakana-Account-Key", apiKey == null ? "" : apiKey);
+        if (payload != null && "POST".equals(method)) {
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
+            try (OutputStream os = c.getOutputStream()) { os.write(bytes); }
+        }
+        int code = c.getResponseCode();
+        InputStream is = (code >= 200 && code < 300) ? c.getInputStream() : c.getErrorStream();
+        StringBuilder sb = new StringBuilder();
+        if (is != null) try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+        }
+        String raw = sb.toString();
+        JSONObject obj = raw.isEmpty() ? new JSONObject() : new JSONObject(raw);
+        if (code < 200 || code >= 300) {
+            String error = obj.optString("message", obj.optString("error", "HTTP " + code));
+            throw new Exception(code + ": " + error);
+        }
+        return obj;
     }
 
     private void showDebt(String category) {
