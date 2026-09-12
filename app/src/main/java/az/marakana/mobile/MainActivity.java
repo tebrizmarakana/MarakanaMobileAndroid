@@ -3129,7 +3129,7 @@ public class MainActivity extends Activity {
 
         LinearLayout createActions = new LinearLayout(this);
         createActions.setOrientation(LinearLayout.HORIZONTAL);
-        Button add = button("＋ Yeni hesab satışı", GREEN, Color.WHITE);
+        Button add = button("＋ Yeni hesab yarat", GREEN, Color.WHITE);
         add.setTextSize(13);
         createActions.addView(add, new LinearLayout.LayoutParams(0, dp(52), 1f));
         Button addCustomer = button("＋ Yeni müştəri yarat", BLUE, Color.WHITE);
@@ -3360,27 +3360,18 @@ public class MainActivity extends Activity {
 
     private void showAccountSalesForm(JSONObject record, JSONObject settings) {
         final boolean editing = record != null && record.optInt("id", 0) > 0;
-        ScrollView sv = screenWithBody(editing ? "Hesabı düzəlt" : "Yeni hesab satışı", true, () -> showAccountSales("accounts"));
+        ScrollView sv = screenWithBody(editing ? "Hesabı düzəlt" : "Yeni hesab yarat", true, () -> showAccountSales("accounts"));
         LinearLayout body = scrollBody(sv);
 
         EditText game = accountField(body, "Oyunun adı *", "Kliklə seç və ya axtar", editing ? record.optString("game_name", "") : "", InputType.TYPE_CLASS_TEXT);
         game.setFocusable(false);
         game.setClickable(true);
         game.setOnClickListener(v -> showAccountSalesGamePicker(game));
-        Spinner type = accountSpinnerField(body, "Növ *", new String[]{"Online", "Universal", "Offline"}, editing ? record.optString("account_type", "Online") : "Online");
         EditText email = accountField(body, "E-mail *", "example@mail.com", editing ? record.optString("email", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         EditText price = accountField(body, "Qiymət *", "35.50", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         Spinner console = accountSpinnerField(body, "Konsol *", new String[]{"PS4", "PS5", "PS4/PS5"}, editing ? record.optString("console", "PS5") : "PS5");
-        EditText customer = accountField(body, "Ad soyad", "Kliklə müştəri seç və ya axtar", editing ? record.optString("customer_name", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
-        EditText phone = accountField(body, "Telefon", "0705603030", editing ? record.optString("phone", "") : "", InputType.TYPE_CLASS_PHONE);
-        customer.setFocusable(false);
-        customer.setClickable(true);
-        customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone));
-        String defaultDate = accountSalesDateForDisplay(LocalDate.now().toString());
-        String initialDate = editing ? accountSalesDateForDisplay(record.optString("sale_date", LocalDate.now().toString())) : defaultDate;
-        EditText date = accountField(body, "Satış tarixi", "DD-MM-YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
 
-        if (accountSalesGameChoices.length() == 0 || accountSalesCustomerChoices.length() == 0) {
+        if (accountSalesGameChoices.length() == 0 || (editing && accountSalesCustomerChoices.length() == 0)) {
             loadAccountSalesJson("/overview?section=settings", result -> {
                 JSONArray loadedGames = result.optJSONArray("game_names");
                 JSONArray loadedCustomers = result.optJSONArray("customers");
@@ -3388,21 +3379,47 @@ public class MainActivity extends Activity {
                 if (loadedCustomers != null) accountSalesCustomerChoices = loadedCustomers;
             });
         }
+
+        if (!editing) {
+            TextView note = text("Hesab yaradıldıqda seçilən bütün növlər avtomatik Satılmayıb kimi stokda saxlanılacaq.", 12, MUTED, false);
+            note.setPadding(dp(4), dp(4), dp(4), dp(10));
+            body.addView(note);
+
+            Button save = button("Hesabı əlavə et", GREEN, Color.WHITE);
+            body.addView(save);
+            save.setOnClickListener(v -> showAccountSalesCreateTypeDialog(
+                    game.getText().toString(),
+                    email.getText().toString(),
+                    price.getText().toString(),
+                    String.valueOf(console.getSelectedItem())
+            ));
+            return;
+        }
+
+        Spinner type = accountSpinnerField(body, "Növ *", new String[]{"Online", "Universal", "Offline"}, record.optString("account_type", "Online"));
+        EditText customer = accountField(body, "Ad soyad", "Kliklə müştəri seç və ya axtar", record.optString("customer_name", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        EditText phone = accountField(body, "Telefon", "0705603030", record.optString("phone", ""), InputType.TYPE_CLASS_PHONE);
+        customer.setFocusable(false);
+        customer.setClickable(true);
+        customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone));
+        String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
+        EditText date = accountField(body, "Satış tarixi", "DD-MM-YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
+
         String defaultPayment = settings == null ? "Nağd" : settings.optString("default_payment_type", "Nağd");
         String defaultStock = settings == null ? "Satılıb" : settings.optString("default_stock_status", "Satılıb");
-        Spinner payment = accountSpinnerField(body, "Ödəniş növü *", new String[]{"Nağd", "Nisyə"}, editing ? record.optString("payment_type", defaultPayment) : defaultPayment);
-        Spinner stock = accountSpinnerField(body, "Stok *", new String[]{"Satılıb", "Satılmayıb"}, editing ? record.optString("stock_status", defaultStock) : defaultStock);
+        Spinner payment = accountSpinnerField(body, "Ödəniş növü *", new String[]{"Nağd", "Nisyə"}, record.optString("payment_type", defaultPayment));
+        Spinner stock = accountSpinnerField(body, "Stok *", new String[]{"Satılıb", "Satılmayıb"}, record.optString("stock_status", defaultStock));
 
         TextView note = text("Satılıb seçilərsə ad soyad, telefon və satış tarixi məcburidir.", 12, MUTED, false);
         note.setPadding(dp(4), dp(4), dp(4), dp(10));
         body.addView(note);
 
-        Button save = button(editing ? "Dəyişiklikləri yadda saxla" : "Hesabı əlavə et", GREEN, Color.WHITE);
+        Button save = button("Dəyişiklikləri yadda saxla", GREEN, Color.WHITE);
         body.addView(save);
         save.setOnClickListener(v -> {
             JSONObject payload = new JSONObject();
             try {
-                payload.put("id", editing ? record.optInt("id", 0) : 0);
+                payload.put("id", record.optInt("id", 0));
                 payload.put("game_name", game.getText().toString());
                 payload.put("account_type", String.valueOf(type.getSelectedItem()));
                 payload.put("email", email.getText().toString());
@@ -3415,11 +3432,63 @@ public class MainActivity extends Activity {
                 payload.put("stock_status", String.valueOf(stock.getSelectedItem()));
             } catch (Exception ignored) {}
             postAccountSalesJson("/save", payload, result -> {
-                if (result.optInt("auto_universal_created", 0) == 1) toast("Hesab əlavə edildi və Universal versiya avtomatik yaradıldı.");
-                else toast(editing ? "Hesab yeniləndi." : "Hesab əlavə edildi.");
+                toast("Hesab yeniləndi.");
                 showAccountSales("accounts");
             });
         });
+    }
+
+    private void showAccountSalesCreateTypeDialog(String gameName, String email, String price, String console) {
+        String game = gameName == null ? "" : gameName.trim();
+        String mail = email == null ? "" : email.trim();
+        String amount = price == null ? "" : price.trim();
+        String consoleName = console == null ? "" : console.trim();
+        if (game.isEmpty()) {
+            toast("Oyunun adını daxil et.");
+            return;
+        }
+        if (mail.isEmpty()) {
+            toast("E-mail daxil et.");
+            return;
+        }
+        if (amount.isEmpty()) {
+            toast("Qiyməti daxil et.");
+            return;
+        }
+
+        String[] types = {"Online", "Universal", "Offline"};
+        boolean[] checked = {false, false, false};
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Hesab növünü seç")
+                .setMultiChoiceItems(types, checked, (d, which, isChecked) -> checked[which] = isChecked)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yarat", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            JSONArray selectedTypes = new JSONArray();
+            for (int i = 0; i < types.length; i++) {
+                if (checked[i]) selectedTypes.put(types[i]);
+            }
+            if (selectedTypes.length() == 0) {
+                toast("Ən azı bir hesab növü seç.");
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("game_name", game);
+                payload.put("email", mail);
+                payload.put("price", amount);
+                payload.put("console", consoleName);
+                payload.put("account_types", selectedTypes);
+            } catch (Exception ignored) {}
+            dialog.dismiss();
+            postAccountSalesJson("/create-accounts", payload, result -> {
+                int created = result.optInt("created_count", selectedTypes.length());
+                toast(created + " hesab yaradıldı. Hamısı Satılmayıb kimi əlavə edildi.");
+                showAccountSales("accounts");
+            });
+        }));
+        dialog.show();
     }
 
     private String accountSalesDateForDisplay(String value) {

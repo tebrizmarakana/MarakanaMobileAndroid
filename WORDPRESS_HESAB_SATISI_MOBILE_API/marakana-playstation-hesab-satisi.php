@@ -3,7 +3,7 @@
  * Plugin Name: Marakana Playstation Hesab Satışı
  * Plugin URI: https://marakana.local/
  * Description: Playstation oyun hesablarının satışı, stok, müştəri, ödəniş və geniş axtarış idarəetməsi üçün professional Marakana plugin.
- * Version: 1.0.72
+ * Version: 1.0.73
  * Author: Marakana
  * Text Domain: marakana-playstation-hesab-satisi
  * Requires PHP: 7.4
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
     final class Marakana_Playstation_Hesab_Satisi_100
     {
-        const VERSION = '1.0.72';
+        const VERSION = '1.0.73';
         const DB_VERSION = '1.0.4';
         const OPTION_KEY = 'mara_account_sale_settings';
         const DB_OPTION_KEY = 'mara_account_sale_db_version';
@@ -1277,6 +1277,11 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'callback' => array($this, 'rest_mobile_save'),
                 'permission_callback' => array($this, 'rest_mobile_permission'),
             ));
+            register_rest_route($namespace, '/create-accounts', array(
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => array($this, 'rest_mobile_create_accounts'),
+                'permission_callback' => array($this, 'rest_mobile_permission'),
+            ));
             register_rest_route($namespace, '/delete', array(
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => array($this, 'rest_mobile_delete'),
@@ -1581,6 +1586,80 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'id' => $id,
                 'record' => is_array($record) ? $this->mobile_record_payload($record) : null,
                 'auto_universal_created' => $auto_universal_created ? 1 : 0,
+            ));
+        }
+
+        public function rest_mobile_create_accounts($request)
+        {
+            global $wpdb;
+            $this->create_or_update_table();
+            $this->repair_table_schema();
+            $input = $request->get_json_params();
+            if (!is_array($input)) $input = array();
+
+            $types = isset($input['account_types']) && is_array($input['account_types']) ? $input['account_types'] : array();
+            $allowed_types = array('Online', 'Universal', 'Offline');
+            $selected_types = array();
+            foreach ($types as $type) {
+                $type = sanitize_text_field((string) $type);
+                if (in_array($type, $allowed_types, true) && !in_array($type, $selected_types, true)) {
+                    $selected_types[] = $type;
+                }
+            }
+            if (empty($selected_types)) {
+                return new WP_Error('mara_account_sale_mobile_types_required', 'Ən azı bir hesab növü seçilməlidir.', array('status' => 400));
+            }
+
+            $table = $this->table_name();
+            $now = current_time('mysql');
+            $formats = array('%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');
+            $created_ids = array();
+            $created_types = array();
+            $wpdb->query('START TRANSACTION');
+
+            foreach ($selected_types as $type) {
+                $row_input = array(
+                    'game_name' => isset($input['game_name']) ? $input['game_name'] : '',
+                    'account_type' => $type,
+                    'email' => isset($input['email']) ? $input['email'] : '',
+                    'price' => isset($input['price']) ? $input['price'] : '',
+                    'console' => isset($input['console']) ? $input['console'] : '',
+                    'customer_name' => '',
+                    'phone' => '',
+                    'sale_date' => '',
+                    'payment_type' => 'Nağd',
+                    'stock_status' => 'Satılmayıb',
+                );
+                $errors = array();
+                $data = $this->sanitize_mobile_record_data($row_input, $errors);
+                if (!empty($errors)) {
+                    $wpdb->query('ROLLBACK');
+                    return new WP_Error('mara_account_sale_mobile_create_validation', implode(' ', $errors), array('status' => 400));
+                }
+                $data['customer_name'] = '';
+                $data['phone'] = '';
+                $data['sale_date'] = null;
+                $data['payment_type'] = 'Nağd';
+                $data['stock_status'] = 'Satılmayıb';
+                $data['created_at'] = $now;
+                $data['updated_at'] = $now;
+
+                $inserted = $wpdb->insert($table, $data, $formats);
+                if ($inserted === false) {
+                    $wpdb->query('ROLLBACK');
+                    return new WP_Error('mara_account_sale_mobile_create_failed', 'Hesab yaradılarkən xəta baş verdi.', array('status' => 500));
+                }
+                $created_ids[] = (int) $wpdb->insert_id;
+                $created_types[] = $type;
+            }
+
+            $wpdb->query('COMMIT');
+            return rest_ensure_response(array(
+                'ok' => true,
+                'created_count' => count($created_ids),
+                'created_ids' => $created_ids,
+                'created_types' => $created_types,
+                'stock_status' => 'Satılmayıb',
             ));
         }
 

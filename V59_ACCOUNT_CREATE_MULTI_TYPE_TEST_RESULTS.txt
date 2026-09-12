@@ -1,0 +1,41 @@
+Marakana Mobile v59 — Yeni hesab yarat / çoxlu növ testi
+
+PASS - versionCode 59
+PASS - versionName v59
+PASS - workflow name v59
+PASS - workflow release apk v59
+PASS - workflow artifact v59
+PASS - main button renamed
+PASS - old button absent
+PASS - new screen title
+PASS - new create form game
+PASS - new create form email
+PASS - new create form price
+PASS - new create form console
+PASS - new create branch
+PASS - create button text
+PASS - type dialog helper
+PASS - three types
+PASS - multi choice enabled
+PASS - at least one validation
+PASS - batch endpoint mobile
+PASS - editing type remains
+PASS - editing customer remains
+PASS - editing date remains
+PASS - editing payment remains
+PASS - editing stock remains
+PASS - plugin v1.0.73 header
+PASS - plugin v1.0.73 const
+PASS - route create accounts
+PASS - handler create accounts
+PASS - handler allowed 3 types
+PASS - handler forces unsold
+PASS - handler clears customer
+PASS - handler clears phone
+PASS - handler clears sale date
+PASS - handler returns count
+PASS - handler transaction begin
+PASS - handler transaction rollback
+PASS - handler transaction commit
+
+TOTAL: 37/37 PASS
