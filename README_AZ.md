@@ -1,12 +1,11 @@
-# MarakanaMobile v86 — Oyun seçimində bir kliklə yarat + axtarış təmizlə
+# MarakanaMobile v89 — Bütün axtarış xanalarında X təmizlə düyməsi
 
-- `Yeni hesab yarat` içində `Oyunun adı` seçim pəncərəsi yeniləndi.
-- Axtarışda uyğun oyun tapılmadıqda görünən **`Yeni oyun yarat`** düyməsi artıq əlavə pəncərə açmır; kliklənən kimi axtarışdakı adı dərhal yaradır.
-- Tək oyun rejimində yeni oyun yaradılan kimi avtomatik seçilir və pəncərə bağlanır.
-- `Bundle` rejimində yeni oyun yaradılan kimi avtomatik Bundle seçiminə əlavə olunur.
-- Axtarış xanasına kiçik **`✕`** təmizləmə düyməsi əlavə edildi; klikləndikdə mətn dərhal silinir.
-- `versionCode 86`
-- `versionName 3.4.63-native-v86`
+- Tətbiqdə `axtar` tipli bütün axtarış xanalarına sağ tərəfdə kiçik **X / clear** düyməsi əlavə edildi.
+- Xanada mətn olduqda bu ikon görünür; klikləyəndə yazı dərhal təmizlənir.
+- Bu qayda Hesab Satışı, Müştəri, Oyun seçimi, Müştəri seçimi, İcarə, Borc Dəftəri və digər axtarış sahələrinə avtomatik tətbiq olunur.
+- Təmizləmə davranışı proqram daxilində ümumi helper kimi əlavə edildiyi üçün sonradan açılan digər `axtar` xanalarında da işləyir.
+- `versionCode 89`
+- `versionName 3.4.66-native-v89`
 
 ---
 

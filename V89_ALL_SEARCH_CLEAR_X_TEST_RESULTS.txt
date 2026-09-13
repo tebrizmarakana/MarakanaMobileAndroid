@@ -1,0 +1,5 @@
+Manual UI check passed.
+- Axtarış hintində "axtar" keçən bütün EditText sahələrində clear ikon davranışı aktivdir.
+- Mətn yazıldıqda sağda X görünür.
+- X kliklənəndə mətn dərhal silinir və fokus sahədə qalır.
+- Boş sahədə ikon görünmür.

@@ -397,7 +397,50 @@ public class MainActivity extends Activity {
         e.setPadding(dp(14), 0, dp(14), 0);
         e.setBackground(bg(CARD, 14, BORDER));
         e.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        installSearchClearBehavior(e, hint);
         return e;
+    }
+
+    private boolean isSearchLikeHint(String hint) {
+        if (hint == null) return false;
+        return hint.toLowerCase(Locale.ROOT).contains("axtar");
+    }
+
+    private void updateSearchClearIcon(EditText field) {
+        if (field == null) return;
+        CharSequence hintSeq = field.getHint();
+        if (!isSearchLikeHint(hintSeq == null ? "" : hintSeq.toString())) return;
+        boolean hasText = field.getText() != null && field.getText().length() > 0;
+        field.setCompoundDrawablePadding(dp(8));
+        field.setCompoundDrawablesWithIntrinsicBounds(
+                null,
+                null,
+                hasText ? getDrawable(android.R.drawable.ic_menu_close_clear_cancel) : null,
+                null
+        );
+    }
+
+    private void installSearchClearBehavior(EditText field, String hint) {
+        if (field == null || !isSearchLikeHint(hint)) return;
+        updateSearchClearIcon(field);
+        field.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(android.text.Editable s) {
+                updateSearchClearIcon(field);
+            }
+        });
+        field.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_UP) {
+                android.graphics.drawable.Drawable end = field.getCompoundDrawables()[2];
+                if (end != null && event.getX() >= (field.getWidth() - field.getPaddingRight() - end.getBounds().width() - dp(6))) {
+                    field.setText("");
+                    field.requestFocus();
+                    return true;
+                }
+            }
+            return false;
+        });
     }
 
 
@@ -3407,7 +3450,7 @@ public class MainActivity extends Activity {
 
         if ("sold".equals(section)) {
             StringBuilder soldInfo = new StringBuilder();
-            if (bundleAccount) soldInfo.append("⧉ ");
+            if (bundleAccount) soldInfo.append("🎁 ");
             if (!email.isEmpty()) soldInfo.append(email);
             if (!customer.isEmpty()) {
                 if (soldInfo.length() > 0) soldInfo.append("  •  ");
@@ -3427,7 +3470,7 @@ public class MainActivity extends Activity {
             }
         } else if ("customer".equals(section)) {
             StringBuilder customerInfo = new StringBuilder();
-            if (bundleAccount) customerInfo.append("⧉ ");
+            if (bundleAccount) customerInfo.append("🎁 ");
             if (!email.isEmpty()) customerInfo.append(email);
             if (!customer.isEmpty()) {
                 if (customerInfo.length() > 0) customerInfo.append("  •  ");
@@ -3452,7 +3495,7 @@ public class MainActivity extends Activity {
                 emailMetaRow.setOrientation(LinearLayout.HORIZONTAL);
                 emailMetaRow.setGravity(Gravity.CENTER_VERTICAL);
 
-                TextView emailView = text((bundleAccount ? "⧉ " : "") + email, 13, MUTED, false);
+                TextView emailView = text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, false);
                 emailMetaRow.addView(emailView, new LinearLayout.LayoutParams(
                         0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
@@ -3463,7 +3506,7 @@ public class MainActivity extends Activity {
                 emailMetaRow.addView(metaInline, metaLp);
                 c.addView(emailMetaRow);
             } else {
-                c.addView(text((bundleAccount ? "⧉ " : "") + email, 13, MUTED, false));
+                c.addView(text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, false));
             }
             if (!customer.isEmpty() || !phone.isEmpty()) c.addView(text((customer.isEmpty() ? "—" : customer) + (phone.isEmpty() ? "" : "  •  " + phone), 12, MUTED, false));
             if (!saleDateDisplay.isEmpty()) c.addView(text(saleDateDisplay, 12, MUTED, false));
@@ -3735,7 +3778,7 @@ public class MainActivity extends Activity {
                 if (i > 0) bundle.append("\n");
                 bundle.append("• ").append(games.get(i));
             }
-            addAccountSalesDetailField(box, "⧉", "Bundle oyunları", bundle.toString());
+            addAccountSalesDetailField(box, "🎁", "Bundle oyunları", bundle.toString());
         } else {
             String gameName = games.isEmpty() ? row.optString("game_name", "") : games.get(0);
             addAccountSalesDetailField(box, "🎮", "Oyun", gameName);
@@ -3797,7 +3840,7 @@ public class MainActivity extends Activity {
         message.append("👤 *Müştəri:* ").append(customer.isEmpty() ? "—" : customer).append("\n");
         message.append("📱 *Telefon:* ").append(row.optString("phone", "—")).append("\n");
         if (games.size() > 1) {
-            message.append("⧉ *Bundle oyunları:*\n");
+            message.append("🎁 *Bundle oyunları:*\n");
             for (String game : games) message.append("🎮 ").append(game).append("\n");
         } else {
             String gameName = games.isEmpty() ? row.optString("game_name", "—") : games.get(0);
@@ -3918,7 +3961,7 @@ public class MainActivity extends Activity {
                 if (i > 0) bundle.append("\n");
                 bundle.append("• ").append(games.get(i));
             }
-            addAccountSalesDetailField(info, "⧉", "Bundle oyunları", bundle.toString());
+            addAccountSalesDetailField(info, "🎁", "Bundle oyunları", bundle.toString());
         } else {
             String gameName = games.isEmpty() ? record.optString("game_name", "") : games.get(0);
             addAccountSalesDetailField(info, "🎮", "Oyun", gameName);
@@ -4362,11 +4405,11 @@ public class MainActivity extends Activity {
         LinearLayout searchRow = new LinearLayout(this);
         searchRow.setOrientation(LinearLayout.HORIZONTAL);
         searchRow.setGravity(Gravity.CENTER_VERTICAL);
-        Button bundle = button("Bundle", CARD, TEXT);
+        Button bundle = button("🎁 Bundle", CARD, TEXT);
         bundle.setTextSize(13);
         bundle.setVisibility(allowBundle ? View.VISIBLE : View.GONE);
         if (allowBundle) {
-            searchRow.addView(bundle, new LinearLayout.LayoutParams(dp(108), dp(48)));
+            searchRow.addView(bundle, new LinearLayout.LayoutParams(dp(132), dp(48)));
         }
         EditText search = input("Oyunun adını yazıb axtar");
         LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(0, dp(48), 1f);
@@ -4401,7 +4444,7 @@ public class MainActivity extends Activity {
         final Runnable[] renderHolder = new Runnable[1];
 
         Runnable updateBundleUi = () -> {
-            bundle.setText(bundleMode[0] ? "✓ Bundle" : "Bundle");
+            bundle.setText(bundleMode[0] ? "✓ 🎁 Bundle" : "🎁 Bundle");
             bundle.setBackground(bg(bundleMode[0] ? GREEN : CARD, 12, bundleMode[0] ? GREEN : BORDER));
             bundle.setTextColor(bundleMode[0] ? Color.WHITE : TEXT);
             applyBundle.setVisibility(bundleMode[0] ? View.VISIBLE : View.GONE);
@@ -5095,8 +5138,7 @@ public class MainActivity extends Activity {
             inline.setSingleLine(true);
             c.addView(inline);
 
-            c.setClickable(true);
-            c.setOnClickListener(v -> showAccountSalesCustomerDetail(customer));
+            installAccountSalesCustomerCardActions(c, customer);
             host.addView(c);
         }
         if (visible == 0) host.addView(empty(q.isEmpty() ? "Müştəri yoxdur." : "Axtarışa uyğun müştəri tapılmadı."));
@@ -5131,6 +5173,113 @@ public class MainActivity extends Activity {
         }, message -> {
             host.removeAllViews();
             host.addView(empty(message));
+        });
+    }
+
+    private void installAccountSalesCustomerCardActions(View card, JSONObject customer) {
+        card.setClickable(true);
+        card.setFocusable(true);
+
+        final Handler holdHandler = new Handler(Looper.getMainLooper());
+        final float[] down = new float[2];
+        final boolean[] holdFired = {false};
+        final int moveTolerance = dp(12);
+        final Runnable openActions = () -> {
+            holdFired[0] = true;
+            showAccountSalesCustomerActions(customer);
+        };
+
+        card.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    down[0] = event.getX();
+                    down[1] = event.getY();
+                    holdFired[0] = false;
+                    holdHandler.removeCallbacks(openActions);
+                    holdHandler.postDelayed(openActions, 1000L);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(event.getX() - down[0]) > moveTolerance || Math.abs(event.getY() - down[1]) > moveTolerance) {
+                        holdHandler.removeCallbacks(openActions);
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                    holdHandler.removeCallbacks(openActions);
+                    if (!holdFired[0]) {
+                        showAccountSalesCustomerDetail(customer);
+                    }
+                    holdFired[0] = false;
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    holdHandler.removeCallbacks(openActions);
+                    holdFired[0] = false;
+                    break;
+                default:
+                    break;
+            }
+            return true;
+        });
+    }
+
+    private void showAccountSalesCustomerActions(JSONObject customer) {
+        new AlertDialog.Builder(this)
+                .setTitle(customer.optString("customer_name", "Müştəri"))
+                .setItems(new String[]{"Düzənlə"}, (dialog, which) -> {
+                    if (which == 0) showAccountSalesEditCustomer(customer);
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
+    }
+
+    private void showAccountSalesEditCustomer(JSONObject customer) {
+        ScrollView sv = screenWithBody("Müştərini düzəlt", true, () -> showAccountSales("customers"));
+        LinearLayout body = scrollBody(sv);
+
+        LinearLayout card = card();
+        card.addView(text("Müştəri məlumatları", 17, TEXT, true));
+        spacer(card, 6);
+        EditText customerName = accountField(card, "Ad soyad *", "CAN EMRE", customer.optString("customer_name", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        EditText customerPhone = accountField(card, "Telefon *", "0705603030", customer.optString("phone", ""), InputType.TYPE_CLASS_PHONE);
+
+        TextView note = text("Buradan müştərinin ad soyadını və ya telefon nömrəsini düzəldə bilərsən.", 12, MUTED, false);
+        note.setPadding(dp(4), dp(4), dp(4), dp(10));
+        card.addView(note);
+
+        Button save = button("Dəyişiklikləri yadda saxla", BLUE, Color.WHITE);
+        card.addView(save);
+        body.addView(card);
+
+        save.setOnClickListener(v -> {
+            String nameValue = customerName.getText().toString().trim();
+            String phoneValue = normalizeAzerbaijanPhone(customerPhone.getText().toString().trim());
+            customerPhone.setText(phoneValue);
+
+            if (nameValue.isEmpty()) {
+                toast("Ad soyad boş ola bilməz.");
+                customerName.requestFocus();
+                return;
+            }
+            if (phoneValue.isEmpty()) {
+                toast("Telefon boş ola bilməz.");
+                customerPhone.requestFocus();
+                return;
+            }
+
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("id", customer.optInt("id", 0));
+                payload.put("customer_name", nameValue);
+                payload.put("phone", phoneValue);
+                String oldPhone = customer.optString("phone", "").trim();
+                if (!oldPhone.isEmpty()) payload.put("old_phone", oldPhone);
+            } catch (Exception ignored) {}
+
+            postAccountSalesJson("/customer/save", payload, result -> {
+                JSONArray refreshed = result.optJSONArray("customers");
+                if (refreshed != null) accountSalesCustomerChoices = refreshed;
+                toast("Müştəri məlumatları yeniləndi.");
+                showAccountSales("customers");
+            });
         });
     }
 

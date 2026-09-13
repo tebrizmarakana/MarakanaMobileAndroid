@@ -1,0 +1,5 @@
+Manual UI check passed.
+- Müştəri kartına normal klik detal səhifəsini açır.
+- 1 saniyə hold edəndə Düzənlə menyusu açılır.
+- Düzənlə ekranında ad soyad və telefon dəyişdirilir.
+- Telefon +994 formatına avtomatik çevrilir.

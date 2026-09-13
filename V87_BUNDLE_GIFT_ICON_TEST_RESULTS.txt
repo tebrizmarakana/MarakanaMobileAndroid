@@ -1,0 +1,5 @@
+Manual UI check passed.
+- Bundle hesab markerləri 🎁 kimi görünür.
+- Hesab detallarında Bundle oyunları sahəsi 🎁 ikonu ilə göstərilir.
+- Məlumat göndərmə mətnində Bundle sətiri 🎁 ilə başlayır.
+- Oyun seçim pəncərəsində Bundle düyməsi 🎁 Bundle kimi görünür.
