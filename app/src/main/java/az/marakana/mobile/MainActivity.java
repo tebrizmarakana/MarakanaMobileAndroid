@@ -3308,18 +3308,35 @@ public class MainActivity extends Activity {
         LinearLayout gameColumn = new LinearLayout(this);
         gameColumn.setOrientation(LinearLayout.VERTICAL);
         boolean bundleAccount = cardGames.size() > 1;
+        boolean compactStatusInTitle = "sold".equals(section) || "unsold".equals(section) || "rental".equals(section);
+
+        String firstGameName = cardGames.isEmpty() ? row.optString("game_name", "Hesab") : cardGames.get(0);
+        LinearLayout firstGameRow = new LinearLayout(this);
+        firstGameRow.setOrientation(LinearLayout.HORIZONTAL);
+        firstGameRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView firstGameTitle = text(firstGameName, bundleAccount ? 15 : 16, TEXT, true);
+        firstGameRow.addView(firstGameTitle, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        if (compactStatusInTitle) {
+            LinearLayout metaInline = buildAccountSalesInlineMeta(row);
+            LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            metaLp.setMargins(dp(6), 0, 0, 0);
+            firstGameRow.addView(metaInline, metaLp);
+        }
+        gameColumn.addView(firstGameRow, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
         if (bundleAccount) {
-            for (String gameName : cardGames) {
-                TextView gameLine = text(gameName, 15, TEXT, true);
+            spacer(gameColumn, 2);
+            for (int gameIndex = 1; gameIndex < cardGames.size(); gameIndex++) {
+                TextView gameLine = text(cardGames.get(gameIndex), 15, TEXT, true);
                 gameColumn.addView(gameLine, new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-                spacer(gameColumn, 2);
+                if (gameIndex < cardGames.size() - 1) spacer(gameColumn, 2);
             }
-        } else {
-            String singleGame = cardGames.isEmpty() ? row.optString("game_name", "Hesab") : cardGames.get(0);
-            TextView title = text(singleGame, 16, TEXT, true);
-            gameColumn.addView(title, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
         LinearLayout.LayoutParams gameLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         gameLp.setMargins(0, 0, dp(8), 0);
@@ -3333,7 +3350,9 @@ public class MainActivity extends Activity {
 
         String email = row.optString("email", "");
         c.addView(text((bundleAccount ? "⧉ " : "") + email, 13, MUTED, false));
-        c.addView(text(row.optString("account_type", "") + "  •  " + row.optString("console", "") + "  •  " + row.optString("stock_status", ""), 12, TEXT, true));
+        if (!compactStatusInTitle) {
+            c.addView(buildAccountSalesMetaLine(row));
+        }
         String customer = row.optString("customer_name", "").trim();
         String phone = row.optString("phone", "").trim();
         if (!customer.isEmpty() || !phone.isEmpty()) c.addView(text((customer.isEmpty() ? "—" : customer) + (phone.isEmpty() ? "" : "  •  " + phone), 12, MUTED, false));
@@ -3353,6 +3372,61 @@ public class MainActivity extends Activity {
         spacer(c, 8);
         installAccountSalesRecordCardActions(c, row, settings, section);
         return c;
+    }
+
+    private LinearLayout buildAccountSalesInlineMeta(JSONObject row) {
+        LinearLayout line = new LinearLayout(this);
+        line.setOrientation(LinearLayout.HORIZONTAL);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+
+        String type = row.optString("account_type", "").trim();
+        String console = row.optString("console", "").trim();
+        String status = row.optString("stock_status", "").trim();
+
+        StringBuilder prefix = new StringBuilder();
+        if (!type.isEmpty()) prefix.append(type);
+        if (!console.isEmpty()) {
+            if (prefix.length() > 0) prefix.append(" • ");
+            prefix.append(console);
+        }
+        if (prefix.length() > 0 && !status.isEmpty()) prefix.append(" • ");
+
+        if (prefix.length() > 0) {
+            line.addView(text(prefix.toString(), 10, MUTED, true));
+        }
+        if (!status.isEmpty()) {
+            line.addView(text(status, 10, accountSalesStatusColor(status), true));
+        }
+        return line;
+    }
+
+    private LinearLayout buildAccountSalesMetaLine(JSONObject row) {
+        LinearLayout line = new LinearLayout(this);
+        line.setOrientation(LinearLayout.HORIZONTAL);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+
+        String type = row.optString("account_type", "").trim();
+        String console = row.optString("console", "").trim();
+        String status = row.optString("stock_status", "").trim();
+
+        StringBuilder prefix = new StringBuilder();
+        if (!type.isEmpty()) prefix.append(type);
+        if (!console.isEmpty()) {
+            if (prefix.length() > 0) prefix.append("  •  ");
+            prefix.append(console);
+        }
+        if (prefix.length() > 0 && !status.isEmpty()) prefix.append("  •  ");
+
+        if (prefix.length() > 0) line.addView(text(prefix.toString(), 12, TEXT, true));
+        if (!status.isEmpty()) line.addView(text(status, 12, accountSalesStatusColor(status), true));
+        return line;
+    }
+
+    private int accountSalesStatusColor(String status) {
+        if ("Satılıb".equalsIgnoreCase(status)) return Color.rgb(198, 40, 40);
+        if ("Satılmayıb".equalsIgnoreCase(status)) return GREEN;
+        if ("İcarə".equalsIgnoreCase(status)) return ORANGE;
+        return TEXT;
     }
 
     private void installAccountSalesRecordCardActions(View card, JSONObject row, JSONObject settings, String section) {
@@ -3479,7 +3553,7 @@ public class MainActivity extends Activity {
             LinearLayout copy = accountSalesActionRow(android.R.drawable.ic_menu_add,
                     "Kopyala", "Eyni hesabı müştəri və satış tarixi boş Satılmayan kimi yarat", BLUE, () -> {
                         dismiss.run();
-                        copyAccountSaleAsUnsold(row);
+                        confirmCopyAccountSaleAsUnsold(row);
                     });
             box.addView(copy);
             spacer(box, 8);
@@ -3633,6 +3707,17 @@ public class MainActivity extends Activity {
         message.append("\n🎮 *Marakana Game Center*");
 
         openWhatsAppChooser(phone, message.toString());
+    }
+
+    private void confirmCopyAccountSaleAsUnsold(JSONObject row) {
+        String title = row.optString("game_name", "Hesab").trim();
+        if (title.isEmpty()) title = "Hesab";
+        new AlertDialog.Builder(this)
+                .setTitle("Hesabı kopyala")
+                .setMessage(title + " hesabının Satılmayan nüsxəsi yaradılsın?\n\nMüştəri məlumatları və satış tarixi boş qalacaq.")
+                .setNegativeButton("Xeyr", null)
+                .setPositiveButton("Kopyala", (d, w) -> copyAccountSaleAsUnsold(row))
+                .show();
     }
 
     private void copyAccountSaleAsUnsold(JSONObject row) {

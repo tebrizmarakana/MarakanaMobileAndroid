@@ -1,4 +1,25 @@
-# Marakana Mobile Native v76
+# Marakana Mobile Native v78
+
+## v78 — Status rəngləri və başlıq sətrində göstəricilər
+
+- `Satılıb` sözü qırmızı rəngdə göstərilir.
+- `Satılmayıb` sözü yaşıl rəngdə göstərilir.
+- `İcarə` statusu narıncı rəngdə qalır.
+- Satılanlar / Satılmayanlar / İcarə bölmələrində `Universal • PS5 • Satılıb` tipli göstərici artıq oyun adının olduğu üst sətirdə göstərilir.
+- Bundle hesabda göstərici birinci oyun adının sətirində göstərilir.
+
+
+## v77 — Satılan hesabı kopyalamadan əvvəl təsdiq
+
+- **Satılanlar → Kopyala** seçiləndə artıq hesab dərhal kopyalanmır.
+- Əvvəlcə **Hesabı kopyala** təsdiqləmə pəncərəsi açılır.
+- Pəncərədə yeni nüsxənin **Satılmayan** kimi yaradılacağı, müştəri məlumatları və satış tarixinin boş qalacağı göstərilir.
+- **Kopyala** basıldıqda əvvəlki v76 qaydası ilə yeni Satılmayan nüsxə yaradılır.
+- **Xeyr** basıldıqda heç bir dəyişiklik edilmir.
+- `versionCode 78`
+- `versionName 3.4.55-native-v78`
+- Release APK: `MarakanaMobile-v78-release.apk`
+
 
 ## v76 — Satılan hesabı Satılmayan kimi kopyala
 
