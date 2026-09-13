@@ -1,12 +1,11 @@
-# MarakanaMobile v84 — Sat zamanı axtarışdan yeni müştəri yarat
+# MarakanaMobile v85 — Telefon nömrəsi avtomatik +994 formatı
 
-- `Satılmayanlar → Sat` axınında `Ad soyad` sahəsinə klikləyəndə açılan müştəri seçim pəncərəsi yeniləndi.
-- Yazılan ada görə uyğun müştəri tapılmadıqda artıq **`Yeni müştəri yarat`** düyməsi görünür.
-- Bu düyməyə klikləyəndə kiçik yaratma pəncərəsi açılır; yeni müştərinin adı və nömrəsi daxil edilərək yaradılır.
-- Yaradıldıqdan sonra həmin yeni müştəri avtomatik seçilir və `Ad soyad` + `Telefon` xanaları dolur.
-- Dəyişiklik yalnız `Sat` axınında tətbiq olunur; digər bölmələrin davranışı saxlanılıb.
-- `versionCode 84`
-- `versionName 3.4.61-native-v84`
+- Telefon yazılan sahələrdə `0705603030` və ya `705603030` tipli giriş artıq avtomatik `+994705603030` formatına çevrilir.
+- Bu qayda Hesab Satışı daxilindəki satış, düzəliş, yeni müştəri yarat, sürətli müştəri yarat formalarında tətbiq olunur.
+- Eyni telefon formatlama qaydası Borc Dəftərində yeni borclu yarat pəncərəsində də aktivdir.
+- Telefon sahəsi fokusdan çıxanda və yadda saxlayanda da format avtomatik düzəldilir.
+- `versionCode 85`
+- `versionName 3.4.62-native-v85`
 
 ---
 

@@ -400,6 +400,57 @@ public class MainActivity extends Activity {
         return e;
     }
 
+
+    private String normalizeAzerbaijanPhone(String value) {
+        String raw = value == null ? "" : value.trim();
+        if (raw.isEmpty()) return "";
+        String digits = raw.replaceAll("[^0-9]", "");
+        if (digits.startsWith("994") && digits.length() == 12) {
+            return "+994" + digits.substring(3);
+        }
+        if (digits.startsWith("0") && digits.length() == 10) {
+            return "+994" + digits.substring(1);
+        }
+        if (!digits.startsWith("0") && digits.length() == 9) {
+            return "+994" + digits;
+        }
+        return raw;
+    }
+
+    private void applyPhoneNormalization(EditText field) {
+        if (field == null) return;
+        String current = field.getText() == null ? "" : field.getText().toString();
+        String normalized = normalizeAzerbaijanPhone(current);
+        if (!normalized.equals(current)) {
+            field.setText(normalized);
+            field.setSelection(field.getText().length());
+        }
+    }
+
+    private void installPhoneAutoFormat(EditText field) {
+        if (field == null) return;
+        applyPhoneNormalization(field);
+        final boolean[] selfChange = new boolean[]{false};
+        field.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(android.text.Editable s) {
+                if (selfChange[0]) return;
+                String current = s == null ? "" : s.toString();
+                String normalized = normalizeAzerbaijanPhone(current);
+                if (!normalized.equals(current) && normalized.startsWith("+994")) {
+                    selfChange[0] = true;
+                    field.setText(normalized);
+                    field.setSelection(field.getText().length());
+                    selfChange[0] = false;
+                }
+            }
+        });
+        field.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) applyPhoneNormalization(field);
+        });
+    }
+
     private LinearLayout card() {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
@@ -3925,7 +3976,8 @@ public class MainActivity extends Activity {
         final Spinner rentalUnitField = rentalUnit;
         save.setOnClickListener(v -> {
             String customerValue = customer.getText().toString().trim();
-            String phoneValue = phone.getText().toString().trim();
+            String phoneValue = normalizeAzerbaijanPhone(phone.getText().toString().trim());
+            phone.setText(phoneValue);
             if (customerValue.isEmpty() || phoneValue.isEmpty()) {
                 toast((rental ? "İcarə" : "Satış") + " üçün müştəri adı və telefon məcburidir.");
                 return;
@@ -4093,7 +4145,9 @@ public class MainActivity extends Activity {
                     payload.put("sale_date", "");
                 } else {
                     payload.put("customer_name", customer.getText().toString());
-                    payload.put("phone", phone.getText().toString());
+                    String normalizedPhone = normalizeAzerbaijanPhone(phone.getText().toString());
+                    phone.setText(normalizedPhone);
+                    payload.put("phone", normalizedPhone);
                     payload.put("sale_date", accountSalesDateForApi(date.getText().toString()));
                 }
                 // Ödəniş növü artıq UI-da yoxdur. Mövcud dəyəri yalnız köhnə WordPress
@@ -4842,6 +4896,7 @@ public class MainActivity extends Activity {
         box.addView(phoneLabel);
         EditText customerPhone = input("0705603030");
         customerPhone.setInputType(InputType.TYPE_CLASS_PHONE);
+        installPhoneAutoFormat(customerPhone);
         box.addView(customerPhone);
 
         final AlertDialog dialog = new AlertDialog.Builder(this)
@@ -4852,7 +4907,8 @@ public class MainActivity extends Activity {
                 .create();
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String nameValue = customerName.getText().toString().trim();
-            String phoneValue = customerPhone.getText().toString().trim();
+            String phoneValue = normalizeAzerbaijanPhone(customerPhone.getText().toString().trim());
+            customerPhone.setText(phoneValue);
             if (nameValue.isEmpty()) {
                 toast("Ad soyad boş ola bilməz.");
                 customerName.requestFocus();
@@ -4910,7 +4966,8 @@ public class MainActivity extends Activity {
 
         saveCustomer.setOnClickListener(v -> {
             String nameValue = customerName.getText().toString().trim();
-            String phoneValue = customerPhone.getText().toString().trim();
+            String phoneValue = normalizeAzerbaijanPhone(customerPhone.getText().toString().trim());
+            customerPhone.setText(phoneValue);
             if (nameValue.isEmpty()) {
                 toast("Ad soyad boş ola bilməz.");
                 customerName.requestFocus();
@@ -4938,7 +4995,10 @@ public class MainActivity extends Activity {
         body.addView(l);
         EditText e = input(hint);
         e.setInputType(inputType);
-        e.setText(value == null ? "" : value);
+        String initialValue = value == null ? "" : value;
+        if (inputType == InputType.TYPE_CLASS_PHONE) initialValue = normalizeAzerbaijanPhone(initialValue);
+        e.setText(initialValue);
+        if (inputType == InputType.TYPE_CLASS_PHONE) installPhoneAutoFormat(e);
         body.addView(e);
         spacer(body, 10);
         return e;
@@ -5530,8 +5590,8 @@ public class MainActivity extends Activity {
     }
 
     private void createDebtorDialog(String category) {
-        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(6),dp(18),0); EditText name=input(category.equals("Firma")?"Firma adı":"Ad Soyad");box.addView(name); EditText phone=input("Telefon"); addDialogField(box,phone); EditText amount=input("İlkin borc (0 ola bilər)");amount.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);addDialogField(box,amount); EditText note=input("Qeyd");addDialogField(box,note);
-        new AlertDialog.Builder(this).setTitle("Yeni borclu • "+category).setView(box).setNegativeButton("Ləğv",null).setPositiveButton("Yarat",(d,w)->{ JSONObject p=new JSONObject();try{p.put("category",category);p.put("full_name",name.getText().toString());p.put("phone",phone.getText().toString());p.put("amount",amount.getText().toString());p.put("note",note.getText().toString());}catch(Exception ignored){} postJson("/api/mobile/debt/create",p,r->showDebt(category)); }).show();
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(6),dp(18),0); EditText name=input(category.equals("Firma")?"Firma adı":"Ad Soyad");box.addView(name); EditText phone=input("Telefon"); phone.setInputType(InputType.TYPE_CLASS_PHONE); installPhoneAutoFormat(phone); addDialogField(box,phone); EditText amount=input("İlkin borc (0 ola bilər)");amount.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);addDialogField(box,amount); EditText note=input("Qeyd");addDialogField(box,note);
+        new AlertDialog.Builder(this).setTitle("Yeni borclu • "+category).setView(box).setNegativeButton("Ləğv",null).setPositiveButton("Yarat",(d,w)->{ JSONObject p=new JSONObject();try{p.put("category",category);p.put("full_name",name.getText().toString());String normalizedPhone=normalizeAzerbaijanPhone(phone.getText().toString());phone.setText(normalizedPhone);p.put("phone",normalizedPhone);p.put("amount",amount.getText().toString());p.put("note",note.getText().toString());}catch(Exception ignored){} postJson("/api/mobile/debt/create",p,r->showDebt(category)); }).show();
     }
 
     private void addDialogField(LinearLayout box, EditText e) { LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(54));p.setMargins(0,dp(8),0,0);e.setLayoutParams(p);box.addView(e); }
