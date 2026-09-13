@@ -1,4 +1,13 @@
-# Marakana Mobile Native v71
+# Marakana Mobile Native v72
+
+## v72 — Hesab kartında tək klik + modern əməliyyat menyusu
+- Hesablar / Satılanlar / Satılmayanlar / İcarə bölmələrində hesab kartına artıq 1 saniyə basılı saxlamaq lazım deyil; bir dəfə klik menyunu açır.
+- Açılan menyu ikonlu, kart tipli və müasir görünüşə keçirildi.
+- Satılmayıb statusunda əvvəlki qayda saxlanır: Ətraflı məlumat və Məlumatı göndər göstərilmir.
+- `versionCode 72`
+- `versionName 3.4.49-native-v72`
+- Release APK: `MarakanaMobile-v72-release.apk`
+
 
 ## v71 — Hesab Satışı İcarə statusu
 - Hesab statusları: Satılıb / Satılmayıb / İcarə.

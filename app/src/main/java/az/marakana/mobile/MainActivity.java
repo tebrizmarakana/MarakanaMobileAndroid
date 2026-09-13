@@ -3351,27 +3351,33 @@ public class MainActivity extends Activity {
             if (!rentalEnds.isEmpty()) c.addView(text("Bitmə: " + rentalEnds, 11, MUTED, false));
         }
         spacer(c, 8);
-        installAccountSalesRecordHoldActions(c, row, settings, section);
+        installAccountSalesRecordCardActions(c, row, settings, section);
         return c;
     }
 
-    private void installAccountSalesRecordHoldActions(View card, JSONObject row, JSONObject settings, String section) {
-        final Handler holdHandler = new Handler(Looper.getMainLooper());
-        final float[] down = new float[2];
-        final boolean[] fired = {false};
-        final int moveTolerance = dp(12);
-        final Runnable openActions = () -> {
-            fired[0] = true;
-            showAccountSalesRecordActions(row, settings, section);
-        };
+    private void installAccountSalesRecordCardActions(View card, JSONObject row, JSONObject settings, String section) {
+        boolean tapToOpen = "accounts".equals(section) || "sold".equals(section) ||
+                "unsold".equals(section) || "rental".equals(section);
 
         card.setClickable(true);
+        card.setFocusable(true);
+        card.setOnTouchListener(null);
+
+        if (tapToOpen) {
+            card.setOnClickListener(v -> showAccountSalesRecordActions(row, settings, section));
+            return;
+        }
+
+        // Müştəri tarixçəsi kimi köhnə köməkçi görünüşlərdə əvvəlki 1 saniyəlik hold saxlanılır.
+        final Handler holdHandler = new Handler(Looper.getMainLooper());
+        final float[] down = new float[2];
+        final int moveTolerance = dp(12);
+        final Runnable openActions = () -> showAccountSalesRecordActions(row, settings, section);
         card.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     down[0] = event.getX();
                     down[1] = event.getY();
-                    fired[0] = false;
                     holdHandler.removeCallbacks(openActions);
                     holdHandler.postDelayed(openActions, 1000L);
                     return true;
@@ -3390,34 +3396,112 @@ public class MainActivity extends Activity {
         });
     }
 
+    private LinearLayout accountSalesActionRow(int iconRes, String label, String description, int iconColor, Runnable action) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(10), dp(12), dp(10));
+        row.setBackground(bg(Color.rgb(249, 251, 253), 16, BORDER));
+        row.setClickable(true);
+        row.setFocusable(true);
+
+        FrameLayout iconBox = new FrameLayout(this);
+        iconBox.setBackground(bg(Color.rgb(238, 244, 250), 13, Color.TRANSPARENT));
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(iconColor);
+        icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER);
+        iconBox.addView(icon, iconLp);
+        row.addView(iconBox, new LinearLayout.LayoutParams(dp(46), dp(46)));
+
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title = text(label, 15, TEXT, true);
+        TextView sub = text(description, 12, MUTED, false);
+        labels.addView(title);
+        labels.addView(sub);
+        LinearLayout.LayoutParams labelsLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        labelsLp.setMargins(dp(12), 0, 0, 0);
+        row.addView(labels, labelsLp);
+
+        TextView arrow = text("›", 27, MUTED, false);
+        arrow.setGravity(Gravity.CENTER);
+        row.addView(arrow, new LinearLayout.LayoutParams(dp(24), dp(46)));
+        row.setOnClickListener(v -> action.run());
+        return row;
+    }
+
     private void showAccountSalesRecordActions(JSONObject row, JSONObject settings, String section) {
-        String title = row.optString("game_name", "Hesab");
+        String title = row.optString("game_name", "Hesab").trim();
+        if (title.isEmpty()) title = "Hesab";
         boolean accountOrSoldSection = "accounts".equals(section) || "sold".equals(section) || "rental".equals(section);
         boolean unsoldStatus = "Satılmayıb".equalsIgnoreCase(row.optString("stock_status", "").trim());
         boolean detailActions = accountOrSoldSection && !unsoldStatus;
-        String[] items = detailActions
-                ? new String[]{"Düzənlə", "Ətraflı məlumat", "Məlumatı göndər", "Sil"}
-                : new String[]{"Düzənlə", "Sil"};
-        new AlertDialog.Builder(this)
-                .setTitle(title)
-                .setItems(items, (dialog, which) -> {
-                    if (!detailActions) {
-                        if (which == 0) showAccountSalesForm(row, settings);
-                        else if (which == 1) confirmDeleteAccountSale(row);
-                        return;
-                    }
-                    if (which == 0) {
-                        showAccountSalesForm(row, settings);
-                    } else if (which == 1) {
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(18), dp(18), dp(14));
+        box.setBackground(bg(CARD, 22, Color.TRANSPARENT));
+
+        TextView heading = text(title, 18, TEXT, true);
+        box.addView(heading);
+        TextView hint = text("Əməliyyat seç", 12, MUTED, false);
+        LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hintLp.setMargins(0, dp(4), 0, dp(14));
+        box.addView(hint, hintLp);
+
+        final AlertDialog[] dialogRef = new AlertDialog[1];
+        Runnable dismiss = () -> { if (dialogRef[0] != null) dialogRef[0].dismiss(); };
+
+        LinearLayout edit = accountSalesActionRow(android.R.drawable.ic_menu_edit,
+                "Düzənlə", "Hesab məlumatlarını dəyiş", BLUE, () -> {
+                    dismiss.run();
+                    showAccountSalesForm(row, settings);
+                });
+        box.addView(edit);
+        spacer(box, 8);
+
+        if (detailActions) {
+            LinearLayout detail = accountSalesActionRow(android.R.drawable.ic_menu_info_details,
+                    "Ətraflı məlumat", "Bütün hesab məlumatlarına bax", GREEN, () -> {
+                        dismiss.run();
                         showAccountSalesRecordDetail(row);
-                    } else if (which == 2) {
+                    });
+            box.addView(detail);
+            spacer(box, 8);
+
+            LinearLayout send = accountSalesActionRow(android.R.drawable.ic_menu_send,
+                    "Məlumatı göndər", "WhatsApp ilə müştəriyə göndər", Color.rgb(31, 154, 92), () -> {
+                        dismiss.run();
                         sendAccountSalesInfoWhatsApp(row);
-                    } else if (which == 3) {
-                        confirmDeleteAccountSale(row);
-                    }
-                })
-                .setNegativeButton("Bağla", null)
-                .show();
+                    });
+            box.addView(send);
+            spacer(box, 8);
+        }
+
+        LinearLayout delete = accountSalesActionRow(android.R.drawable.ic_menu_delete,
+                "Sil", "Hesabı bazadan sil", Color.rgb(190, 55, 55), () -> {
+                    dismiss.run();
+                    confirmDeleteAccountSale(row);
+                });
+        box.addView(delete);
+
+        TextView close = text("Bağla", 14, BLUE, true);
+        close.setGravity(Gravity.CENTER);
+        close.setPadding(0, dp(12), 0, dp(2));
+        close.setClickable(true);
+        close.setOnClickListener(v -> dismiss.run());
+        box.addView(close);
+
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(box).create();
+        dialogRef[0] = dialog;
+        dialog.setOnShowListener(d -> {
+            Window window = dialog.getWindow();
+            if (window != null) window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        });
+        dialog.show();
     }
 
     private void showAccountSalesRecordDetail(JSONObject row) {
