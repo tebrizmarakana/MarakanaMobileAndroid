@@ -3474,6 +3474,17 @@ public class MainActivity extends Activity {
             spacer(box, 8);
         }
 
+        boolean soldSection = "sold".equals(section) && "Satılıb".equalsIgnoreCase(row.optString("stock_status", "").trim());
+        if (soldSection) {
+            LinearLayout copy = accountSalesActionRow(android.R.drawable.ic_menu_add,
+                    "Kopyala", "Eyni hesabı müştəri və satış tarixi boş Satılmayan kimi yarat", BLUE, () -> {
+                        dismiss.run();
+                        copyAccountSaleAsUnsold(row);
+                    });
+            box.addView(copy);
+            spacer(box, 8);
+        }
+
         LinearLayout edit = accountSalesActionRow(android.R.drawable.ic_menu_edit,
                 "Düzənlə", "Hesab məlumatlarını dəyiş", BLUE, () -> {
                     dismiss.run();
@@ -3624,6 +3635,34 @@ public class MainActivity extends Activity {
         openWhatsAppChooser(phone, message.toString());
     }
 
+    private void copyAccountSaleAsUnsold(JSONObject row) {
+        try {
+            JSONObject payload = new JSONObject();
+            String gameName = row.optString("game_name", "");
+            payload.put("game_name", gameName);
+            payload.put("game_ids", accountSalesGameIdsForSelection(gameName));
+            payload.put("email", row.optString("email", ""));
+            payload.put("price", row.optDouble("price", 0));
+            payload.put("console", row.optString("console", "PS5"));
+
+            JSONArray accountTypes = new JSONArray();
+            accountTypes.put(row.optString("account_type", "Online"));
+            payload.put("account_types", accountTypes);
+
+            postAccountSalesJson("/create-accounts", payload, result -> {
+                int created = result.optInt("created_count", 1);
+                if (created > 0) {
+                    toast("Hesabın Satılmayan nüsxəsi yaradıldı.");
+                    showAccountSales("unsold");
+                } else {
+                    toast("Hesab kopyalana bilmədi.");
+                }
+            });
+        } catch (Exception ex) {
+            toast("Hesab kopyalana bilmədi: " + ex.getMessage());
+        }
+    }
+
     private void confirmDeleteAccountSale(JSONObject row) {
         String title = row.optString("game_name", "Hesab");
         new AlertDialog.Builder(this)
@@ -3708,6 +3747,7 @@ public class MainActivity extends Activity {
         if (sold) {
             String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
             date = accountField(body, "Satış tarixi *", "DD-MM-YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
+            attachAccountSalesDatePicker(date);
         }
 
         EditText rentalDuration = null;
@@ -3833,6 +3873,7 @@ public class MainActivity extends Activity {
         customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone));
         String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
         EditText date = accountField(body, "Satış tarixi", "DD-MM-YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
+        attachAccountSalesDatePicker(date);
 
         String defaultStock = settings == null ? "Satılıb" : settings.optString("default_stock_status", "Satılıb");
         Spinner stock = accountSpinnerField(body, "Status *", new String[]{"Satılıb", "Satılmayıb", "İcarə"}, record.optString("stock_status", defaultStock));
@@ -3985,6 +4026,44 @@ public class MainActivity extends Activity {
             });
         }));
         dialog.show();
+    }
+
+    private void attachAccountSalesDatePicker(EditText field) {
+        if (field == null) return;
+        field.setFocusable(false);
+        field.setClickable(true);
+        field.setCursorVisible(false);
+        field.setOnClickListener(v -> {
+            java.util.Calendar selected = java.util.Calendar.getInstance();
+            String current = field.getText().toString().trim();
+            if (current.matches("\\d{2}-\\d{2}-\\d{4}")) {
+                try {
+                    java.text.SimpleDateFormat displayFormat = new java.text.SimpleDateFormat("dd-MM-yyyy", java.util.Locale.US);
+                    displayFormat.setLenient(false);
+                    java.util.Date parsed = displayFormat.parse(current);
+                    if (parsed != null) selected.setTime(parsed);
+                } catch (Exception ignored) {}
+            }
+
+            android.app.DatePickerDialog picker = new android.app.DatePickerDialog(
+                    this,
+                    (view, year, month, dayOfMonth) -> field.setText(String.format(
+                            java.util.Locale.US, "%02d-%02d-%04d", dayOfMonth, month + 1, year)),
+                    selected.get(java.util.Calendar.YEAR),
+                    selected.get(java.util.Calendar.MONTH),
+                    selected.get(java.util.Calendar.DAY_OF_MONTH)
+            );
+            picker.setTitle("Satış tarixini seç");
+            picker.setButton(android.content.DialogInterface.BUTTON_NEUTRAL, "Bu gün", (dialog, which) -> {
+                java.util.Calendar today = java.util.Calendar.getInstance();
+                field.setText(String.format(
+                        java.util.Locale.US, "%02d-%02d-%04d",
+                        today.get(java.util.Calendar.DAY_OF_MONTH),
+                        today.get(java.util.Calendar.MONTH) + 1,
+                        today.get(java.util.Calendar.YEAR)));
+            });
+            picker.show();
+        });
     }
 
     private String accountSalesDateForDisplay(String value) {

@@ -1,4 +1,27 @@
-# Marakana Mobile Native v74
+# Marakana Mobile Native v76
+
+## v76 — Satılan hesabı Satılmayan kimi kopyala
+
+- **Satılanlar** bölməsində hesabın əməliyyat menyusuna **Kopyala** düyməsi əlavə edildi.
+- **Kopyala** basıldıqda həmin hesabın oyun/bundle, e-mail, hesab növü, konsol və qiymət məlumatları ilə yeni nüsxəsi yaradılır.
+- Yeni nüsxə avtomatik **Satılmayıb** statusunda olur.
+- Müştəri adı, telefon və satış tarixi yeni nüsxədə boş qalır; əvvəlki alıcının məlumatları kopyalanmır.
+- Bu funksiya eyni oyun hesabını ikinci müştəriyə satmaq lazım olduqda istifadə oluna bilər.
+- Kopyalamadan sonra tətbiq yeni yaradılan hesabı görmək üçün **Satılmayanlar** bölməsinə keçir.
+- `versionCode 76`
+- `versionName 3.4.53-native-v76`
+- Release APK: `MarakanaMobile-v76-release.apk`
+
+## v75 — Satış tarixi təqvim seçimi
+
+- Satılmayanlar → **Sat** ekranında **Satış tarixi** sahəsinə klikləyəndə Android təqvimi açılır.
+- İstənilən tarix təqvimdən seçilə bilir və sahəyə `DD-MM-YYYY` formatında yazılır.
+- Təqvimdə ayrıca **Bu gün** düyməsi var; klikləyəndə cihazın bugünkü tarixi seçilir.
+- **Hesabı düzəlt** ekranındakı Satış tarixi sahəsi də eyni təqvim seçimini istifadə edir.
+- Tarix sahəsi klaviatura ilə əl ilə dəyişdirilmir; yalnız təqvimdən seçilir.
+- `versionCode 75`
+- `versionName 3.4.52-native-v75`
+- Release APK: `MarakanaMobile-v75-release.apk`
 
 ## v74 — Sat / İcarə məlumatları yalnız baxış + Satılmayıb sıfırlama
 

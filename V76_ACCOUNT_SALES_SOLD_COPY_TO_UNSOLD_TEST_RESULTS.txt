@@ -1,0 +1,15 @@
+Marakana Mobile v76 — Satılan hesabı Satılmayan kimi kopyala
+
+PASS static checks
+
+Yoxlanılan əsas məqamlar:
+- versionCode 76 / versionName 3.4.53-native-v76
+- Satılanlar bölməsində Satılıb statuslu hesabın menyusunda Kopyala əməliyyatı görünür
+- Kopyala mövcud /create-accounts mobil API endpoint-indən istifadə edir; əlavə WordPress plugin yeniləməsi tələb etmir
+- oyun/bundle seçimi game_ids ilə birlikdə kopyalanır
+- e-mail, qiymət, konsol və hesab növü eyni saxlanılır
+- yeni qeyd yalnız bir hesab növü ilə yaradılır
+- server /create-accounts qaydasına görə yeni qeyd Satılmayıb olur
+- müştəri adı, telefon və satış tarixi server tərəfində boş saxlanılır
+- kopyalamadan sonra Satılmayanlar bölməsi açılır
+- v75 tarix təqvimi və v74 Sat/İcarə read-only davranışı saxlanılıb
