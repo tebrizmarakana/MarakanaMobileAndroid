@@ -1,11 +1,12 @@
-# MarakanaMobile v89 — Bütün axtarış xanalarında X təmizlə düyməsi
+# MarakanaMobile v90 — Yeni hesab yaratda Məxfi kod xanası
 
-- Tətbiqdə `axtar` tipli bütün axtarış xanalarına sağ tərəfdə kiçik **X / clear** düyməsi əlavə edildi.
-- Xanada mətn olduqda bu ikon görünür; klikləyəndə yazı dərhal təmizlənir.
-- Bu qayda Hesab Satışı, Müştəri, Oyun seçimi, Müştəri seçimi, İcarə, Borc Dəftəri və digər axtarış sahələrinə avtomatik tətbiq olunur.
-- Təmizləmə davranışı proqram daxilində ümumi helper kimi əlavə edildiyi üçün sonradan açılan digər `axtar` xanalarında da işləyir.
-- `versionCode 89`
-- `versionName 3.4.66-native-v89`
+- `Yeni hesab yarat` formasına yeni **`Məxfi kod`** xanasi əlavə edildi.
+- Yazılan məxfi kod yeni yaradılan hesablarla birlikdə serverə göndərilir.
+- Eyni sahə `Hesabı düzəlt` ekranına da əlavə olundu ki, sonradan dəyişmək mümkün olsun.
+- Sat / İcarə ver axınında hesab məlumatları baxış hissəsində `Məxfi kod` da görünür.
+- Ətraflı məlumat və WhatsApp ilə məlumat göndərmə mətninə də `Məxfi kod` əlavə edildi.
+- `versionCode 90`
+- `versionName 3.4.67-native-v90`
 
 ---
 

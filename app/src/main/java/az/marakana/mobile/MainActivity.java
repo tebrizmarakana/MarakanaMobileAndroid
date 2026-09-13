@@ -3784,6 +3784,7 @@ public class MainActivity extends Activity {
             addAccountSalesDetailField(box, "🎮", "Oyun", gameName);
         }
         addAccountSalesDetailField(box, "📧", "E-mail", row.optString("email", ""));
+        addAccountSalesDetailField(box, "🔐", "Məxfi kod", row.optString("secret_code", ""));
         addAccountSalesDetailField(box, "🏷️", "Növ", row.optString("account_type", ""));
         addAccountSalesDetailField(box, "🕹️", "Konsol", row.optString("console", ""));
         addAccountSalesDetailField(box, "💰", "Qiymət", row.optString("price_formatted", money(row.optDouble("price", 0))));
@@ -3967,6 +3968,7 @@ public class MainActivity extends Activity {
             addAccountSalesDetailField(info, "🎮", "Oyun", gameName);
         }
         addAccountSalesDetailField(info, "📧", "E-mail", record.optString("email", ""));
+        addAccountSalesDetailField(info, "🔐", "Məxfi kod", record.optString("secret_code", ""));
         addAccountSalesDetailField(info, "🏷️", "Növ", record.optString("account_type", ""));
         addAccountSalesDetailField(info, "🕹️", "Konsol", record.optString("console", ""));
         addAccountSalesDetailField(info, "💰", "Qiymət", record.optString("price_formatted", money(record.optDouble("price", 0))));
@@ -4079,6 +4081,7 @@ public class MainActivity extends Activity {
         game.setClickable(true);
         game.setOnClickListener(v -> showAccountSalesGamePicker(game, true));
         EditText email = accountField(body, "E-mail *", "example@mail.com", editing ? record.optString("email", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        EditText secretCode = accountField(body, "Məxfi kod", "Məsələn: şifrə və ya giriş kodu", editing ? record.optString("secret_code", "") : "", InputType.TYPE_CLASS_TEXT);
         EditText price = accountField(body, "Qiymət *", "35.50", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         Spinner console = accountSpinnerField(body, "Konsol *", new String[]{"PS4", "PS5", "PS4/PS5"}, editing ? record.optString("console", "PS5") : "PS5");
 
@@ -4100,6 +4103,7 @@ public class MainActivity extends Activity {
             save.setOnClickListener(v -> showAccountSalesCreateTypeDialog(
                     game.getText().toString(),
                     email.getText().toString(),
+                    secretCode.getText().toString(),
                     price.getText().toString(),
                     String.valueOf(console.getSelectedItem())
             ));
@@ -4178,6 +4182,7 @@ public class MainActivity extends Activity {
                 payload.put("game_ids", accountSalesGameIdsForSelection(game.getText().toString()));
                 payload.put("account_type", String.valueOf(type.getSelectedItem()));
                 payload.put("email", email.getText().toString());
+                payload.put("secret_code", secretCode.getText().toString());
                 payload.put("price", price.getText().toString());
                 payload.put("console", String.valueOf(console.getSelectedItem()));
                 // Satılmış hesab Satılmayıb statusuna qaytarılanda əvvəlki satış/müştəri izi saxlanmır.
@@ -4217,9 +4222,10 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void showAccountSalesCreateTypeDialog(String gameName, String email, String price, String console) {
+    private void showAccountSalesCreateTypeDialog(String gameName, String email, String secretCode, String price, String console) {
         String game = gameName == null ? "" : gameName.trim();
         String mail = email == null ? "" : email.trim();
+        String secret = secretCode == null ? "" : secretCode.trim();
         String amount = price == null ? "" : price.trim();
         String consoleName = console == null ? "" : console.trim();
         if (game.isEmpty()) {
@@ -4257,6 +4263,7 @@ public class MainActivity extends Activity {
                 payload.put("game_name", game);
                 payload.put("game_ids", accountSalesGameIdsForSelection(game));
                 payload.put("email", mail);
+                payload.put("secret_code", secret);
                 payload.put("price", amount);
                 payload.put("console", consoleName);
                 payload.put("account_types", selectedTypes);
