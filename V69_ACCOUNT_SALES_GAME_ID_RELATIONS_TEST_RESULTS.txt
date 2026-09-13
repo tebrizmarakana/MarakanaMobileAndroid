@@ -1,0 +1,50 @@
+Marakana Mobile v69 / WordPress v1.0.75 — Game ID Relations Test Results
+
+44/44 PASS
+
+PASS - plugin header 1.0.75
+PASS - plugin const 1.0.75
+PASS - db version 1.1.0
+PASS - games table helper
+PASS - account-game relation table helper
+PASS - primary_game_id column
+PASS - games id PK
+PASS - games unique name hash
+PASS - bundle relation composite PK
+PASS - migration option
+PASS - legacy migration helper
+PASS - game ensure ID helper
+PASS - sync relation helper
+PASS - hydrate record helper
+PASS - rename preserves/relinks IDs
+PASS - game list exposes ID
+PASS - record payload exposes game_ids
+PASS - record payload exposes games
+PASS - overview storage marker
+PASS - init auto DB update
+PASS - admin save syncs relation
+PASS - legacy import syncs relation
+PASS - auto universal syncs relation
+PASS - REST create syncs relation
+PASS - delete relation cleanup
+PASS - orphan cleanup
+PASS - mobile sends game_ids edit
+PASS - mobile sends game_ids create
+PASS - mobile ID resolver helper
+PASS - game resolver accepts game_id/id
+PASS - bundle UI preserved
+PASS - unsold info actions still hidden
+PASS - WhatsApp detail menu preserved
+PASS - v69 code
+PASS - v69 name
+PASS - money helper unique
+PASS - companion PHP identical
+PASS - .github/workflows/main.yml YAML parse
+PASS - .github/workflows/main.yml v69 artifact
+PASS - build-apk.yml YAML parse
+PASS - build-apk.yml v69 artifact
+PASS - PHP lint
+PASS - Java delimiter balance
+PASS - javac no syntax/arity marker
+
+Note: Full Android assembleRelease was not run locally because this source ZIP has no Gradle wrapper/local Android SDK. javac was used as a syntax/arity probe; Android dependency errors are expected in this container.

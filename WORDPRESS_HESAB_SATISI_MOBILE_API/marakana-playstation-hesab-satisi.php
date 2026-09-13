@@ -3,7 +3,7 @@
  * Plugin Name: Marakana Playstation Hesab Satışı
  * Plugin URI: https://marakana.local/
  * Description: Playstation oyun hesablarının satışı, stok, müştəri, ödəniş və geniş axtarış idarəetməsi üçün professional Marakana plugin.
- * Version: 1.0.74
+ * Version: 1.0.75
  * Author: Marakana
  * Text Domain: marakana-playstation-hesab-satisi
  * Requires PHP: 7.4
@@ -16,14 +16,15 @@ if (!defined('ABSPATH')) {
 if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
     final class Marakana_Playstation_Hesab_Satisi_100
     {
-        const VERSION = '1.0.74';
-        const DB_VERSION = '1.0.4';
+        const VERSION = '1.0.75';
+        const DB_VERSION = '1.1.0';
         const OPTION_KEY = 'mara_account_sale_settings';
         const DB_OPTION_KEY = 'mara_account_sale_db_version';
         const LEGACY_IMPORT_OPTION_KEY = 'mara_account_sale_legacy_pdf_import_v54';
         const MOBILE_API_KEY_OPTION_KEY = 'mara_account_sale_mobile_api_key_v1';
         const CUSTOMER_CONTACTS_OPTION_KEY = 'mara_account_sale_customer_contacts_v1';
         const GAME_CATALOG_OPTION_KEY = 'mara_account_sale_game_catalog_v1';
+        const GAME_RELATION_MIGRATION_OPTION_KEY = 'mara_account_sale_game_relation_migration_v1';
 
         private static $instance = null;
 
@@ -54,6 +55,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             add_action('admin_post_mara_account_sale_regenerate_mobile_key', array($this, 'handle_regenerate_mobile_key'));
 
             add_action('admin_init', array($this, 'maybe_update_database'));
+            add_action('init', array($this, 'maybe_update_database'));
             add_action('rest_api_init', array($this, 'register_mobile_rest_routes'));
         }
 
@@ -83,6 +85,18 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             return $wpdb->prefix . 'marakana_account_sales';
         }
 
+        private function games_table_name()
+        {
+            global $wpdb;
+            return $wpdb->prefix . 'marakana_account_games';
+        }
+
+        private function account_games_table_name()
+        {
+            global $wpdb;
+            return $wpdb->prefix . 'marakana_account_sale_games';
+        }
+
         private function capability()
         {
             return apply_filters('mara_account_sale_capability', 'manage_options');
@@ -108,11 +122,14 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
         {
             global $wpdb;
             $table = $this->table_name();
+            $games_table = $this->games_table_name();
+            $links_table = $this->account_games_table_name();
             $charset_collate = $wpdb->get_charset_collate();
 
             $sql = "CREATE TABLE {$table} (
                 id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
                 game_name TEXT NOT NULL,
+                primary_game_id BIGINT(20) UNSIGNED NULL DEFAULT NULL,
                 account_type VARCHAR(20) NOT NULL,
                 email VARCHAR(190) NOT NULL,
                 price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
@@ -125,6 +142,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL,
                 PRIMARY KEY  (id),
+                KEY primary_game_id (primary_game_id),
                 KEY phone (phone),
                 KEY stock_status (stock_status),
                 KEY payment_type (payment_type),
@@ -133,9 +151,33 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 KEY account_type (account_type)
             ) {$charset_collate};";
 
+            $games_sql = "CREATE TABLE {$games_table} (
+                id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+                game_name VARCHAR(190) NOT NULL,
+                name_hash CHAR(32) NOT NULL,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                PRIMARY KEY  (id),
+                UNIQUE KEY name_hash (name_hash),
+                KEY game_name (game_name)
+            ) {$charset_collate};";
+
+            $links_sql = "CREATE TABLE {$links_table} (
+                account_id BIGINT(20) UNSIGNED NOT NULL,
+                game_id BIGINT(20) UNSIGNED NOT NULL,
+                sort_order INT(10) UNSIGNED NOT NULL DEFAULT 0,
+                created_at DATETIME NOT NULL,
+                PRIMARY KEY  (account_id,game_id),
+                KEY game_id (game_id),
+                KEY sort_order (sort_order)
+            ) {$charset_collate};";
+
             require_once ABSPATH . 'wp-admin/includes/upgrade.php';
             dbDelta($sql);
+            dbDelta($games_sql);
+            dbDelta($links_sql);
             $this->repair_table_schema();
+            $this->migrate_legacy_game_relations();
         }
 
         private function repair_table_schema()
@@ -218,6 +260,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 $record['stock_status'] = $this->normalize_stock_status_value(isset($record['stock_status']) ? $record['stock_status'] : '');
                 $record['account_type'] = $this->normalize_legacy_account_type(isset($record['account_type']) ? $record['account_type'] : 'Online');
                 $record['console'] = $this->normalize_legacy_console(isset($record['console']) ? $record['console'] : '');
+                $this->hydrate_record_games($record);
             }
             unset($record);
             return $records;
@@ -349,31 +392,23 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             if ($value === '') {
                 return array();
             }
-
             $parts = preg_split('/\s*(?:,|;|\r?\n|\s+\+\s+|·)\s*/u', $value);
             $names = array();
             $seen = array();
-
             foreach ($parts as $part) {
                 $name = trim((string) $part);
-                if ($name === '') {
-                    continue;
-                }
-                $key = function_exists('mb_strtolower') ? mb_strtolower($name, 'UTF-8') : strtolower($name);
-                if (isset($seen[$key])) {
-                    continue;
-                }
+                if ($name === '') continue;
+                $key = $this->game_name_key($name);
+                if (isset($seen[$key])) continue;
                 $seen[$key] = true;
                 $names[] = $name;
             }
-
             return $names;
         }
 
         private function normalize_game_names($value)
         {
-            $names = $this->split_game_names($value);
-            return implode(', ', $names);
+            return implode(', ', $this->split_game_names($value));
         }
 
         private function game_name_key($value)
@@ -382,70 +417,264 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
         }
 
-        private function get_game_catalog()
+        private function game_name_hash($value)
         {
-            $raw = get_option(self::GAME_CATALOG_OPTION_KEY, array());
-            if (!is_array($raw)) {
-                return array();
-            }
-            $result = array();
-            foreach ($raw as $entry) {
-                if (is_array($entry)) {
-                    $name = isset($entry['game_name']) ? trim((string) $entry['game_name']) : '';
-                    $updated_at = isset($entry['updated_at']) ? (string) $entry['updated_at'] : '';
-                } else {
-                    $name = trim((string) $entry);
-                    $updated_at = '';
-                }
-                if ($name === '') {
-                    continue;
-                }
-                $key = $this->game_name_key($name);
-                $result[$key] = array(
+            return md5($this->game_name_key($value));
+        }
+
+        private function get_game_by_id($game_id)
+        {
+            global $wpdb;
+            $game_id = absint($game_id);
+            if ($game_id <= 0) return null;
+            $row = $wpdb->get_row(
+                $wpdb->prepare("SELECT id, game_name, created_at, updated_at FROM {$this->games_table_name()} WHERE id = %d", $game_id),
+                ARRAY_A
+            );
+            return is_array($row) ? $row : null;
+        }
+
+        private function get_game_by_name($name)
+        {
+            global $wpdb;
+            $name = trim((string) $name);
+            if ($name === '') return null;
+            $hash = $this->game_name_hash($name);
+            $row = $wpdb->get_row(
+                $wpdb->prepare("SELECT id, game_name, created_at, updated_at FROM {$this->games_table_name()} WHERE name_hash = %s", $hash),
+                ARRAY_A
+            );
+            return is_array($row) ? $row : null;
+        }
+
+        private function ensure_game_record($name)
+        {
+            global $wpdb;
+            $name = trim(sanitize_text_field((string) $name));
+            if ($name === '') return 0;
+            $existing = $this->get_game_by_name($name);
+            if ($existing) return (int) $existing['id'];
+            $now = current_time('mysql');
+            $ok = $wpdb->insert(
+                $this->games_table_name(),
+                array(
                     'game_name' => $name,
-                    'updated_at' => $updated_at,
+                    'name_hash' => $this->game_name_hash($name),
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ),
+                array('%s', '%s', '%s', '%s')
+            );
+            if ($ok === false) {
+                $retry = $this->get_game_by_name($name);
+                return $retry ? (int) $retry['id'] : 0;
+            }
+            return (int) $wpdb->insert_id;
+        }
+
+        private function normalize_game_ids($ids)
+        {
+            $out = array();
+            $seen = array();
+            if (!is_array($ids)) return $out;
+            foreach ($ids as $id) {
+                $id = absint($id);
+                if ($id <= 0 || isset($seen[$id]) || !$this->get_game_by_id($id)) continue;
+                $seen[$id] = true;
+                $out[] = $id;
+            }
+            return $out;
+        }
+
+        private function game_ids_from_names($value)
+        {
+            $ids = array();
+            foreach ($this->split_game_names($value) as $name) {
+                $id = $this->ensure_game_record($name);
+                if ($id > 0 && !in_array($id, $ids, true)) $ids[] = $id;
+            }
+            return $ids;
+        }
+
+        private function game_ids_from_input($input, $fallback_game_name = '')
+        {
+            $ids = array();
+            if (is_array($input) && isset($input['game_ids']) && is_array($input['game_ids'])) {
+                $ids = $this->normalize_game_ids($input['game_ids']);
+            }
+            if (empty($ids)) $ids = $this->game_ids_from_names($fallback_game_name);
+            return $ids;
+        }
+
+        private function get_account_game_rows($account_id)
+        {
+            global $wpdb;
+            $account_id = absint($account_id);
+            if ($account_id <= 0) return array();
+            $links = $this->account_games_table_name();
+            $games = $this->games_table_name();
+            $rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT g.id, g.game_name, ag.sort_order
+                     FROM {$links} ag
+                     INNER JOIN {$games} g ON g.id = ag.game_id
+                     WHERE ag.account_id = %d
+                     ORDER BY ag.sort_order ASC, g.id ASC",
+                    $account_id
+                ),
+                ARRAY_A
+            );
+            return is_array($rows) ? $rows : array();
+        }
+
+        private function refresh_account_game_cache($account_id)
+        {
+            global $wpdb;
+            $account_id = absint($account_id);
+            if ($account_id <= 0) return;
+            $rows = $this->get_account_game_rows($account_id);
+            $names = array();
+            $first_id = null;
+            foreach ($rows as $row) {
+                if ($first_id === null) $first_id = (int) $row['id'];
+                $names[] = (string) $row['game_name'];
+            }
+            $wpdb->update(
+                $this->table_name(),
+                array(
+                    'game_name' => implode(', ', $names),
+                    'primary_game_id' => $first_id,
+                ),
+                array('id' => $account_id),
+                array('%s', '%d'),
+                array('%d')
+            );
+        }
+
+        private function sync_account_game_links($account_id, $game_ids = array(), $fallback_game_name = '')
+        {
+            global $wpdb;
+            $account_id = absint($account_id);
+            if ($account_id <= 0) return array();
+            $game_ids = $this->normalize_game_ids($game_ids);
+            if (empty($game_ids)) $game_ids = $this->game_ids_from_names($fallback_game_name);
+            if (empty($game_ids)) return array();
+
+            $links = $this->account_games_table_name();
+            $wpdb->delete($links, array('account_id' => $account_id), array('%d'));
+            $now = current_time('mysql');
+            foreach ($game_ids as $order => $game_id) {
+                $wpdb->insert(
+                    $links,
+                    array(
+                        'account_id' => $account_id,
+                        'game_id' => $game_id,
+                        'sort_order' => (int) $order,
+                        'created_at' => $now,
+                    ),
+                    array('%d', '%d', '%d', '%s')
                 );
             }
-            return $result;
+            $this->refresh_account_game_cache($account_id);
+            return $game_ids;
+        }
+
+        private function delete_account_game_links($account_id)
+        {
+            global $wpdb;
+            $wpdb->delete($this->account_games_table_name(), array('account_id' => absint($account_id)), array('%d'));
+        }
+
+        private function cleanup_orphan_game_links()
+        {
+            global $wpdb;
+            $links = $this->account_games_table_name();
+            $sales = $this->table_name();
+            $wpdb->query("DELETE ag FROM {$links} ag LEFT JOIN {$sales} s ON s.id = ag.account_id WHERE s.id IS NULL");
+        }
+
+        private function hydrate_record_games(&$record)
+        {
+            if (!is_array($record)) return;
+            $account_id = isset($record['id']) ? absint($record['id']) : 0;
+            if ($account_id <= 0) return;
+            $rows = $this->get_account_game_rows($account_id);
+            if (empty($rows) && !empty($record['game_name'])) {
+                $this->sync_account_game_links($account_id, array(), $record['game_name']);
+                $rows = $this->get_account_game_rows($account_id);
+            }
+            $ids = array();
+            $names = array();
+            $games = array();
+            foreach ($rows as $row) {
+                $id = (int) $row['id'];
+                $name = (string) $row['game_name'];
+                $ids[] = $id;
+                $names[] = $name;
+                $games[] = array('id' => $id, 'game_id' => $id, 'game_name' => $name);
+            }
+            if (!empty($names)) $record['game_name'] = implode(', ', $names);
+            $record['game_ids'] = $ids;
+            $record['games'] = $games;
+            $record['primary_game_id'] = !empty($ids) ? $ids[0] : 0;
+        }
+
+        private function migrate_legacy_game_relations()
+        {
+            global $wpdb;
+            $done = get_option(self::GAME_RELATION_MIGRATION_OPTION_KEY, '');
+            if ($done === self::DB_VERSION) return;
+
+            // Köhnə ayrıca oyun kataloqundakı adları yeni ID cədvəlinə köçür.
+            $legacy_catalog = get_option(self::GAME_CATALOG_OPTION_KEY, array());
+            if (is_array($legacy_catalog)) {
+                foreach ($legacy_catalog as $entry) {
+                    $name = is_array($entry) && isset($entry['game_name']) ? $entry['game_name'] : $entry;
+                    $this->ensure_game_record($name);
+                }
+            }
+
+            // Mövcud hesabların game_name mətnlərini game_id əlaqələrinə çevir.
+            $rows = $wpdb->get_results("SELECT id, game_name FROM {$this->table_name()} ORDER BY id ASC", ARRAY_A);
+            foreach (is_array($rows) ? $rows : array() as $row) {
+                $account_id = isset($row['id']) ? absint($row['id']) : 0;
+                if ($account_id <= 0) continue;
+                if (empty($this->get_account_game_rows($account_id))) {
+                    $this->sync_account_game_links($account_id, array(), isset($row['game_name']) ? $row['game_name'] : '');
+                } else {
+                    $this->refresh_account_game_cache($account_id);
+                }
+            }
+            update_option(self::GAME_RELATION_MIGRATION_OPTION_KEY, self::DB_VERSION, false);
+        }
+
+        private function get_game_catalog()
+        {
+            $out = array();
+            foreach ($this->get_game_name_rows() as $row) {
+                $key = $this->game_name_key(isset($row['game_name']) ? $row['game_name'] : '');
+                if ($key === '') continue;
+                $out[$key] = array(
+                    'id' => isset($row['id']) ? (int) $row['id'] : 0,
+                    'game_name' => isset($row['game_name']) ? (string) $row['game_name'] : '',
+                    'updated_at' => isset($row['last_used']) ? (string) $row['last_used'] : '',
+                );
+            }
+            return $out;
         }
 
         private function save_game_catalog($catalog)
         {
-            $clean = array();
-            if (is_array($catalog)) {
-                foreach ($catalog as $entry) {
-                    if (!is_array($entry)) {
-                        continue;
-                    }
-                    $name = isset($entry['game_name']) ? trim(sanitize_text_field((string) $entry['game_name'])) : '';
-                    if ($name === '') {
-                        continue;
-                    }
-                    $key = $this->game_name_key($name);
-                    $clean[$key] = array(
-                        'game_name' => $name,
-                        'updated_at' => isset($entry['updated_at']) && $entry['updated_at'] !== '' ? (string) $entry['updated_at'] : current_time('mysql'),
-                    );
-                }
+            if (!is_array($catalog)) return;
+            foreach ($catalog as $entry) {
+                $name = is_array($entry) && isset($entry['game_name']) ? $entry['game_name'] : $entry;
+                $this->ensure_game_record($name);
             }
-            update_option(self::GAME_CATALOG_OPTION_KEY, array_values($clean), false);
         }
 
         private function remember_game_name($value)
         {
-            $catalog = $this->get_game_catalog();
-            $now = current_time('mysql');
-            foreach ($this->split_game_names($value) as $name) {
-                $name = trim(sanitize_text_field((string) $name));
-                if ($name === '') {
-                    continue;
-                }
-                $catalog[$this->game_name_key($name)] = array(
-                    'game_name' => $name,
-                    'updated_at' => $now,
-                );
-            }
-            $this->save_game_catalog($catalog);
+            foreach ($this->split_game_names($value) as $name) $this->ensure_game_record($name);
         }
 
         private function rename_game_name_everywhere($old_name, $new_name, &$error = '')
@@ -457,124 +686,101 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 $error = 'Köhnə və yeni oyun adı boş ola bilməz.';
                 return false;
             }
-
-            $old_key = $this->game_name_key($old_name);
-            $new_key = $this->game_name_key($new_name);
-            if ($old_key === $new_key && $old_name === $new_name) {
-                $this->remember_game_name($new_name);
+            $this->migrate_legacy_game_relations();
+            $old = $this->get_game_by_name($old_name);
+            if (!$old) {
+                $this->ensure_game_record($new_name);
                 return 0;
             }
-
-            $table = $this->table_name();
-            $rows = $wpdb->get_results("SELECT id, game_name FROM {$table} WHERE game_name <> ''", ARRAY_A);
-            if (!is_array($rows)) {
-                $rows = array();
-            }
-
+            $old_id = (int) $old['id'];
+            $new = $this->get_game_by_name($new_name);
+            $links = $this->account_games_table_name();
+            $account_ids = $wpdb->get_col($wpdb->prepare("SELECT account_id FROM {$links} WHERE game_id = %d", $old_id));
+            $account_ids = array_values(array_unique(array_map('absint', is_array($account_ids) ? $account_ids : array())));
             $now = current_time('mysql');
-            $updated_count = 0;
-            $wpdb->query('START TRANSACTION');
-            foreach ($rows as $row) {
-                $parts = $this->split_game_names(isset($row['game_name']) ? $row['game_name'] : '');
-                $changed = false;
-                foreach ($parts as $index => $part) {
-                    if ($this->game_name_key($part) === $old_key) {
-                        $parts[$index] = $new_name;
-                        $changed = true;
-                    }
+
+            if ($new && (int) $new['id'] !== $old_id) {
+                $new_id = (int) $new['id'];
+                foreach ($account_ids as $account_id) {
+                    $sort_order = (int) $wpdb->get_var($wpdb->prepare(
+                        "SELECT sort_order FROM {$links} WHERE account_id = %d AND game_id = %d",
+                        $account_id,
+                        $old_id
+                    ));
+                    $wpdb->query($wpdb->prepare(
+                        "INSERT IGNORE INTO {$links} (account_id, game_id, sort_order, created_at) VALUES (%d, %d, %d, %s)",
+                        $account_id,
+                        $new_id,
+                        $sort_order,
+                        $now
+                    ));
                 }
-                if (!$changed) {
-                    continue;
-                }
-                $new_value = $this->normalize_game_names(implode(', ', $parts));
-                $result = $wpdb->update(
-                    $table,
-                    array('game_name' => $new_value, 'updated_at' => $now),
-                    array('id' => isset($row['id']) ? (int) $row['id'] : 0),
-                    array('%s', '%s'),
+                $wpdb->delete($links, array('game_id' => $old_id), array('%d'));
+                $wpdb->delete($this->games_table_name(), array('id' => $old_id), array('%d'));
+            } else {
+                $updated = $wpdb->update(
+                    $this->games_table_name(),
+                    array(
+                        'game_name' => $new_name,
+                        'name_hash' => $this->game_name_hash($new_name),
+                        'updated_at' => $now,
+                    ),
+                    array('id' => $old_id),
+                    array('%s', '%s', '%s'),
                     array('%d')
                 );
-                if ($result === false) {
-                    $wpdb->query('ROLLBACK');
-                    $error = 'Oyun adı hesablar üzərində yenilənərkən xəta baş verdi.';
+                if ($updated === false) {
+                    $error = 'Oyun adı bazada yenilənmədi.';
                     return false;
                 }
-                $updated_count++;
             }
-            $wpdb->query('COMMIT');
-
-            $catalog = $this->get_game_catalog();
-            if (isset($catalog[$old_key])) {
-                unset($catalog[$old_key]);
-            }
-            $catalog[$new_key] = array('game_name' => $new_name, 'updated_at' => $now);
-            $this->save_game_catalog($catalog);
-            return $updated_count;
+            foreach ($account_ids as $account_id) $this->refresh_account_game_cache($account_id);
+            return count($account_ids);
         }
 
         private function get_game_name_rows()
         {
             global $wpdb;
-            $table = $this->table_name();
+            $this->cleanup_orphan_game_links();
+            $games = $this->games_table_name();
+            $links = $this->account_games_table_name();
+            $sales = $this->table_name();
             $rows = $wpdb->get_results(
-                "SELECT game_name, updated_at
-                 FROM {$table}
-                 WHERE game_name <> ''
-                 ORDER BY updated_at DESC",
+                "SELECT g.id, g.game_name, g.updated_at,
+                        COUNT(DISTINCT ag.account_id) AS use_count,
+                        MAX(s.updated_at) AS last_used
+                 FROM {$games} g
+                 LEFT JOIN {$links} ag ON ag.game_id = g.id
+                 LEFT JOIN {$sales} s ON s.id = ag.account_id
+                 GROUP BY g.id, g.game_name, g.updated_at
+                 ORDER BY COALESCE(MAX(s.updated_at), g.updated_at) DESC, g.game_name ASC",
                 ARRAY_A
             );
-
-            $games = array();
-            foreach ($this->get_game_catalog() as $key => $entry) {
-                $games[$key] = array(
-                    'game_name' => isset($entry['game_name']) ? (string) $entry['game_name'] : '',
-                    'use_count' => 0,
-                    'last_used' => isset($entry['updated_at']) ? (string) $entry['updated_at'] : '',
+            $out = array();
+            foreach (is_array($rows) ? $rows : array() as $row) {
+                $id = isset($row['id']) ? (int) $row['id'] : 0;
+                $out[] = array(
+                    'id' => $id,
+                    'game_id' => $id,
+                    'game_name' => isset($row['game_name']) ? (string) $row['game_name'] : '',
+                    'use_count' => isset($row['use_count']) ? (int) $row['use_count'] : 0,
+                    'last_used' => !empty($row['last_used']) ? (string) $row['last_used'] : (isset($row['updated_at']) ? (string) $row['updated_at'] : ''),
                 );
             }
-
-            if (!is_array($rows)) {
-                $rows = array();
-            }
-            foreach ($rows as $row) {
-                $last_used = isset($row['updated_at']) ? $row['updated_at'] : '';
-                foreach ($this->split_game_names(isset($row['game_name']) ? $row['game_name'] : '') as $game_name) {
-                    $key = $this->game_name_key($game_name);
-                    if (!isset($games[$key])) {
-                        $games[$key] = array(
-                            'game_name' => $game_name,
-                            'use_count' => 0,
-                            'last_used' => $last_used,
-                        );
-                    }
-                    $games[$key]['use_count']++;
-                    if ($last_used > $games[$key]['last_used']) {
-                        $games[$key]['last_used'] = $last_used;
-                    }
-                }
-            }
-
-            $games = array_values(array_filter($games, function ($game) {
-                return isset($game['game_name']) && trim((string) $game['game_name']) !== '';
-            }));
-            usort($games, function ($a, $b) {
-                if ($a['last_used'] === $b['last_used']) {
-                    return strcasecmp($a['game_name'], $b['game_name']);
-                }
-                return strcmp($b['last_used'], $a['last_used']);
-            });
-
-            return $games;
+            return $out;
         }
 
         private function get_records_by_phone($phone)
         {
             global $wpdb;
             $table = $this->table_name();
-            return $wpdb->get_results(
+            $records = $wpdb->get_results(
                 $wpdb->prepare("SELECT * FROM {$table} WHERE phone = %s ORDER BY sale_date DESC, id DESC", $phone),
                 ARRAY_A
             );
+            foreach (is_array($records) ? $records : array() as &$record) $this->hydrate_record_games($record);
+            unset($record);
+            return is_array($records) ? $records : array();
         }
 
         private function calculate_stats($records)
@@ -1037,6 +1243,8 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     }
                     continue;
                 }
+                $new_account_id = (int) $wpdb->insert_id;
+                $this->sync_account_game_links($new_account_id, array(), isset($data['game_name']) ? $data['game_name'] : '');
                 $inserted++;
                 if ($stock_status === 'Satılıb') {
                     $inserted_sold++;
@@ -1130,12 +1338,14 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             global $wpdb;
             $table = $this->table_name();
             $this->create_or_update_table();
+            $deleted_links = $wpdb->query("DELETE FROM {$this->account_games_table_name()}");
             $deleted = $wpdb->query("DELETE FROM {$table}");
-            if ($deleted === false) {
+            if ($deleted === false || $deleted_links === false) {
                 return false;
             }
             $wpdb->query("ALTER TABLE {$table} AUTO_INCREMENT = 1");
             delete_option(self::LEGACY_IMPORT_OPTION_KEY);
+            update_option(self::GAME_RELATION_MIGRATION_OPTION_KEY, self::DB_VERSION, false);
             return true;
         }
 
@@ -1280,8 +1490,12 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 $universal,
                 array_merge($base_formats, array('%s', '%s'))
             );
-
-            return $inserted !== false;
+            if ($inserted !== false) {
+                $universal_id = (int) $wpdb->insert_id;
+                $this->sync_account_game_links($universal_id, array(), isset($universal['game_name']) ? $universal['game_name'] : '');
+                return true;
+            }
+            return false;
         }
 
         public function handle_save()
@@ -1319,7 +1533,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 if ($updated === false) {
                     $this->redirect_with_message('error', $return_tab, 'Düzəliş zamanı xəta baş verdi.');
                 }
-                $this->remember_game_name(isset($data['game_name']) ? $data['game_name'] : '');
+                $this->sync_account_game_links($id, array(), isset($data['game_name']) ? $data['game_name'] : '');
                 $this->redirect_with_message('updated', 'accounts');
             }
 
@@ -1330,8 +1544,9 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 $this->redirect_with_message('error', $return_tab, 'Yadda saxlanma zamanı xəta baş verdi.');
             }
 
+            $id = (int) $wpdb->insert_id;
+            $this->sync_account_game_links($id, array(), isset($data['game_name']) ? $data['game_name'] : '');
             $auto_universal_created = $this->maybe_create_auto_universal_account($data, $base_formats, $now);
-            $this->remember_game_name(isset($data['game_name']) ? $data['game_name'] : '');
             $this->redirect_with_message($auto_universal_created ? 'saved_auto_universal' : 'saved', 'accounts');
         }
 
@@ -1346,6 +1561,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             }
             check_admin_referer('mara_account_sale_delete_' . $id);
             global $wpdb;
+            $this->delete_account_game_links($id);
             $deleted = $wpdb->delete($this->table_name(), array('id' => $id), array('%d'));
             if ($deleted === false) {
                 $this->redirect_with_message('error', 'accounts', 'Silmə zamanı xəta baş verdi.');
@@ -1470,9 +1686,13 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
 
         private function mobile_record_payload($record)
         {
+            if (is_array($record)) $this->hydrate_record_games($record);
             return array(
                 'id' => isset($record['id']) ? (int) $record['id'] : 0,
                 'game_name' => isset($record['game_name']) ? (string) $record['game_name'] : '',
+                'primary_game_id' => isset($record['primary_game_id']) ? (int) $record['primary_game_id'] : 0,
+                'game_ids' => isset($record['game_ids']) && is_array($record['game_ids']) ? array_values(array_map('intval', $record['game_ids'])) : array(),
+                'games' => isset($record['games']) && is_array($record['games']) ? $record['games'] : array(),
                 'account_type' => isset($record['account_type']) ? (string) $record['account_type'] : '',
                 'email' => isset($record['email']) ? (string) $record['email'] : '',
                 'price' => isset($record['price']) ? (float) $record['price'] : 0,
@@ -1558,6 +1778,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'stats' => $this->calculate_stats($all_records),
                 'customers' => $customers,
                 'game_names' => $games,
+                'game_storage' => 'id_relation_v1',
                 'settings' => $settings,
                 'currency' => isset($settings['currency']) ? $settings['currency'] : 'AZN',
             ));
@@ -1734,10 +1955,13 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     return new WP_Error('mara_account_sale_mobile_insert_failed', 'Yadda saxlanma zamanı xəta baş verdi.', array('status' => 500));
                 }
                 $id = (int) $wpdb->insert_id;
-                $auto_universal_created = $this->maybe_create_auto_universal_account($data, $base_formats, $now);
             }
 
-            $this->remember_game_name(isset($data['game_name']) ? $data['game_name'] : '');
+            $game_ids = $this->game_ids_from_input($input, isset($data['game_name']) ? $data['game_name'] : '');
+            $this->sync_account_game_links($id, $game_ids, isset($data['game_name']) ? $data['game_name'] : '');
+            if (empty($input['id'])) {
+                $auto_universal_created = $this->maybe_create_auto_universal_account($data, $base_formats, $now);
+            }
             $record = $wpdb->get_row($wpdb->prepare("SELECT * FROM {$table} WHERE id = %d", $id), ARRAY_A);
             return rest_ensure_response(array(
                 'ok' => true,
@@ -1778,8 +2002,10 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 $this->remember_game_name($new_name);
             }
 
+            $saved_game = $this->get_game_by_name($new_name);
             return rest_ensure_response(array(
                 'ok' => true,
+                'game_id' => $saved_game ? (int) $saved_game['id'] : 0,
                 'game_name' => $new_name,
                 'old_name' => $old_name,
                 'updated_records' => $updated_count,
@@ -1847,12 +2073,14 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     $wpdb->query('ROLLBACK');
                     return new WP_Error('mara_account_sale_mobile_create_failed', 'Hesab yaradılarkən xəta baş verdi.', array('status' => 500));
                 }
-                $created_ids[] = (int) $wpdb->insert_id;
+                $new_account_id = (int) $wpdb->insert_id;
+                $game_ids = $this->game_ids_from_input($input, isset($data['game_name']) ? $data['game_name'] : '');
+                $this->sync_account_game_links($new_account_id, $game_ids, isset($data['game_name']) ? $data['game_name'] : '');
+                $created_ids[] = $new_account_id;
                 $created_types[] = $type;
             }
 
             $wpdb->query('COMMIT');
-            $this->remember_game_name(isset($input['game_name']) ? $input['game_name'] : '');
             return rest_ensure_response(array(
                 'ok' => true,
                 'created_count' => count($created_ids),
@@ -1870,6 +2098,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             if ($id <= 0) {
                 return new WP_Error('mara_account_sale_mobile_delete_id', 'Silinəcək hesab tapılmadı.', array('status' => 400));
             }
+            $this->delete_account_game_links($id);
             $deleted = $wpdb->delete($this->table_name(), array('id' => $id), array('%d'));
             if ($deleted === false) {
                 return new WP_Error('mara_account_sale_mobile_delete_failed', 'Silmə zamanı xəta baş verdi.', array('status' => 500));

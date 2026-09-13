@@ -3577,6 +3577,7 @@ public class MainActivity extends Activity {
             try {
                 payload.put("id", record.optInt("id", 0));
                 payload.put("game_name", game.getText().toString());
+                payload.put("game_ids", accountSalesGameIdsForSelection(game.getText().toString()));
                 payload.put("account_type", String.valueOf(type.getSelectedItem()));
                 payload.put("email", email.getText().toString());
                 payload.put("price", price.getText().toString());
@@ -3634,6 +3635,7 @@ public class MainActivity extends Activity {
             JSONObject payload = new JSONObject();
             try {
                 payload.put("game_name", game);
+                payload.put("game_ids", accountSalesGameIdsForSelection(game));
                 payload.put("email", mail);
                 payload.put("price", amount);
                 payload.put("console", consoleName);
@@ -3716,6 +3718,25 @@ public class MainActivity extends Activity {
             out.append(clean);
         }
         return out.toString();
+    }
+
+    private JSONArray accountSalesGameIdsForSelection(String value) {
+        JSONArray ids = new JSONArray();
+        ArrayList<String> selectedNames = parseAccountSalesGameSelection(value);
+        for (String selectedName : selectedNames) {
+            if (selectedName == null || selectedName.trim().isEmpty()) continue;
+            for (int i = 0; i < accountSalesGameChoices.length(); i++) {
+                JSONObject row = accountSalesGameChoices.optJSONObject(i);
+                if (row == null) continue;
+                String name = row.optString("game_name", "").trim();
+                int gameId = row.optInt("game_id", row.optInt("id", 0));
+                if (gameId > 0 && name.equalsIgnoreCase(selectedName.trim())) {
+                    ids.put(gameId);
+                    break;
+                }
+            }
+        }
+        return ids;
     }
 
     private void showAccountSalesGamePicker(EditText target, boolean allowBundle) {

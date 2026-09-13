@@ -1,4 +1,16 @@
-# Marakana Mobile Native v68
+# Marakana Mobile Native v69
+
+## v69 — Oyunlar ID əlaqəli bazaya keçirildi
+
+- Mobil oyun seçimini artıq WordPress API-yə `game_ids` ilə də göndərir.
+- Tək oyun və Bundle seçimlərində seçilən adlar serverdə ayrıca oyun ID-lərinə bağlanır.
+- Köhnə `game_name` mətn sahəsi yalnız geriyə uyğun cache kimi saxlanılır.
+- Oyun adını dəyişəndə hesablar həmin `game_id` əlaqəsini saxlayır; Bundle əlaqələri pozulmur.
+- Mövcud v68 funksiyaları dəyişməyib.
+
+- `versionCode 69`
+- `versionName 3.4.46-native-v69`
+- Release APK: `MarakanaMobile-v69-release.apk`
 
 ## v68 — Satılmamış hesabda məlumat aksiyaları gizlidir
 

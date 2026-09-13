@@ -1,3 +1,8 @@
+v1.0.75 ID əlaqəli oyun bazası:
+- Oyunlar ayrıca wp_marakana_account_games cədvəlində ID ilə saxlanır.
+- Hesab↔oyun Bundle əlaqələri wp_marakana_account_sale_games cədvəlində saxlanır.
+- Mövcud game_name məlumatları ilk update zamanı avtomatik migrate olunur.
+
 Marakana Hesab Satışı — Mobil APK bağlantısı
 =============================================
 
