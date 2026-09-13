@@ -111,7 +111,7 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
     private static final String ACCOUNT_SALES_DEFAULT_SITE = "https://marakana.az";
     private static final String ACCOUNT_SALES_API_PATH = "/wp-json/marakana-account-sales/v1";
-    private static final String[] ACCOUNT_SALES_SECTIONS = {"accounts", "sold", "unsold", "customers", "settings"};
+    private static final String[] ACCOUNT_SALES_SECTIONS = {"accounts", "sold", "unsold", "rental", "customers", "settings"};
     private JSONArray accountSalesGameChoices = new JSONArray();
     private JSONArray accountSalesCustomerChoices = new JSONArray();
 
@@ -3221,9 +3221,9 @@ public class MainActivity extends Activity {
         footer.setPadding(dp(4), dp(8), dp(4), dp(8));
         footer.setBackground(bg(Color.WHITE, 22, BORDER));
         footer.setElevation(dp(12));
-        String[] labels = {"Hesablar", "Satılanlar", "Satılmayanlar", "Müştəri"};
-        String[] icons = {"🎮", "✅", "📦", "👥"};
-        String[] targets = {"accounts", "sold", "unsold", "customers"};
+        String[] labels = {"Hesablar", "Satılanlar", "Satılmayanlar", "İcarə", "Müştəri"};
+        String[] icons = {"🎮", "✅", "📦", "⏳", "👥"};
+        String[] targets = {"accounts", "sold", "unsold", "rental", "customers"};
         for (int i = 0; i < targets.length; i++) {
             final String target = targets[i];
             LinearLayout tab = buildRentalFooterTab(icons[i], labels[i], target.equals(activeSection));
@@ -3241,8 +3241,8 @@ public class MainActivity extends Activity {
         if (stats == null) return;
         LinearLayout c = card();
         c.addView(text("Göstəricilər", 13, MUTED, true));
-        String line1 = "Hesab: " + stats.optInt("total", 0) + "  •  Satılanlar: " + stats.optInt("sold", 0) + "  •  Satılmayanlar: " + stats.optInt("unsold", 0);
-        String line2 = "Cəmi: " + money(stats.optDouble("total_amount", 0));
+        String line1 = "Hesab: " + stats.optInt("total", 0) + "  •  Satılanlar: " + stats.optInt("sold", 0) + "  •  Satılmayanlar: " + stats.optInt("unsold", 0) + "  •  İcarə: " + stats.optInt("rental", 0);
+        String line2 = "Bitməyə yaxın: " + stats.optInt("rental_expiring", 0) + "  •  Müddəti bitən: " + stats.optInt("rental_expired", 0) + "  •  Cəmi satış: " + money(stats.optDouble("total_amount", 0));
         c.addView(text(line1, 15, TEXT, true));
         TextView totals = text(line2, 12, MUTED, false);
         totals.setPadding(0, dp(4), 0, 0);
@@ -3290,7 +3290,7 @@ public class MainActivity extends Activity {
             String haystack = row.optString("game_name", "") + " " + row.optString("email", "") + " " +
                     row.optString("customer_name", "") + " " + row.optString("phone", "") + " " +
                     row.optString("console", "") + " " + row.optString("account_type", "") + " " +
-                    row.optString("stock_status", "");
+                    row.optString("stock_status", "") + " " + row.optString("rental_remaining_text", "");
             if (!q.isEmpty() && !haystack.toLowerCase(Locale.ROOT).contains(q)) continue;
             visible++;
             host.addView(buildAccountSalesRecordCard(row, settings, section));
@@ -3340,6 +3340,16 @@ public class MainActivity extends Activity {
         String saleDate = row.optString("sale_date", "").trim();
         String saleDateDisplay = accountSalesDateForDisplay(saleDate);
         if (!saleDateDisplay.isEmpty()) c.addView(text(saleDateDisplay, 12, MUTED, false));
+        if ("İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim())) {
+            String rentalState = row.optString("rental_state", "");
+            String rentalText = row.optString("rental_remaining_text", "").trim();
+            if (rentalText.isEmpty()) rentalText = "İcarə müddəti göstərilməyib";
+            String prefix = "expired".equals(rentalState) ? "⛔ " : ("expiring".equals(rentalState) ? "⚠️ " : "⏳ ");
+            int rentalColor = "expired".equals(rentalState) ? ORANGE : ("expiring".equals(rentalState) ? ORANGE : GREEN);
+            c.addView(text(prefix + rentalText, 13, rentalColor, true));
+            String rentalEnds = accountSalesDateTimeForDisplay(row.optString("rental_ends_at", ""));
+            if (!rentalEnds.isEmpty()) c.addView(text("Bitmə: " + rentalEnds, 11, MUTED, false));
+        }
         spacer(c, 8);
         installAccountSalesRecordHoldActions(c, row, settings, section);
         return c;
@@ -3382,7 +3392,7 @@ public class MainActivity extends Activity {
 
     private void showAccountSalesRecordActions(JSONObject row, JSONObject settings, String section) {
         String title = row.optString("game_name", "Hesab");
-        boolean accountOrSoldSection = "accounts".equals(section) || "sold".equals(section);
+        boolean accountOrSoldSection = "accounts".equals(section) || "sold".equals(section) || "rental".equals(section);
         boolean unsoldStatus = "Satılmayıb".equalsIgnoreCase(row.optString("stock_status", "").trim());
         boolean detailActions = accountOrSoldSection && !unsoldStatus;
         String[] items = detailActions
@@ -3438,6 +3448,12 @@ public class MainActivity extends Activity {
         addAccountSalesDetailField(box, "📱", "Telefon", row.optString("phone", ""));
         addAccountSalesDetailField(box, "📅", "Satış tarixi", accountSalesDateForDisplay(row.optString("sale_date", "")));
         addAccountSalesDetailField(box, "📦", "Status", row.optString("stock_status", ""));
+        if ("İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim())) {
+            addAccountSalesDetailField(box, "⏱️", "İcarə müddəti", row.optString("rental_duration_label", ""));
+            addAccountSalesDetailField(box, "▶️", "İcarə başlanıb", accountSalesDateTimeForDisplay(row.optString("rental_started_at", "")));
+            addAccountSalesDetailField(box, "🏁", "İcarə bitir", accountSalesDateTimeForDisplay(row.optString("rental_ends_at", "")));
+            addAccountSalesDetailField(box, "⏳", "Qalan müddət", row.optString("rental_remaining_text", ""));
+        }
         addAccountSalesDetailField(box, "🆔", "Hesab ID", String.valueOf(row.optInt("id", 0)));
         addAccountSalesDetailField(box, "🕒", "Yaradılıb", accountSalesDateTimeForDisplay(row.optString("created_at", "")));
         addAccountSalesDetailField(box, "♻️", "Son dəyişiklik", accountSalesDateTimeForDisplay(row.optString("updated_at", "")));
@@ -3494,6 +3510,11 @@ public class MainActivity extends Activity {
         String saleDate = accountSalesDateForDisplay(row.optString("sale_date", ""));
         if (!saleDate.isEmpty()) message.append("📅 *Satış tarixi:* ").append(saleDate).append("\n");
         message.append("📦 *Status:* ").append(row.optString("stock_status", "—")).append("\n");
+        if ("İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim())) {
+            message.append("⏱️ *İcarə müddəti:* ").append(row.optString("rental_duration_label", "—")).append("\n");
+            message.append("🏁 *İcarə bitir:* ").append(accountSalesDateTimeForDisplay(row.optString("rental_ends_at", ""))).append("\n");
+            message.append("⏳ *Qalan:* ").append(row.optString("rental_remaining_text", "—")).append("\n");
+        }
         message.append("🆔 *Hesab ID:* ").append(row.optInt("id", 0)).append("\n");
         message.append("\n🎮 *Marakana Game Center*");
 
@@ -3563,15 +3584,60 @@ public class MainActivity extends Activity {
         EditText date = accountField(body, "Satış tarixi", "DD-MM-YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
 
         String defaultStock = settings == null ? "Satılıb" : settings.optString("default_stock_status", "Satılıb");
-        Spinner stock = accountSpinnerField(body, "Stok *", new String[]{"Satılıb", "Satılmayıb"}, record.optString("stock_status", defaultStock));
+        Spinner stock = accountSpinnerField(body, "Status *", new String[]{"Satılıb", "Satılmayıb", "İcarə"}, record.optString("stock_status", defaultStock));
+
+        LinearLayout rentalBox = new LinearLayout(this);
+        rentalBox.setOrientation(LinearLayout.VERTICAL);
+        EditText rentalDuration = accountField(
+                rentalBox,
+                "İcarə müddəti *",
+                "Məsələn: 3",
+                record.optInt("rental_duration_value", 0) > 0 ? String.valueOf(record.optInt("rental_duration_value", 0)) : "",
+                InputType.TYPE_CLASS_NUMBER
+        );
+        String rentalUnitValue = "hour".equalsIgnoreCase(record.optString("rental_duration_unit", "day")) ? "Saat" : "Gün";
+        Spinner rentalUnit = accountSpinnerField(rentalBox, "Müddət vahidi *", new String[]{"Saat", "Gün"}, rentalUnitValue);
+        body.addView(rentalBox);
 
         TextView note = text("Satılıb seçilərsə ad soyad, telefon və satış tarixi məcburidir.", 12, MUTED, false);
         note.setPadding(dp(4), dp(4), dp(4), dp(10));
         body.addView(note);
 
+        Runnable syncRentalFields = () -> {
+            String status = String.valueOf(stock.getSelectedItem());
+            boolean rental = "İcarə".equals(status);
+            rentalBox.setVisibility(rental ? View.VISIBLE : View.GONE);
+            if ("Satılıb".equals(status)) {
+                note.setText("Satılıb seçilib: ad soyad, telefon və satış tarixi məcburidir.");
+            } else if (rental) {
+                note.setText("İcarə seçilib: ad soyad, telefon və icarə müddəti məcburidir.");
+            } else {
+                note.setText("Satılmayıb seçilib: müştəri məlumatları boş qala bilər.");
+            }
+        };
+        stock.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) { syncRentalFields.run(); }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { syncRentalFields.run(); }
+        });
+        syncRentalFields.run();
+
         Button save = button("Dəyişiklikləri yadda saxla", GREEN, Color.WHITE);
         body.addView(save);
         save.setOnClickListener(v -> {
+            String selectedStatus = String.valueOf(stock.getSelectedItem());
+            if ("İcarə".equals(selectedStatus)) {
+                String durationText = rentalDuration.getText().toString().trim();
+                int durationValue = 0;
+                try { durationValue = Integer.parseInt(durationText); } catch (Exception ignored) {}
+                if (durationValue <= 0) {
+                    toast("İcarə müddətini düzgün daxil et.");
+                    return;
+                }
+                if (customer.getText().toString().trim().isEmpty() || phone.getText().toString().trim().isEmpty()) {
+                    toast("İcarə üçün müştəri adı və telefon məcburidir.");
+                    return;
+                }
+            }
             JSONObject payload = new JSONObject();
             try {
                 payload.put("id", record.optInt("id", 0));
@@ -3587,11 +3653,15 @@ public class MainActivity extends Activity {
                 // Ödəniş növü artıq UI-da yoxdur. Mövcud dəyəri yalnız köhnə WordPress
                 // validasiyası ilə uyğunluq üçün səssiz saxlayırıq; istifadəçiyə göstərilmir/seçdirilmir.
                 payload.put("payment_type", record.optString("payment_type", "Nağd"));
-                payload.put("stock_status", String.valueOf(stock.getSelectedItem()));
+                payload.put("stock_status", selectedStatus);
+                if ("İcarə".equals(selectedStatus)) {
+                    payload.put("rental_duration_value", rentalDuration.getText().toString().trim());
+                    payload.put("rental_duration_unit", "Saat".equals(String.valueOf(rentalUnit.getSelectedItem())) ? "hour" : "day");
+                }
             } catch (Exception ignored) {}
             postAccountSalesJson("/save", payload, result -> {
-                toast("Hesab yeniləndi.");
-                showAccountSales("accounts");
+                toast("İcarə".equals(selectedStatus) ? "Hesab icarəyə verildi." : "Hesab yeniləndi.");
+                showAccountSales("İcarə".equals(selectedStatus) ? "rental" : "accounts");
             });
         });
     }

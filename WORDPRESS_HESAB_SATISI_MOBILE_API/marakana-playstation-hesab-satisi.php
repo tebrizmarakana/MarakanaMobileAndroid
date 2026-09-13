@@ -3,7 +3,7 @@
  * Plugin Name: Marakana Playstation Hesab Satışı
  * Plugin URI: https://marakana.local/
  * Description: Playstation oyun hesablarının satışı, stok, müştəri, ödəniş və geniş axtarış idarəetməsi üçün professional Marakana plugin.
- * Version: 1.0.78
+ * Version: 1.0.79
  * Author: Marakana
  * Text Domain: marakana-playstation-hesab-satisi
  * Requires PHP: 7.4
@@ -16,8 +16,8 @@ if (!defined('ABSPATH')) {
 if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
     final class Marakana_Playstation_Hesab_Satisi_100
     {
-        const VERSION = '1.0.78';
-        const DB_VERSION = '1.1.0';
+        const VERSION = '1.0.79';
+        const DB_VERSION = '1.2.0';
         const OPTION_KEY = 'mara_account_sale_settings';
         const DB_OPTION_KEY = 'mara_account_sale_db_version';
         const LEGACY_IMPORT_OPTION_KEY = 'mara_account_sale_legacy_pdf_import_v54';
@@ -137,12 +137,17 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 sale_date DATE NULL DEFAULT NULL,
                 payment_type VARCHAR(20) NOT NULL,
                 stock_status VARCHAR(30) NOT NULL,
+                rental_duration_value INT(10) UNSIGNED NULL DEFAULT NULL,
+                rental_duration_unit VARCHAR(10) NULL DEFAULT NULL,
+                rental_started_at DATETIME NULL DEFAULT NULL,
+                rental_ends_at DATETIME NULL DEFAULT NULL,
                 created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL,
                 PRIMARY KEY  (id),
                 KEY primary_game_id (primary_game_id),
                 KEY phone (phone),
                 KEY stock_status (stock_status),
+                KEY rental_ends_at (rental_ends_at),
                 KEY payment_type (payment_type),
                 KEY sale_date (sale_date),
                 KEY console (console),
@@ -784,6 +789,9 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'total' => count($records),
                 'sold' => 0,
                 'unsold' => 0,
+                'rental' => 0,
+                'rental_expiring' => 0,
+                'rental_expired' => 0,
                 'total_amount' => 0,
                 'cash_amount' => 0,
                 'credit_amount' => 0,
@@ -808,6 +816,11 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     if (strpos((string) $record['sale_date'], $month) === 0) {
                         $stats['month_sold']++;
                     }
+                } elseif ($this->normalize_stock_status_value($record['stock_status']) === 'İcarə') {
+                    $stats['rental']++;
+                    $runtime = $this->rental_runtime_payload($record);
+                    if ($runtime['rental_state'] === 'expired') $stats['rental_expired']++;
+                    elseif ($runtime['rental_state'] === 'expiring') $stats['rental_expiring']++;
                 } else {
                     $stats['unsold']++;
                 }
@@ -890,12 +903,134 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             return checkdate((int) $parts[1], (int) $parts[2], (int) $parts[0]);
         }
 
+        private function normalize_rental_unit($value)
+        {
+            $value = strtolower(trim((string) $value));
+            return in_array($value, array('hour', 'day'), true) ? $value : 'day';
+        }
+
+        private function rental_unit_label($unit)
+        {
+            return $this->normalize_rental_unit($unit) === 'hour' ? 'saat' : 'gün';
+        }
+
+        private function build_rental_fields($stock_status, $duration_value, $duration_unit, &$errors)
+        {
+            if ($stock_status !== 'İcarə') {
+                return array(
+                    'rental_duration_value' => null,
+                    'rental_duration_unit' => null,
+                    'rental_started_at' => null,
+                    'rental_ends_at' => null,
+                );
+            }
+
+            $duration_value = absint($duration_value);
+            $duration_unit = $this->normalize_rental_unit($duration_unit);
+            if ($duration_value <= 0) {
+                $errors[] = 'İcarə seçilərsə icarə müddəti 0-dan böyük olmalıdır.';
+                return array(
+                    'rental_duration_value' => null,
+                    'rental_duration_unit' => $duration_unit,
+                    'rental_started_at' => null,
+                    'rental_ends_at' => null,
+                );
+            }
+
+            $seconds = $duration_value * ($duration_unit === 'hour' ? HOUR_IN_SECONDS : DAY_IN_SECONDS);
+            $start_ts = current_time('timestamp');
+            return array(
+                'rental_duration_value' => $duration_value,
+                'rental_duration_unit' => $duration_unit,
+                'rental_started_at' => current_time('mysql'),
+                'rental_ends_at' => date('Y-m-d H:i:s', $start_ts + $seconds),
+            );
+        }
+
+        private function rental_runtime_payload($record)
+        {
+            $status = isset($record['stock_status']) ? $this->normalize_stock_status_value($record['stock_status']) : '';
+            $ends_at = isset($record['rental_ends_at']) ? trim((string) $record['rental_ends_at']) : '';
+            $value = isset($record['rental_duration_value']) ? (int) $record['rental_duration_value'] : 0;
+            $unit = isset($record['rental_duration_unit']) ? $this->normalize_rental_unit($record['rental_duration_unit']) : 'day';
+            $payload = array(
+                'rental_duration_value' => $value,
+                'rental_duration_unit' => $unit,
+                'rental_duration_label' => $value > 0 ? ($value . ' ' . $this->rental_unit_label($unit)) : '',
+                'rental_started_at' => isset($record['rental_started_at']) ? (string) $record['rental_started_at'] : '',
+                'rental_ends_at' => $ends_at,
+                'rental_remaining_seconds' => 0,
+                'rental_state' => '',
+                'rental_remaining_text' => '',
+            );
+            if ($status !== 'İcarə' || $ends_at === '') {
+                return $payload;
+            }
+
+            try {
+                $tz = function_exists('wp_timezone') ? wp_timezone() : new DateTimeZone('UTC');
+                $end = new DateTimeImmutable($ends_at, $tz);
+                $now = new DateTimeImmutable('now', $tz);
+                $remaining = $end->getTimestamp() - $now->getTimestamp();
+            } catch (Exception $e) {
+                $remaining = strtotime($ends_at) - current_time('timestamp');
+            }
+            $payload['rental_remaining_seconds'] = (int) $remaining;
+            if ($remaining <= 0) {
+                $payload['rental_state'] = 'expired';
+                $payload['rental_remaining_text'] = 'Müddət bitib';
+            } elseif ($remaining <= DAY_IN_SECONDS) {
+                $payload['rental_state'] = 'expiring';
+                $hours = (int) floor($remaining / HOUR_IN_SECONDS);
+                $minutes = (int) floor(($remaining % HOUR_IN_SECONDS) / MINUTE_IN_SECONDS);
+                $payload['rental_remaining_text'] = ($hours > 0 ? $hours . ' saat ' : '') . $minutes . ' dəq qalıb';
+            } else {
+                $days = (int) floor($remaining / DAY_IN_SECONDS);
+                $hours = (int) floor(($remaining % DAY_IN_SECONDS) / HOUR_IN_SECONDS);
+                $payload['rental_state'] = 'active';
+                $payload['rental_remaining_text'] = $days . ' gün' . ($hours > 0 ? ' ' . $hours . ' saat' : '') . ' qalıb';
+            }
+            return $payload;
+        }
+
+        private function preserve_existing_rental_window($id, &$data)
+        {
+            $id = absint($id);
+            if ($id <= 0 || !is_array($data) || !isset($data['stock_status']) || $data['stock_status'] !== 'İcarə') {
+                return;
+            }
+            global $wpdb;
+            $existing = $wpdb->get_row($wpdb->prepare("SELECT stock_status, rental_duration_value, rental_duration_unit, rental_started_at, rental_ends_at FROM {$this->table_name()} WHERE id = %d", $id), ARRAY_A);
+            if (!is_array($existing) || $this->normalize_stock_status_value(isset($existing['stock_status']) ? $existing['stock_status'] : '') !== 'İcarə') {
+                return;
+            }
+            $same_value = (int) (isset($existing['rental_duration_value']) ? $existing['rental_duration_value'] : 0) === (int) (isset($data['rental_duration_value']) ? $data['rental_duration_value'] : 0);
+            $same_unit = $this->normalize_rental_unit(isset($existing['rental_duration_unit']) ? $existing['rental_duration_unit'] : '') === $this->normalize_rental_unit(isset($data['rental_duration_unit']) ? $data['rental_duration_unit'] : '');
+            if ($same_value && $same_unit && !empty($existing['rental_ends_at'])) {
+                $data['rental_started_at'] = !empty($existing['rental_started_at']) ? $existing['rental_started_at'] : current_time('mysql');
+                $data['rental_ends_at'] = $existing['rental_ends_at'];
+            }
+        }
+
+        private function sort_rental_records($records)
+        {
+            usort($records, function ($a, $b) {
+                $a_end = isset($a['rental_ends_at']) ? strtotime((string) $a['rental_ends_at']) : PHP_INT_MAX;
+                $b_end = isset($b['rental_ends_at']) ? strtotime((string) $b['rental_ends_at']) : PHP_INT_MAX;
+                if ($a_end === $b_end) {
+                    return (isset($b['id']) ? (int) $b['id'] : 0) <=> (isset($a['id']) ? (int) $a['id'] : 0);
+                }
+                return $a_end <=> $b_end;
+            });
+            return $records;
+        }
+
         private function sanitize_record_from_post(&$errors)
         {
             $allowed_types = array('Online', 'Universal', 'Offline');
             $allowed_consoles = array('PS4', 'PS5', 'PS4/PS5');
             $allowed_payments = array('Nağd', 'Nisyə');
-            $allowed_stock = array('Satılıb', 'Satılmayıb');
+            $allowed_stock = array('Satılıb', 'Satılmayıb', 'İcarə');
 
             $game_name = isset($_POST['game_name']) ? sanitize_text_field(wp_unslash($_POST['game_name'])) : '';
             $account_type = isset($_POST['account_type']) ? sanitize_text_field(wp_unslash($_POST['account_type'])) : '';
@@ -907,19 +1042,13 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $sale_date = isset($_POST['sale_date']) ? sanitize_text_field(wp_unslash($_POST['sale_date'])) : '';
             $payment_type = isset($_POST['payment_type']) ? sanitize_text_field(wp_unslash($_POST['payment_type'])) : '';
             $stock_status = isset($_POST['stock_status']) ? sanitize_text_field(wp_unslash($_POST['stock_status'])) : '';
+            $rental_duration_value = isset($_POST['rental_duration_value']) ? absint($_POST['rental_duration_value']) : 0;
+            $rental_duration_unit = isset($_POST['rental_duration_unit']) ? sanitize_text_field(wp_unslash($_POST['rental_duration_unit'])) : 'day';
 
             $game_name = $this->normalize_game_names($game_name);
-            if ($game_name === '') {
-                $errors[] = 'Oyunun adı boş ola bilməz.';
-            }
-
-            if (!in_array($account_type, $allowed_types, true)) {
-                $errors[] = 'Növ düzgün seçilməyib.';
-            }
-
-            if ($email === '' || !is_email($email)) {
-                $errors[] = 'E-mail formatı düzgün deyil.';
-            }
+            if ($game_name === '') $errors[] = 'Oyunun adı boş ola bilməz.';
+            if (!in_array($account_type, $allowed_types, true)) $errors[] = 'Növ düzgün seçilməyib.';
+            if ($email === '' || !is_email($email)) $errors[] = 'E-mail formatı düzgün deyil.';
 
             $price_clean = str_replace(',', '.', trim($price_raw));
             if ($price_clean === '' || !is_numeric($price_clean) || (float) $price_clean < 0) {
@@ -929,47 +1058,30 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 $price = round((float) $price_clean, 2);
             }
 
-            if (!in_array($console, $allowed_consoles, true)) {
-                $errors[] = 'Konsol düzgün seçilməyib.';
-            }
-
-            if (!in_array($payment_type, $allowed_payments, true)) {
-                $errors[] = 'Ödəniş növü düzgün seçilməyib.';
-            }
-
-            if (!in_array($stock_status, $allowed_stock, true)) {
-                $errors[] = 'Stok statusu düzgün seçilməyib.';
-            }
+            if (!in_array($console, $allowed_consoles, true)) $errors[] = 'Konsol düzgün seçilməyib.';
+            if (!in_array($payment_type, $allowed_payments, true)) $errors[] = 'Ödəniş növü düzgün seçilməyib.';
+            if (!in_array($stock_status, $allowed_stock, true)) $errors[] = 'Stok statusu düzgün seçilməyib.';
 
             if ($stock_status === 'Satılıb') {
-                if (!$this->validate_date($sale_date)) {
-                    $errors[] = 'Satılıb seçilərsə satış tarixi düzgün olmalıdır.';
-                }
+                if (!$this->validate_date($sale_date)) $errors[] = 'Satılıb seçilərsə satış tarixi düzgün olmalıdır.';
             } elseif ($sale_date !== '' && !$this->validate_date($sale_date)) {
                 $errors[] = 'Satış tarixi düzgün deyil.';
             }
 
             $customer_name = $this->normalize_name($customer_name_raw);
-            if ($customer_name !== '' && !preg_match('/^[\p{L}\s]+$/u', $customer_name)) {
-                $errors[] = 'Ad soyad yalnız hərflərdən və boşluqdan ibarət olmalıdır.';
-            }
+            if ($customer_name !== '' && !preg_match('/^[\p{L}\s]+$/u', $customer_name)) $errors[] = 'Ad soyad yalnız hərflərdən və boşluqdan ibarət olmalıdır.';
 
             $phone_error = '';
             $phone = $this->normalize_phone($phone_raw, $phone_error);
-            if ($phone_raw !== '' && $phone === '' && $phone_error !== '') {
-                $errors[] = $phone_error;
+            if ($phone_raw !== '' && $phone === '' && $phone_error !== '') $errors[] = $phone_error;
+
+            if ($stock_status === 'Satılıb' || $stock_status === 'İcarə') {
+                if ($customer_name === '') $errors[] = ($stock_status === 'İcarə' ? 'İcarə' : 'Satılıb') . ' seçilərsə ad soyad məcburidir.';
+                if ($phone === '') $errors[] = ($stock_status === 'İcarə' ? 'İcarə' : 'Satılıb') . ' seçilərsə telefon məcburidir.';
             }
 
-            if ($stock_status === 'Satılıb') {
-                if ($customer_name === '') {
-                    $errors[] = 'Satılıb seçilərsə ad soyad məcburidir.';
-                }
-                if ($phone === '') {
-                    $errors[] = 'Satılıb seçilərsə telefon məcburidir.';
-                }
-            }
-
-            return array(
+            $rental = $this->build_rental_fields($stock_status, $rental_duration_value, $rental_duration_unit, $errors);
+            return array_merge(array(
                 'game_name' => $game_name,
                 'account_type' => $account_type,
                 'email' => $email,
@@ -977,12 +1089,11 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'console' => $console,
                 'customer_name' => $customer_name,
                 'phone' => $phone,
-                'sale_date' => $sale_date !== '' ? $sale_date : null,
+                'sale_date' => $stock_status === 'Satılıb' && $sale_date !== '' ? $sale_date : null,
                 'payment_type' => $payment_type,
                 'stock_status' => $stock_status,
-            );
+            ), $rental);
         }
-
 
         private function pdf_unescape_string($value)
         {
@@ -1283,14 +1394,17 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'Ç' => 'c',
             ));
 
-            if (strpos($lower, 'satılmayıb') !== false || strpos($ascii, 'satilmayib') !== false || strpos($ascii, 'satilmayan') !== false || strpos($ascii, 'icare') !== false || strpos($ascii, 'icarə') !== false || strpos($ascii, 'unsold') !== false) {
+            if (strpos($lower, 'icarə') !== false || strpos($ascii, 'icare') !== false || strpos($ascii, 'rental') !== false) {
+                return 'İcarə';
+            }
+            if (strpos($lower, 'satılmayıb') !== false || strpos($ascii, 'satilmayib') !== false || strpos($ascii, 'satilmayan') !== false || strpos($ascii, 'unsold') !== false) {
                 return 'Satılmayıb';
             }
             if (strpos($lower, 'satılıb') !== false || strpos($ascii, 'satilib') !== false || strpos($ascii, 'sold') !== false) {
                 return 'Satılıb';
             }
 
-            return in_array($value, array('Satılıb', 'Satılmayıb'), true) ? $value : 'Satılmayıb';
+            return in_array($value, array('Satılıb', 'Satılmayıb', 'İcarə'), true) ? $value : 'Satılmayıb';
         }
 
         private function normalize_legacy_console($value)
@@ -1500,7 +1614,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             global $wpdb;
             $table = $this->table_name();
             $this->create_or_update_table();
-            $counts = array('total' => 0, 'sold' => 0, 'unsold' => 0, 'other' => 0);
+            $counts = array('total' => 0, 'sold' => 0, 'unsold' => 0, 'rental' => 0, 'other' => 0);
             $rows = $wpdb->get_results("SELECT stock_status, COUNT(*) AS cnt FROM {$table} GROUP BY stock_status", ARRAY_A);
             if (!is_array($rows)) {
                 return $counts;
@@ -1513,6 +1627,8 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     $counts['sold'] += $cnt;
                 } elseif ($status === 'Satılmayıb') {
                     $counts['unsold'] += $cnt;
+                } elseif ($status === 'İcarə') {
+                    $counts['rental'] += $cnt;
                 } else {
                     $counts['other'] += $cnt;
                 }
@@ -1712,6 +1828,10 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $universal['phone'] = '';
             $universal['sale_date'] = null;
             $universal['stock_status'] = 'Satılmayıb';
+            $universal['rental_duration_value'] = null;
+            $universal['rental_duration_unit'] = null;
+            $universal['rental_started_at'] = null;
+            $universal['rental_ends_at'] = null;
             $universal['created_at'] = $now;
             $universal['updated_at'] = $now;
 
@@ -1743,13 +1863,16 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $data = $this->sanitize_record_from_post($errors);
             $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
             $return_tab = isset($_POST['mara_return_tab']) ? sanitize_key(wp_unslash($_POST['mara_return_tab'])) : 'accounts';
+            if (empty($errors) && $id > 0) {
+                $this->preserve_existing_rental_window($id, $data);
+            }
 
             if (!empty($errors)) {
                 $this->redirect_with_message('error', $return_tab, implode(' ', $errors));
             }
 
             $now = current_time('mysql');
-            $base_formats = array('%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s');
+            $base_formats = array('%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s');
 
             if ($id > 0) {
                 $data['updated_at'] = $now;
@@ -1917,7 +2040,8 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
         private function mobile_record_payload($record)
         {
             if (is_array($record)) $this->hydrate_record_games($record);
-            return array(
+            $runtime = $this->rental_runtime_payload(is_array($record) ? $record : array());
+            return array_merge(array(
                 'id' => isset($record['id']) ? (int) $record['id'] : 0,
                 'game_name' => isset($record['game_name']) ? (string) $record['game_name'] : '',
                 'primary_game_id' => isset($record['primary_game_id']) ? (int) $record['primary_game_id'] : 0,
@@ -1933,9 +2057,13 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'sale_date' => isset($record['sale_date']) && $record['sale_date'] !== null ? (string) $record['sale_date'] : '',
                 'payment_type' => isset($record['payment_type']) ? (string) $record['payment_type'] : '',
                 'stock_status' => isset($record['stock_status']) ? $this->normalize_stock_status_value($record['stock_status']) : 'Satılmayıb',
+                'rental_duration_value' => isset($record['rental_duration_value']) ? (int) $record['rental_duration_value'] : 0,
+                'rental_duration_unit' => isset($record['rental_duration_unit']) ? (string) $record['rental_duration_unit'] : '',
+                'rental_started_at' => isset($record['rental_started_at']) ? (string) $record['rental_started_at'] : '',
+                'rental_ends_at' => isset($record['rental_ends_at']) ? (string) $record['rental_ends_at'] : '',
                 'created_at' => isset($record['created_at']) ? (string) $record['created_at'] : '',
                 'updated_at' => isset($record['updated_at']) ? (string) $record['updated_at'] : '',
-            );
+            ), $runtime);
         }
 
         private function mobile_customer_payload($customer)
@@ -1974,6 +2102,8 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 $records = array_values(array_filter($records, array($this, 'is_sold_record')));
             } elseif ($section === 'unsold') {
                 $records = array_values(array_filter($records, array($this, 'is_unsold_record')));
+            } elseif ($section === 'rental') {
+                $records = $this->sort_rental_records(array_values(array_filter($records, array($this, 'is_rental_record'))));
             } elseif ($section === 'customers' || $section === 'settings') {
                 $records = array();
             }
@@ -2078,7 +2208,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $allowed_types = array('Online', 'Universal', 'Offline');
             $allowed_consoles = array('PS4', 'PS5', 'PS4/PS5');
             $allowed_payments = array('Nağd', 'Nisyə');
-            $allowed_stock = array('Satılıb', 'Satılmayıb');
+            $allowed_stock = array('Satılıb', 'Satılmayıb', 'İcarə');
 
             $game_name = $this->normalize_game_names(isset($input['game_name']) ? sanitize_text_field((string) $input['game_name']) : '');
             $account_type = isset($input['account_type']) ? sanitize_text_field((string) $input['account_type']) : '';
@@ -2090,6 +2220,8 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $sale_date = isset($input['sale_date']) ? sanitize_text_field((string) $input['sale_date']) : '';
             $payment_type = isset($input['payment_type']) ? sanitize_text_field((string) $input['payment_type']) : '';
             $stock_status = isset($input['stock_status']) ? sanitize_text_field((string) $input['stock_status']) : '';
+            $rental_duration_value = isset($input['rental_duration_value']) ? absint($input['rental_duration_value']) : 0;
+            $rental_duration_unit = isset($input['rental_duration_unit']) ? sanitize_text_field((string) $input['rental_duration_unit']) : 'day';
 
             if ($game_name === '') $errors[] = 'Oyunun adı boş ola bilməz.';
             if (!in_array($account_type, $allowed_types, true)) $errors[] = 'Növ düzgün seçilməyib.';
@@ -2114,20 +2246,19 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             }
 
             $customer_name = $this->normalize_name($customer_name_raw);
-            if ($customer_name !== '' && !preg_match('/^[\p{L}\s]+$/u', $customer_name)) {
-                $errors[] = 'Ad soyad yalnız hərflərdən və boşluqdan ibarət olmalıdır.';
-            }
+            if ($customer_name !== '' && !preg_match('/^[\p{L}\s]+$/u', $customer_name)) $errors[] = 'Ad soyad yalnız hərflərdən və boşluqdan ibarət olmalıdır.';
 
             $phone_error = '';
             $phone = $this->normalize_phone($phone_raw, $phone_error);
             if ($phone_raw !== '' && $phone === '' && $phone_error !== '') $errors[] = $phone_error;
 
-            if ($stock_status === 'Satılıb') {
-                if ($customer_name === '') $errors[] = 'Satılıb seçilərsə ad soyad məcburidir.';
-                if ($phone === '') $errors[] = 'Satılıb seçilərsə telefon məcburidir.';
+            if ($stock_status === 'Satılıb' || $stock_status === 'İcarə') {
+                if ($customer_name === '') $errors[] = ($stock_status === 'İcarə' ? 'İcarə' : 'Satılıb') . ' seçilərsə ad soyad məcburidir.';
+                if ($phone === '') $errors[] = ($stock_status === 'İcarə' ? 'İcarə' : 'Satılıb') . ' seçilərsə telefon məcburidir.';
             }
 
-            return array(
+            $rental = $this->build_rental_fields($stock_status, $rental_duration_value, $rental_duration_unit, $errors);
+            return array_merge(array(
                 'game_name' => $game_name,
                 'account_type' => $account_type,
                 'email' => $email,
@@ -2135,10 +2266,10 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'console' => $console,
                 'customer_name' => $customer_name,
                 'phone' => $phone,
-                'sale_date' => $sale_date !== '' ? $sale_date : null,
+                'sale_date' => $stock_status === 'Satılıb' && $sale_date !== '' ? $sale_date : null,
                 'payment_type' => $payment_type,
                 'stock_status' => $stock_status,
-            );
+            ), $rental);
         }
 
         public function rest_mobile_save($request)
@@ -2161,8 +2292,11 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
 
             $table = $this->table_name();
             $id = isset($input['id']) ? absint($input['id']) : 0;
+            if ($id > 0) {
+                $this->preserve_existing_rental_window($id, $data);
+            }
             $now = current_time('mysql');
-            $base_formats = array('%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s');
+            $base_formats = array('%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s');
             $auto_universal_created = false;
 
             if ($id > 0) {
@@ -2266,7 +2400,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
 
             $table = $this->table_name();
             $now = current_time('mysql');
-            $formats = array('%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');
+            $formats = array('%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s');
             $created_ids = array();
             $created_types = array();
             $wpdb->query('START TRANSACTION');
@@ -2488,7 +2622,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $game_names = $this->get_game_name_rows();
             $settings = $this->get_settings();
             $active_tab = isset($_GET['mara_tab']) ? sanitize_key(wp_unslash($_GET['mara_tab'])) : 'accounts';
-            if (!in_array($active_tab, array('accounts', 'new', 'customers', 'sold', 'unsold', 'settings'), true)) {
+            if (!in_array($active_tab, array('accounts', 'new', 'customers', 'sold', 'unsold', 'rental', 'settings'), true)) {
                 $active_tab = 'accounts';
             }
 
@@ -2507,6 +2641,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                         'customers' => 'Müştərilər',
                         'sold' => 'Satılanlar',
                         'unsold' => 'Satılmayanlar',
+                        'rental' => 'İcarə',
                         'settings' => 'Ayarlar',
                     );
                     foreach ($tabs as $key => $label) :
@@ -2523,7 +2658,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     <div class="mara-account-sale-card mara-account-sale-card-form">
                         <div class="mara-account-sale-card-head">
                             <h2>Yeni hesab satışı əlavə et</h2>
-                            <p>Satılmayıb seçilərsə müştəri məlumatları boş saxlanıla bilər.</p>
+                            <p>Satılıb, Satılmayıb və İcarə statusları dəstəklənir. İcarə üçün müştəri və müddət qeyd edilir.</p>
                         </div>
                         <?php echo $this->render_form(null, $settings, 'new', $customers, $game_names); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                     </div>
@@ -2541,6 +2676,9 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     <?php echo $this->render_records_table(array_values(array_filter($records, array($this, 'is_unsold_record'))), 'unsold-table', 'Satılmayan hesablar'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                 </section>
 
+                <section class="mara-account-sale-section" data-mara-tab="rental">
+                    <?php echo $this->render_records_table($this->sort_rental_records(array_values(array_filter($records, array($this, 'is_rental_record')))), 'rental-table', 'İcarədə olan hesablar'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+                </section>
 
                 <section class="mara-account-sale-section" data-mara-tab="settings">
                     <?php echo $this->render_stats($stats); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
@@ -2567,6 +2705,11 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             return isset($record['stock_status']) && $this->normalize_stock_status_value($record['stock_status']) === 'Satılmayıb';
         }
 
+        public function is_rental_record($record)
+        {
+            return isset($record['stock_status']) && $this->normalize_stock_status_value($record['stock_status']) === 'İcarə';
+        }
+
         private function export_button_html()
         {
             $url = wp_nonce_url(
@@ -2582,11 +2725,12 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 array('Hesablar', $stats['total']),
                 array('Satılan', $stats['sold']),
                 array('Satılmayan', $stats['unsold']),
-                array('Cəmi', $this->format_price($stats['total_amount'])),
-                array('Nağd', $this->format_price($stats['cash_amount'])),
-                array('Nisyə', $this->format_price($stats['credit_amount'])),
-                array('Bugün', $stats['today_sold']),
-                array('Bu ay', $stats['month_sold']),
+                array('İcarə', $stats['rental']),
+                array('Bitməyə yaxın', $stats['rental_expiring']),
+                array('Müddəti bitən', $stats['rental_expired']),
+                array('Cəmi satış', $this->format_price($stats['total_amount'])),
+                array('Bugün satılan', $stats['today_sold']),
+                array('Bu ay satılan', $stats['month_sold']),
             );
             ob_start();
             ?>
@@ -2655,6 +2799,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                             <option value="">Hamısı</option>
                             <option value="Satılıb">Satılıb</option>
                             <option value="Satılmayıb">Satılmayıb</option>
+                            <option value="İcarə">İcarə</option>
                         </select>
                     </label>
                     <label>Başlanğıc tarixi<input type="date" data-filter-field="date_from"></label>
@@ -2682,9 +2827,10 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $is_accounts_table = ($table_id === 'accounts-table');
             $is_sold_table = ($table_id === 'sold-table');
             $is_unsold_table = ($table_id === 'unsold-table');
+            $is_rental_table = ($table_id === 'rental-table');
             $card_classes = 'mara-account-sale-card mara-account-sale-table-card';
             $table_classes = 'mara-account-sale-table';
-            if ($is_accounts_table || $is_sold_table || $is_unsold_table) {
+            if ($is_accounts_table || $is_sold_table || $is_unsold_table || $is_rental_table) {
                 $card_classes .= ' mara-account-sale-mobile-compact-card';
                 $table_classes .= ' mara-account-sale-mobile-compact-table';
             }
@@ -2696,6 +2842,9 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             }
             if ($is_unsold_table) {
                 $card_classes .= ' mara-account-sale-unsold-flat-card';
+            }
+            if ($is_rental_table) {
+                $card_classes .= ' mara-account-sale-rental-flat-card';
             }
 
             ob_start();
@@ -2723,11 +2872,12 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                                 <th>Telefon</th>
                                 <th>Satış tarixi</th>
                                 <th>Stok</th>
+                                <?php if ($is_rental_table) : ?><th>İcarə müddəti</th><?php endif; ?>
                             </tr>
                         </thead>
                         <tbody>
                         <?php if (empty($records)) : ?>
-                            <tr class="mara-account-sale-empty-row"><td colspan="9">Məlumat yoxdur.</td></tr>
+                            <tr class="mara-account-sale-empty-row"><td colspan="<?php echo $is_rental_table ? 10 : 9; ?>">Məlumat yoxdur.</td></tr>
                         <?php else : ?>
                             <?php foreach ($records as $record) :
                                 $record_json = wp_json_encode($this->record_for_json($record));
@@ -2751,7 +2901,11 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                                     <td data-label="Ad soyad"><?php echo esc_html($record['customer_name'] ?: '—'); ?></td>
                                     <td data-label="Telefon"><?php echo $this->phone_link($record['phone']); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></td>
                                     <td data-label="Satış tarixi"><?php echo esc_html($record['sale_date'] ?: '—'); ?></td>
-                                    <td data-label="Stok"><?php echo $this->badge($this->normalize_stock_status_value($record['stock_status']) === 'Satılıb' ? 'sold' : 'unsold', $record['stock_status']); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></td>
+                                    <?php $normalized_status = $this->normalize_stock_status_value($record['stock_status']); ?>
+                                    <td data-label="Stok"><?php echo $this->badge($normalized_status === 'Satılıb' ? 'sold' : ($normalized_status === 'İcarə' ? 'rental' : 'unsold'), $normalized_status); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></td>
+                                    <?php if ($is_rental_table) : $rental_runtime = $this->rental_runtime_payload($record); ?>
+                                        <td data-label="İcarə müddəti"><strong><?php echo esc_html($rental_runtime['rental_remaining_text'] ?: '—'); ?></strong><?php if (!empty($rental_runtime['rental_ends_at'])) : ?><br><small><?php echo esc_html($rental_runtime['rental_ends_at']); ?></small><?php endif; ?></td>
+                                    <?php endif; ?>
                                 </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
@@ -2765,6 +2919,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
 
         private function record_for_json($record)
         {
+            $record = array_merge($record, $this->rental_runtime_payload($record));
             $record['price_formatted'] = $this->format_price($record['price']);
             $record['whatsapp_phone'] = preg_replace('/\D+/', '', $record['phone']);
             $record['delete_url'] = wp_nonce_url(
@@ -2796,6 +2951,10 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'sale_date' => current_time('Y-m-d'),
                 'payment_type' => $settings['default_payment_type'],
                 'stock_status' => $settings['default_stock_status'],
+                'rental_duration_value' => '',
+                'rental_duration_unit' => 'day',
+                'rental_started_at' => '',
+                'rental_ends_at' => '',
             ));
 
             ob_start();
@@ -2842,12 +3001,24 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                         <input type="date" name="sale_date" value="<?php echo esc_attr($record['sale_date']); ?>" data-form-field="sale_date">
                     </label>
                     <input type="hidden" name="payment_type" value="<?php echo esc_attr(in_array($record['payment_type'], array('Nağd', 'Nisyə'), true) ? $record['payment_type'] : 'Nağd'); ?>" data-form-field="payment_type">
-                    <label>Stok *
+                    <label>Stok / status *
                         <select name="stock_status" required data-form-field="stock_status" data-stock-select>
                             <option value="Satılıb" <?php selected($record['stock_status'], 'Satılıb'); ?>>Satılıb</option>
                             <option value="Satılmayıb" <?php selected($record['stock_status'], 'Satılmayıb'); ?>>Satılmayıb</option>
+                            <option value="İcarə" <?php selected($record['stock_status'], 'İcarə'); ?>>İcarə</option>
                         </select>
                     </label>
+                    <div class="mara-account-sale-rental-fields" data-rental-fields <?php echo $record['stock_status'] === 'İcarə' ? '' : 'hidden'; ?>>
+                        <label>İcarə müddəti *
+                            <input type="number" min="1" step="1" name="rental_duration_value" value="<?php echo esc_attr((int) $record['rental_duration_value'] > 0 ? (int) $record['rental_duration_value'] : ''); ?>" data-form-field="rental_duration_value" data-rental-duration-value>
+                        </label>
+                        <label>Müddət vahidi *
+                            <select name="rental_duration_unit" data-form-field="rental_duration_unit" data-rental-duration-unit>
+                                <option value="hour" <?php selected($record['rental_duration_unit'], 'hour'); ?>>Saat</option>
+                                <option value="day" <?php selected($record['rental_duration_unit'], 'day'); ?>>Gün</option>
+                            </select>
+                        </label>
+                    </div>
                 </div>
                 <div class="mara-account-sale-form-note" data-stock-note>Satılıb seçilərsə ad soyad və telefon məcburidir.</div>
                 <div class="mara-account-sale-form-actions">
@@ -2993,7 +3164,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     <div>
                         <h2>PDF import</h2>
                         <p>Seçilən PDF faylı həqiqətən oxunur və içindəki hesab sətrləri bazaya əlavə edilir.</p>
-                        <p><strong>Hazırkı baza:</strong> Cəmi <?php echo esc_html($db_counts['total']); ?> / Satılıb <?php echo esc_html($db_counts['sold']); ?> / Satılmayıb <?php echo esc_html($db_counts['unsold']); ?></p>
+                        <p><strong>Hazırkı baza:</strong> Cəmi <?php echo esc_html($db_counts['total']); ?> / Satılıb <?php echo esc_html($db_counts['sold']); ?> / Satılmayıb <?php echo esc_html($db_counts['unsold']); ?> / İcarə <?php echo esc_html(isset($db_counts['rental']) ? $db_counts['rental'] : 0); ?></p>
                         <?php if (is_array($last_import) && !empty($last_import)) : ?>
                             <p><strong>Son import:</strong> <?php echo esc_html(isset($last_import['source']) ? $last_import['source'] : '—'); ?> — əlavə edildi <?php echo esc_html(isset($last_import['inserted']) ? (int) $last_import['inserted'] : 0); ?></p>
                         <?php endif; ?>

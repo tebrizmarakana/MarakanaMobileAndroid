@@ -1,4 +1,13 @@
-# Marakana Mobile Native v70
+# Marakana Mobile Native v71
+
+## v71 — Hesab Satışı İcarə statusu
+- Hesab statusları: Satılıb / Satılmayıb / İcarə.
+- İcarə seçiləndə müddət Saat və ya Gün ilə qeyd olunur.
+- Alt paneldə ayrıca ⏳ İcarə bölməsi var.
+- İcarə kartlarında qalan müddət, bitməyə yaxın xəbərdarlıq və müddəti bitən status görünür.
+- `versionCode 71`
+- `versionName 3.4.48-native-v71`
+- Release APK: `MarakanaMobile-v71-release.apk`
 
 ## v70 — Oyun siyahısı serverdən həmişə təzələnir
 - Oyunun adı picker-i hər açılışda WordPress `/overview?section=settings` API-sindən təzə `game_names` siyahısını alır.
