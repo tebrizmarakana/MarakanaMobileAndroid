@@ -3644,12 +3644,148 @@ public class MainActivity extends Activity {
         JSONObject prepared = record;
         try {
             prepared = new JSONObject(record == null ? "{}" : record.toString());
+            String previousStatus = prepared.optString("stock_status", "").trim();
             prepared.put("stock_status", preferredStatus == null ? "" : preferredStatus);
+
+            // Satılmayan stokdan Sat / İcarə ver axını həmişə təmiz müştəri sahələri ilə başlayır.
+            if ("Satılmayıb".equalsIgnoreCase(previousStatus)) {
+                prepared.put("customer_name", "");
+                prepared.put("phone", "");
+                prepared.put("sale_date", "");
+                prepared.put("rental_duration_value", 0);
+                prepared.put("rental_duration_unit", "day");
+            }
             if ("Satılıb".equals(preferredStatus) && prepared.optString("sale_date", "").trim().isEmpty()) {
                 prepared.put("sale_date", new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date()));
             }
         } catch (Exception ignored) {}
-        showAccountSalesForm(prepared, settings);
+        showAccountSalesTransactionForm(prepared, settings, preferredStatus);
+    }
+
+    private void showAccountSalesTransactionForm(JSONObject record, JSONObject settings, String preferredStatus) {
+        final boolean rental = "İcarə".equals(preferredStatus);
+        final boolean sold = "Satılıb".equals(preferredStatus);
+        String screenTitle = rental ? "Hesabı icarəyə ver" : "Hesabı sat";
+        ScrollView sv = screenWithBody(screenTitle, true, () -> showAccountSales("unsold"));
+        LinearLayout body = scrollBody(sv);
+
+        TextView infoTitle = text("Hesab məlumatları", 15, TEXT, true);
+        body.addView(infoTitle);
+        spacer(body, 6);
+
+        // Sat / İcarə ver zamanı oyun-hesab məlumatları yalnız görünüşdür, dəyişdirilə bilməz.
+        LinearLayout info = card();
+        ArrayList<String> games = parseAccountSalesGameSelection(record.optString("game_name", ""));
+        if (games.size() > 1) {
+            StringBuilder bundle = new StringBuilder();
+            for (int i = 0; i < games.size(); i++) {
+                if (i > 0) bundle.append("\n");
+                bundle.append("• ").append(games.get(i));
+            }
+            addAccountSalesDetailField(info, "⧉", "Bundle oyunları", bundle.toString());
+        } else {
+            String gameName = games.isEmpty() ? record.optString("game_name", "") : games.get(0);
+            addAccountSalesDetailField(info, "🎮", "Oyun", gameName);
+        }
+        addAccountSalesDetailField(info, "📧", "E-mail", record.optString("email", ""));
+        addAccountSalesDetailField(info, "🏷️", "Növ", record.optString("account_type", ""));
+        addAccountSalesDetailField(info, "🕹️", "Konsol", record.optString("console", ""));
+        addAccountSalesDetailField(info, "💰", "Qiymət", record.optString("price_formatted", money(record.optDouble("price", 0))));
+        addAccountSalesDetailField(info, "📦", "Status", preferredStatus);
+        body.addView(info);
+
+        TextView customerTitle = text(rental ? "İcarə məlumatları" : "Satış məlumatları", 15, TEXT, true);
+        body.addView(customerTitle);
+        spacer(body, 6);
+
+        EditText customer = accountField(body, "Ad soyad *", "Kliklə müştəri seç və ya axtar", record.optString("customer_name", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        EditText phone = accountField(body, "Telefon *", "0705603030", record.optString("phone", ""), InputType.TYPE_CLASS_PHONE);
+        customer.setFocusable(false);
+        customer.setClickable(true);
+        customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone));
+
+        EditText date = null;
+        if (sold) {
+            String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
+            date = accountField(body, "Satış tarixi *", "DD-MM-YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
+        }
+
+        EditText rentalDuration = null;
+        Spinner rentalUnit = null;
+        if (rental) {
+            rentalDuration = accountField(
+                    body,
+                    "İcarə müddəti *",
+                    "Məsələn: 3",
+                    record.optInt("rental_duration_value", 0) > 0 ? String.valueOf(record.optInt("rental_duration_value", 0)) : "",
+                    InputType.TYPE_CLASS_NUMBER
+            );
+            String rentalUnitValue = "hour".equalsIgnoreCase(record.optString("rental_duration_unit", "day")) ? "Saat" : "Gün";
+            rentalUnit = accountSpinnerField(body, "Müddət vahidi *", new String[]{"Saat", "Gün"}, rentalUnitValue);
+        }
+
+        TextView note = text(
+                rental ? "Oyun məlumatları yalnız baxış üçündür. Müştəri və icarə müddətini daxil et."
+                        : "Oyun məlumatları yalnız baxış üçündür. Müştəri və satış tarixini daxil et.",
+                12, MUTED, false);
+        note.setPadding(dp(4), dp(4), dp(4), dp(10));
+        body.addView(note);
+
+        Button save = button(rental ? "İcarəyə ver" : "Satışı yadda saxla", GREEN, Color.WHITE);
+        body.addView(save);
+
+        final EditText saleDateField = date;
+        final EditText rentalDurationField = rentalDuration;
+        final Spinner rentalUnitField = rentalUnit;
+        save.setOnClickListener(v -> {
+            String customerValue = customer.getText().toString().trim();
+            String phoneValue = phone.getText().toString().trim();
+            if (customerValue.isEmpty() || phoneValue.isEmpty()) {
+                toast((rental ? "İcarə" : "Satış") + " üçün müştəri adı və telefon məcburidir.");
+                return;
+            }
+
+            if (sold && (saleDateField == null || saleDateField.getText().toString().trim().isEmpty())) {
+                toast("Satış tarixini daxil et.");
+                return;
+            }
+
+            int durationValue = 0;
+            if (rental) {
+                String durationText = rentalDurationField == null ? "" : rentalDurationField.getText().toString().trim();
+                try { durationValue = Integer.parseInt(durationText); } catch (Exception ignored) {}
+                if (durationValue <= 0) {
+                    toast("İcarə müddətini düzgün daxil et.");
+                    return;
+                }
+            }
+
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("id", record.optInt("id", 0));
+                payload.put("game_name", record.optString("game_name", ""));
+                payload.put("game_ids", accountSalesGameIdsForSelection(record.optString("game_name", "")));
+                payload.put("account_type", record.optString("account_type", "Online"));
+                payload.put("email", record.optString("email", ""));
+                payload.put("price", String.valueOf(record.optDouble("price", 0)));
+                payload.put("console", record.optString("console", "PS5"));
+                payload.put("customer_name", customerValue);
+                payload.put("phone", phoneValue);
+                payload.put("sale_date", sold && saleDateField != null ? accountSalesDateForApi(saleDateField.getText().toString()) : "");
+                String paymentType = record.optString("payment_type", "Nağd").trim();
+                payload.put("payment_type", paymentType.isEmpty() ? "Nağd" : paymentType);
+                payload.put("stock_status", preferredStatus);
+                if (rental) {
+                    payload.put("rental_duration_value", String.valueOf(durationValue));
+                    payload.put("rental_duration_unit", rentalUnitField != null && "Saat".equals(String.valueOf(rentalUnitField.getSelectedItem())) ? "hour" : "day");
+                }
+            } catch (Exception ignored) {}
+
+            postAccountSalesJson("/save", payload, result -> {
+                toast(rental ? "Hesab icarəyə verildi." : "Hesab satıldı.");
+                showAccountSales(rental ? "rental" : "sold");
+            });
+        });
     }
 
     private void showAccountSalesForm(JSONObject record, JSONObject settings) {
@@ -3762,9 +3898,17 @@ public class MainActivity extends Activity {
                 payload.put("email", email.getText().toString());
                 payload.put("price", price.getText().toString());
                 payload.put("console", String.valueOf(console.getSelectedItem()));
-                payload.put("customer_name", customer.getText().toString());
-                payload.put("phone", phone.getText().toString());
-                payload.put("sale_date", accountSalesDateForApi(date.getText().toString()));
+                // Satılmış hesab Satılmayıb statusuna qaytarılanda əvvəlki satış/müştəri izi saxlanmır.
+                // Beləliklə hesab Satılmayanlar bölməsinə tam təmiz stok kimi qayıdır.
+                if ("Satılmayıb".equals(selectedStatus)) {
+                    payload.put("customer_name", "");
+                    payload.put("phone", "");
+                    payload.put("sale_date", "");
+                } else {
+                    payload.put("customer_name", customer.getText().toString());
+                    payload.put("phone", phone.getText().toString());
+                    payload.put("sale_date", accountSalesDateForApi(date.getText().toString()));
+                }
                 // Ödəniş növü artıq UI-da yoxdur. Mövcud dəyəri yalnız köhnə WordPress
                 // validasiyası ilə uyğunluq üçün səssiz saxlayırıq; istifadəçiyə göstərilmir/seçdirilmir.
                 payload.put("payment_type", record.optString("payment_type", "Nağd"));
@@ -3775,8 +3919,16 @@ public class MainActivity extends Activity {
                 }
             } catch (Exception ignored) {}
             postAccountSalesJson("/save", payload, result -> {
-                toast("İcarə".equals(selectedStatus) ? "Hesab icarəyə verildi." : "Hesab yeniləndi.");
-                showAccountSales("İcarə".equals(selectedStatus) ? "rental" : "accounts");
+                if ("İcarə".equals(selectedStatus)) {
+                    toast("Hesab icarəyə verildi.");
+                    showAccountSales("rental");
+                } else if ("Satılmayıb".equals(selectedStatus)) {
+                    toast("Hesab Satılmayanlara qaytarıldı.");
+                    showAccountSales("unsold");
+                } else {
+                    toast("Hesab yeniləndi.");
+                    showAccountSales("accounts");
+                }
             });
         });
     }

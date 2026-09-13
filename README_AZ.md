@@ -1,12 +1,22 @@
-# Marakana Mobile Native v73
+# Marakana Mobile Native v74
+
+## v74 — Sat / İcarə məlumatları yalnız baxış + Satılmayıb sıfırlama
+
+- Satılmayanlar bölməsində `Sat` və `İcarə ver` seçiləndə oyun/hesab məlumatları ayrıca baxış kartında göstərilir və dəyişdirilə bilmir.
+- Baxış kartında oyun/bundle, e-mail, növ, konsol, qiymət və seçilmiş status görünür.
+- `Sat` axınında yalnız müştəri adı, telefon və satış tarixi daxil edilir.
+- `İcarə ver` axınında yalnız müştəri adı, telefon, icarə müddəti və vahidi daxil edilir.
+- Satılmış hesab `Düzənlə` içində `Satılmayıb` edilərək yadda saxlananda müştəri adı, telefon və satış tarixi boşaldılır.
+- Bu halda hesab avtomatik `Satılmayanlar` bölməsinə qayıdır və təmiz stok kimi görünür.
+- `versionCode 74`
+- `versionName 3.4.51-native-v74`
+- Release APK: `MarakanaMobile-v74-release.apk`
 
 ## v73 — Satılmayan hesabda Sat / İcarə ver sürətli əməliyyatları
-
-- `Satılmayanlar` bölməsində hesab kartına bir dəfə klik etdikdə modern əməliyyat menyusu açılır.
-- `Düzənlə` düyməsinin yuxarısında `Sat` və `İcarə ver` əməliyyatları görünür.
-- `Sat` seçildikdə düzəliş forması `Satılıb` statusu ilə açılır; satış tarixi boşdursa bugünkü tarix avtomatik seçilir.
-- `İcarə ver` seçildikdə forma `İcarə` statusu ilə açılır və mövcud müddət/müştəri validasiyası işləyir.
-- Digər bölmələrin v72 modern tək-klik menyu davranışı dəyişməyib.
+- Satılmayanlar bölməsində hesaba bir dəfə klik edəndə menyunun yuxarısında `Sat` və `İcarə ver` əməliyyatları görünür.
+- `Sat` seçiləndə forma avtomatik Satılıb statusu ilə açılır və satış tarixi boşdursa bugünkü tarix qoyulur.
+- `İcarə ver` seçiləndə forma avtomatik İcarə statusu ilə açılır.
+- Satılmayan hesabda Ətraflı məlumat və Məlumatı göndər gizli qalır.
 - `versionCode 73`
 - `versionName 3.4.50-native-v73`
 - Release APK: `MarakanaMobile-v73-release.apk`

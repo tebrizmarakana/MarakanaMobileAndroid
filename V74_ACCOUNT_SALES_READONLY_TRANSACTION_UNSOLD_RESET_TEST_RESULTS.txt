@@ -1,0 +1,14 @@
+Marakana Mobile v74 — Sat / İcarə baxış məlumatları + Satılmayıb sıfırlama
+
+Yoxlamalar:
+- Satılmayan hesabda Sat seçiləndə oyun/hesab məlumatları input deyil, yalnız baxış kartıdır.
+- Sat axınında oyun adı, e-mail, növ, konsol, qiymət və status dəyişdirilə bilmir.
+- Sat axınında müştəri adı, telefon və satış tarixi daxil edilə bilir.
+- İcarə ver axınında oyun/hesab məlumatları yalnız baxışdır.
+- İcarə ver axınında müştəri adı, telefon, müddət və vahid daxil edilə bilir.
+- Satılmayan stokdan Sat / İcarə ver açılarkən köhnə müştəri/satış məlumatı daşınmır.
+- Satılmış hesab Düzənlə -> Satılmayıb -> yadda saxla ediləndə customer_name, phone və sale_date boş payload göndərilir.
+- Server tərəfi Satılmayıb statusunda sale_date-ni NULL edir və rental sahələrini sıfırlayır.
+- Yadda saxlandıqdan sonra Satılmayanlar bölməsi açılır.
+- Java sintaksis üçün javac parser yoxlamasında yeni syntax xətası aşkarlanmadı (Android SDK sinifləri bu konteynerdə yoxdur).
+- versionCode 74 / versionName 3.4.51-native-v74 və workflow artifact adları v74-ə qaldırılıb.
