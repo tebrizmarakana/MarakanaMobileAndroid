@@ -3308,7 +3308,7 @@ public class MainActivity extends Activity {
         LinearLayout gameColumn = new LinearLayout(this);
         gameColumn.setOrientation(LinearLayout.VERTICAL);
         boolean bundleAccount = cardGames.size() > 1;
-        boolean compactStatusInTitle = "sold".equals(section) || "unsold".equals(section) || "rental".equals(section);
+        boolean compactStatusInTitle = "sold".equals(section) || "rental".equals(section);
 
         String firstGameName = cardGames.isEmpty() ? row.optString("game_name", "Hesab") : cardGames.get(0);
         LinearLayout firstGameRow = new LinearLayout(this);
@@ -3396,11 +3396,28 @@ public class MainActivity extends Activity {
             }
             c.addView(buildAccountSalesMetaLine(row));
         } else {
-            c.addView(text((bundleAccount ? "⧉ " : "") + email, 13, MUTED, false));
+            if ("unsold".equals(section)) {
+                LinearLayout emailMetaRow = new LinearLayout(this);
+                emailMetaRow.setOrientation(LinearLayout.HORIZONTAL);
+                emailMetaRow.setGravity(Gravity.CENTER_VERTICAL);
+
+                TextView emailView = text((bundleAccount ? "⧉ " : "") + email, 13, MUTED, false);
+                emailMetaRow.addView(emailView, new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+                LinearLayout metaInline = buildAccountSalesInlineMeta(row);
+                LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                metaLp.setMargins(dp(6), 0, 0, 0);
+                emailMetaRow.addView(metaInline, metaLp);
+                c.addView(emailMetaRow);
+            } else {
+                c.addView(text((bundleAccount ? "⧉ " : "") + email, 13, MUTED, false));
+            }
             if (!customer.isEmpty() || !phone.isEmpty()) c.addView(text((customer.isEmpty() ? "—" : customer) + (phone.isEmpty() ? "" : "  •  " + phone), 12, MUTED, false));
             if (!saleDateDisplay.isEmpty()) c.addView(text(saleDateDisplay, 12, MUTED, false));
         }
-        if (!compactStatusInTitle && !"customer".equals(section)) {
+        if (!compactStatusInTitle && !"customer".equals(section) && !"unsold".equals(section)) {
             c.addView(buildAccountSalesMetaLine(row));
         }
         if ("İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim())) {
@@ -3870,7 +3887,7 @@ public class MainActivity extends Activity {
         EditText phone = accountField(body, "Telefon *", "0705603030", record.optString("phone", ""), InputType.TYPE_CLASS_PHONE);
         customer.setFocusable(false);
         customer.setClickable(true);
-        customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone));
+        customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone, sold));
 
         EditText date = null;
         if (sold) {
@@ -4729,6 +4746,10 @@ public class MainActivity extends Activity {
     }
 
     private void showAccountSalesCustomerPicker(EditText nameTarget, EditText phoneTarget) {
+        showAccountSalesCustomerPicker(nameTarget, phoneTarget, false);
+    }
+
+    private void showAccountSalesCustomerPicker(EditText nameTarget, EditText phoneTarget, boolean allowCreateWhenMissing) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(18), dp(8), dp(18), 0);
@@ -4767,7 +4788,17 @@ public class MainActivity extends Activity {
                 list.addView(choose, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
                 spacer(list, 4);
             }
-            if (count == 0) list.addView(empty(q.isEmpty() ? "Müştəri siyahısı boşdur." : "Uyğun müştəri tapılmadı. Yazdığın adı istifadə edə bilərsən."));
+            if (count == 0) {
+                list.addView(empty(q.isEmpty() ? "Müştəri siyahısı boşdur." : "Uyğun müştəri tapılmadı."));
+                if (allowCreateWhenMissing && !q.isEmpty()) {
+                    spacer(list, 8);
+                    Button createCustomer = button("＋ Yeni müştəri yarat", BLUE, Color.WHITE);
+                    createCustomer.setTextSize(13);
+                    createCustomer.setOnClickListener(v -> showAccountSalesQuickCreateCustomerDialog(
+                            search.getText().toString().trim(), nameTarget, phoneTarget, dialogHolder[0]));
+                    list.addView(createCustomer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+                }
+            }
         };
         search.addTextChangedListener(new SimpleTextWatcher(render));
 
@@ -4791,6 +4822,72 @@ public class MainActivity extends Activity {
             });
             render.run();
         });
+        dialog.show();
+    }
+
+    private void showAccountSalesQuickCreateCustomerDialog(String initialName, EditText nameTarget, EditText phoneTarget, AlertDialog parentDialog) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(10), dp(18), 0);
+
+        TextView nameLabel = text("Ad soyad *", 13, MUTED, true);
+        box.addView(nameLabel);
+        EditText customerName = input("CAN EMRE");
+        customerName.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        customerName.setText(initialName == null ? "" : initialName.trim());
+        box.addView(customerName);
+        spacer(box, 10);
+
+        TextView phoneLabel = text("Telefon *", 13, MUTED, true);
+        box.addView(phoneLabel);
+        EditText customerPhone = input("0705603030");
+        customerPhone.setInputType(InputType.TYPE_CLASS_PHONE);
+        box.addView(customerPhone);
+
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Yeni müştəri yarat")
+                .setView(box)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yarat", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String nameValue = customerName.getText().toString().trim();
+            String phoneValue = customerPhone.getText().toString().trim();
+            if (nameValue.isEmpty()) {
+                toast("Ad soyad boş ola bilməz.");
+                customerName.requestFocus();
+                return;
+            }
+            if (phoneValue.isEmpty()) {
+                toast("Telefon boş ola bilməz.");
+                customerPhone.requestFocus();
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("customer_name", nameValue);
+                payload.put("phone", phoneValue);
+            } catch (Exception ignored) {}
+            postAccountSalesJson("/customer/save", payload, result -> {
+                String savedName = result.optString("customer_name", nameValue).trim();
+                String savedPhone = result.optString("phone", phoneValue).trim();
+                loadAccountSalesJson("/overview?section=settings", refreshed -> {
+                    JSONArray loadedCustomers = refreshed.optJSONArray("customers");
+                    accountSalesCustomerChoices = loadedCustomers == null ? new JSONArray() : loadedCustomers;
+                    nameTarget.setText(savedName.isEmpty() ? nameValue : savedName);
+                    phoneTarget.setText(savedPhone.isEmpty() ? phoneValue : savedPhone);
+                    if (parentDialog != null) parentDialog.dismiss();
+                    dialog.dismiss();
+                    toast("Yeni müştəri yaradıldı və seçildi.");
+                }, message -> {
+                    nameTarget.setText(savedName.isEmpty() ? nameValue : savedName);
+                    phoneTarget.setText(savedPhone.isEmpty() ? phoneValue : savedPhone);
+                    if (parentDialog != null) parentDialog.dismiss();
+                    dialog.dismiss();
+                    toast("Yeni müştəri yaradıldı və seçildi.");
+                });
+            });
+        }));
         dialog.show();
     }
 

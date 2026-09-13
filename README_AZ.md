@@ -1,13 +1,12 @@
-# MarakanaMobile v82 — Müştəri detalında oyun kartı 2 sətir
+# MarakanaMobile v84 — Sat zamanı axtarışdan yeni müştəri yarat
 
-- `Müştəri` bölməsində müştərinin üzərinə klikləyəndə açılan detal səhifəsində alınmış oyun kartları yığcamlaşdırıldı.
-- Oyun adı və qiymət başlıq sətrində qalır.
-- Qalan məlumatlar artıq 2 sətirdə göstərilir:
-  - `email • müştəri adı • telefon • tarix`
-  - `hesab növü • konsol • status`
-- Əvvəlki çoxsətirli görünüş yığışdırıldı.
-- `versionCode 82`
-- `versionName 3.4.59-native-v82`
+- `Satılmayanlar → Sat` axınında `Ad soyad` sahəsinə klikləyəndə açılan müştəri seçim pəncərəsi yeniləndi.
+- Yazılan ada görə uyğun müştəri tapılmadıqda artıq **`Yeni müştəri yarat`** düyməsi görünür.
+- Bu düyməyə klikləyəndə kiçik yaratma pəncərəsi açılır; yeni müştərinin adı və nömrəsi daxil edilərək yaradılır.
+- Yaradıldıqdan sonra həmin yeni müştəri avtomatik seçilir və `Ad soyad` + `Telefon` xanaları dolur.
+- Dəyişiklik yalnız `Sat` axınında tətbiq olunur; digər bölmələrin davranışı saxlanılıb.
+- `versionCode 84`
+- `versionName 3.4.61-native-v84`
 
 ---
 

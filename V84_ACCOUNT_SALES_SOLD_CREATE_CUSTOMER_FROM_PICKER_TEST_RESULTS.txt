@@ -1,0 +1,5 @@
+Manual flow check passed.
+- Satılmayanlar → Sat → Ad soyad klikində müştəri seçimi açılır.
+- Uyğun müştəri tapılmayanda Yeni müştəri yarat düyməsi görünür.
+- Yeni müştəri adı və telefonu daxil edilərək yaradılır.
+- Yaradılan müştəri avtomatik seçilir və forma xanaları doldurulur.
