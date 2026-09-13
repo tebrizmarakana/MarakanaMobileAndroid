@@ -3348,17 +3348,37 @@ public class MainActivity extends Activity {
         top.addView(priceView, new LinearLayout.LayoutParams(dp(112), ViewGroup.LayoutParams.WRAP_CONTENT));
         c.addView(top);
 
-        String email = row.optString("email", "");
-        c.addView(text((bundleAccount ? "⧉ " : "") + email, 13, MUTED, false));
+        String email = row.optString("email", "").trim();
+        String customer = row.optString("customer_name", "").trim();
+        String phone = row.optString("phone", "").trim();
+        String saleDate = row.optString("sale_date", "").trim();
+        String saleDateDisplay = accountSalesDateForDisplay(saleDate);
+
+        if ("sold".equals(section)) {
+            StringBuilder soldInfo = new StringBuilder();
+            if (bundleAccount) soldInfo.append("⧉ ");
+            if (!email.isEmpty()) soldInfo.append(email);
+            if (!customer.isEmpty()) {
+                if (soldInfo.length() > 0) soldInfo.append("  •  ");
+                soldInfo.append(customer);
+            }
+            if (!phone.isEmpty()) {
+                if (soldInfo.length() > 0) soldInfo.append("  •  ");
+                soldInfo.append(phone);
+            }
+            if (!saleDateDisplay.isEmpty()) {
+                if (soldInfo.length() > 0) soldInfo.append("  •  ");
+                soldInfo.append(saleDateDisplay);
+            }
+            if (soldInfo.length() > 0) c.addView(text(soldInfo.toString(), 12, MUTED, false));
+        } else {
+            c.addView(text((bundleAccount ? "⧉ " : "") + email, 13, MUTED, false));
+            if (!customer.isEmpty() || !phone.isEmpty()) c.addView(text((customer.isEmpty() ? "—" : customer) + (phone.isEmpty() ? "" : "  •  " + phone), 12, MUTED, false));
+            if (!saleDateDisplay.isEmpty()) c.addView(text(saleDateDisplay, 12, MUTED, false));
+        }
         if (!compactStatusInTitle) {
             c.addView(buildAccountSalesMetaLine(row));
         }
-        String customer = row.optString("customer_name", "").trim();
-        String phone = row.optString("phone", "").trim();
-        if (!customer.isEmpty() || !phone.isEmpty()) c.addView(text((customer.isEmpty() ? "—" : customer) + (phone.isEmpty() ? "" : "  •  " + phone), 12, MUTED, false));
-        String saleDate = row.optString("sale_date", "").trim();
-        String saleDateDisplay = accountSalesDateForDisplay(saleDate);
-        if (!saleDateDisplay.isEmpty()) c.addView(text(saleDateDisplay, 12, MUTED, false));
         if ("İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim())) {
             String rentalState = row.optString("rental_state", "");
             String rentalText = row.optString("rental_remaining_text", "").trim();

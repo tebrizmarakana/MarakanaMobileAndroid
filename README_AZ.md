@@ -1,4 +1,12 @@
-# Marakana Mobile Native v78
+# Marakana Mobile Native v79
+
+## v79 — Satılanlarda müştəri məlumatları e-mail sətrində
+
+- `Satılanlar` kartında e-mail, müştəri adı, telefon və satış tarixi artıq eyni məlumat sətrində göstərilir.
+- Görünüş: `email • Ad Soyad • Telefon • Tarix`.
+- Digər bölmələrin kart düzülüşü dəyişdirilməyib.
+- `versionCode 79`
+- `versionName 3.4.56-native-v79`
 
 ## v78 — Status rəngləri və başlıq sətrində göstəricilər
 
