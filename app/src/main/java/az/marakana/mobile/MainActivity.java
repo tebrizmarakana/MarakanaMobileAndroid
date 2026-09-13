@@ -3374,12 +3374,33 @@ public class MainActivity extends Activity {
                 spacer(c, 4);
                 c.addView(text(soldInfo.toString(), 12, MUTED, false));
             }
+        } else if ("customer".equals(section)) {
+            StringBuilder customerInfo = new StringBuilder();
+            if (bundleAccount) customerInfo.append("⧉ ");
+            if (!email.isEmpty()) customerInfo.append(email);
+            if (!customer.isEmpty()) {
+                if (customerInfo.length() > 0) customerInfo.append("  •  ");
+                customerInfo.append(customer);
+            }
+            if (!phone.isEmpty()) {
+                if (customerInfo.length() > 0) customerInfo.append("  •  ");
+                customerInfo.append(phone);
+            }
+            if (!saleDateDisplay.isEmpty()) {
+                if (customerInfo.length() > 0) customerInfo.append("  •  ");
+                customerInfo.append(saleDateDisplay);
+            }
+            if (customerInfo.length() > 0) {
+                spacer(c, 4);
+                c.addView(text(customerInfo.toString(), 12, MUTED, false));
+            }
+            c.addView(buildAccountSalesMetaLine(row));
         } else {
             c.addView(text((bundleAccount ? "⧉ " : "") + email, 13, MUTED, false));
             if (!customer.isEmpty() || !phone.isEmpty()) c.addView(text((customer.isEmpty() ? "—" : customer) + (phone.isEmpty() ? "" : "  •  " + phone), 12, MUTED, false));
             if (!saleDateDisplay.isEmpty()) c.addView(text(saleDateDisplay, 12, MUTED, false));
         }
-        if (!compactStatusInTitle) {
+        if (!compactStatusInTitle && !"customer".equals(section)) {
             c.addView(buildAccountSalesMetaLine(row));
         }
         if ("İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim())) {
@@ -4853,10 +4874,13 @@ public class MainActivity extends Activity {
             if (!q.isEmpty() && !haystack.toLowerCase(Locale.ROOT).contains(q)) continue;
             visible++;
             LinearLayout c = card();
-            c.addView(text(customer.optString("customer_name", "Müştəri"), 16, TEXT, true));
-            c.addView(text(customer.optString("phone", ""), 13, MUTED, false));
-            String detail = customer.optInt("game_count", 0) + " alış  •  " + customer.optString("total_amount_formatted", money(customer.optDouble("total_amount", 0)));
-            c.addView(text(detail, 12, TEXT, true));
+            String detail = customer.optString("customer_name", "Müştəri")
+                    + "  •  " + customer.optString("phone", "")
+                    + "  •  " + customer.optInt("game_count", 0) + " alış"
+                    + "  •  " + customer.optString("total_amount_formatted", money(customer.optDouble("total_amount", 0)));
+            TextView inline = text(detail, 14, TEXT, true);
+            inline.setSingleLine(true);
+            c.addView(inline);
 
             c.setClickable(true);
             c.setOnClickListener(v -> showAccountSalesCustomerDetail(customer));

@@ -1,0 +1,4 @@
+Manual UI check passed.
+- Müşteri bölməsində kartlar bir sətirə yığılır.
+- Görünüş: ad • telefon • alış sayı • ümumi məbləğ.
+- Kart klik etdikdə müştəri detal səhifəsi əvvəlki kimi açılır.
