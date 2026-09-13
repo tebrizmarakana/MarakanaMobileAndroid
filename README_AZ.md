@@ -1,13 +1,19 @@
-# Marakana Mobile Native v69
+# Marakana Mobile Native v70
+
+## v70 — Oyun siyahısı serverdən həmişə təzələnir
+- Oyunun adı picker-i hər açılışda WordPress `/overview?section=settings` API-sindən təzə `game_names` siyahısını alır.
+- Serverdə baza/oyun kataloqu təmizlənibsə, əvvəldən RAM-da qalmış oyun adları artıq görünmür.
+- Yeni hesab/Düzənlə formu açılarkən oyun və müştəri seçimləri də serverdən yenilənir; boş server cavabı lokal siyahını da boşaldır.
+- WordPress companion v1.0.78-də “Bazanı tam təmizlə” oyun ID cədvəlini və köhnə kataloq option-unu da silir.
+- `versionCode 70`
+- `versionName 3.4.47-native-v70`
+- Release APK: `MarakanaMobile-v70-release.apk`
 
 ## v69 — Oyunlar ID əlaqəli bazaya keçirildi
-
-- Mobil oyun seçimini artıq WordPress API-yə `game_ids` ilə də göndərir.
-- Tək oyun və Bundle seçimlərində seçilən adlar serverdə ayrıca oyun ID-lərinə bağlanır.
-- Köhnə `game_name` mətn sahəsi yalnız geriyə uyğun cache kimi saxlanılır.
-- Oyun adını dəyişəndə hesablar həmin `game_id` əlaqəsini saxlayır; Bundle əlaqələri pozulmur.
-- Mövcud v68 funksiyaları dəyişməyib.
-
+- Oyunlar WordPress-də ayrıca numeric `game_id` ilə saxlanır.
+- Bundle hesablar hesab↔oyun many-to-many əlaqə cədvəli ilə işləyir.
+- Mobil create/edit payload-ları `game_ids` göndərir; köhnə `game_name` geriyə uyğun cache kimi qalır.
+- Mövcud köhnə oyun adları v1.0.75+ server migration-u ilə ID əlaqələrinə çevrilir.
 - `versionCode 69`
 - `versionName 3.4.46-native-v69`
 - Release APK: `MarakanaMobile-v69-release.apk`

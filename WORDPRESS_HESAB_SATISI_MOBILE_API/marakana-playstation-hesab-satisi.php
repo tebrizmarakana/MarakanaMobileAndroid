@@ -3,7 +3,7 @@
  * Plugin Name: Marakana Playstation Hesab Satışı
  * Plugin URI: https://marakana.local/
  * Description: Playstation oyun hesablarının satışı, stok, müştəri, ödəniş və geniş axtarış idarəetməsi üçün professional Marakana plugin.
- * Version: 1.0.75
+ * Version: 1.0.78
  * Author: Marakana
  * Text Domain: marakana-playstation-hesab-satisi
  * Requires PHP: 7.4
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
     final class Marakana_Playstation_Hesab_Satisi_100
     {
-        const VERSION = '1.0.75';
+        const VERSION = '1.0.78';
         const DB_VERSION = '1.1.0';
         const OPTION_KEY = 'mara_account_sale_settings';
         const DB_OPTION_KEY = 'mara_account_sale_db_version';
@@ -40,8 +40,6 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
         {
             add_action('admin_menu', array($this, 'admin_menu'));
             add_action('admin_enqueue_scripts', array($this, 'admin_enqueue_scripts'));
-            add_action('wp_enqueue_scripts', array($this, 'register_frontend_assets'));
-            add_shortcode('ps_hesab_satisi', array($this, 'shortcode'));
 
             add_action('admin_post_mara_account_sale_save', array($this, 'handle_save'));
             add_action('admin_post_mara_account_sale_delete', array($this, 'handle_delete'));
@@ -236,11 +234,6 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             wp_enqueue_script('mara-account-sale-script');
         }
 
-        public function shortcode($atts = array())
-        {
-            $this->enqueue_assets();
-            return $this->render_panel('frontend');
-        }
 
         public function admin_page()
         {
@@ -991,6 +984,220 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
         }
 
 
+        private function pdf_unescape_string($value)
+        {
+            $value = preg_replace_callback('/\\([0-7]{1,3})/', function ($m) {
+                return chr(octdec($m[1]));
+            }, (string) $value);
+            return str_replace(
+                array('\\n', '\\r', '\\t', '\\b', '\\f', '\\(', '\\)', '\\\\'),
+                array("\n", "\r", "\t", "\x08", "\x0C", '(', ')', '\\'),
+                $value
+            );
+        }
+
+        private function extract_pdf_text($path, &$error = '')
+        {
+            $error = '';
+            $path = (string) $path;
+            if ($path === '' || !is_readable($path)) {
+                $error = 'PDF faylı oxunmur.';
+                return '';
+            }
+
+            if (function_exists('shell_exec')) {
+                $cmd = 'pdftotext -layout ' . escapeshellarg($path) . ' - 2>/dev/null';
+                $out = @shell_exec($cmd);
+                if (is_string($out) && strlen(trim($out)) > 20) {
+                    return $out;
+                }
+            }
+
+            $raw = @file_get_contents($path);
+            if (!is_string($raw) || $raw === '') {
+                $error = 'PDF faylı oxunmadı.';
+                return '';
+            }
+
+            $chunks = array();
+            if (preg_match_all('/stream\r?\n(.*?)\r?\nendstream/s', $raw, $streams)) {
+                foreach ($streams[1] as $stream) {
+                    $decoded = $stream;
+                    $unzipped = @gzuncompress($stream);
+                    if ($unzipped === false && strlen($stream) > 2) {
+                        $unzipped = @gzuncompress(substr($stream, 2));
+                    }
+                    if (is_string($unzipped) && $unzipped !== '') {
+                        $decoded = $unzipped;
+                    }
+
+                    if (preg_match_all('/\((?:\\.|[^\\)])*\)\s*Tj/s', $decoded, $tj)) {
+                        foreach ($tj[0] as $token) {
+                            if (preg_match('/^\((.*)\)\s*Tj$/s', $token, $m)) {
+                                $chunks[] = $this->pdf_unescape_string($m[1]);
+                            }
+                        }
+                    }
+                    if (preg_match_all('/\[(.*?)\]\s*TJ/s', $decoded, $tjs)) {
+                        foreach ($tjs[1] as $group) {
+                            $line = '';
+                            if (preg_match_all('/\((?:\\.|[^\\)])*\)/s', $group, $parts)) {
+                                foreach ($parts[0] as $part) {
+                                    $line .= $this->pdf_unescape_string(substr($part, 1, -1));
+                                }
+                            }
+                            if (trim($line) !== '') {
+                                $chunks[] = $line;
+                            }
+                        }
+                    }
+                }
+            }
+
+            $text = trim(implode("\n", $chunks));
+            if ($text === '') {
+                $error = 'PDF-dən mətn çıxarmaq mümkün olmadı. Mətn əsaslı PDF istifadə et.';
+            }
+            return $text;
+        }
+
+        private function normalize_import_header($value)
+        {
+            $value = function_exists('mb_strtolower') ? mb_strtolower((string) $value, 'UTF-8') : strtolower((string) $value);
+            return strtr($value, array('ı'=>'i','ə'=>'e','ş'=>'s','ğ'=>'g','ü'=>'u','ö'=>'o','ç'=>'c','İ'=>'i','Ə'=>'e','Ş'=>'s','Ğ'=>'g','Ü'=>'u','Ö'=>'o','Ç'=>'c'));
+        }
+
+        private function parse_pdf_account_rows($text, &$error = '')
+        {
+            $error = '';
+            $lines = preg_split('/\R/u', (string) $text);
+            $rows = array();
+            foreach ($lines as $line) {
+                $line = trim(preg_replace('/[\x{00A0}\t]+/u', '  ', (string) $line));
+                if ($line === '' || stripos($this->normalize_import_header($line), 'oyunun adi') !== false) {
+                    continue;
+                }
+                if (!preg_match('/[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}/iu', $line, $email_match, PREG_OFFSET_CAPTURE)) {
+                    continue;
+                }
+                $email = sanitize_email($email_match[0][0]);
+                if ($email === '' || !is_email($email)) {
+                    continue;
+                }
+
+                $cols = preg_split('/\s{2,}/u', $line);
+                $cols = array_values(array_filter(array_map('trim', $cols), function ($v) { return $v !== ''; }));
+                $email_index = -1;
+                foreach ($cols as $idx => $col) {
+                    if (strpos($col, '@') !== false) {
+                        $email_index = $idx;
+                        break;
+                    }
+                }
+
+                $game_name = '';
+                $account_type = 'Online';
+                $console = '';
+                $price = 0;
+                $customer_name = '';
+                $phone = '';
+                $sale_date = '';
+                $stock_status = 'Satılmayıb';
+
+                if ($email_index >= 0) {
+                    $before = array_slice($cols, 0, $email_index);
+                    foreach ($before as $part) {
+                        $candidate_type = $this->normalize_legacy_account_type($part);
+                        $norm = $this->normalize_import_header($part);
+                        if (in_array($norm, array('on','online','un','universal','unversal','off','offline','ofline','oflline'), true)) {
+                            $account_type = $candidate_type;
+                        } else {
+                            $game_name = trim($game_name . ' ' . $part);
+                        }
+                    }
+                    $after = array_slice($cols, $email_index + 1);
+                } else {
+                    $pos = $email_match[0][1];
+                    $game_name = trim(substr($line, 0, $pos));
+                    $after = preg_split('/\s{2,}/u', trim(substr($line, $pos + strlen($email_match[0][0]))));
+                }
+
+                foreach ($after as $part) {
+                    $part = trim((string) $part);
+                    if ($part === '') continue;
+                    $norm = $this->normalize_import_header($part);
+                    if ($console === '' && preg_match('/PS\s*4\s*\/\s*PS\s*5|PS\s*4|PS\s*5/i', $part, $m)) {
+                        $console = $this->normalize_legacy_console($m[0]);
+                        continue;
+                    }
+                    if ($sale_date === '' && preg_match('/\b(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})\b/', $part, $m)) {
+                        $sale_date = sprintf('%04d-%02d-%02d', $m[1], $m[2], $m[3]);
+                        continue;
+                    }
+                    if ($sale_date === '' && preg_match('/\b(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})\b/', $part, $m)) {
+                        $sale_date = sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+                        continue;
+                    }
+                    if ($phone === '' && preg_match('/(?:\+?994)?0?\d{9}\b/', preg_replace('/\s+/', '', $part), $m)) {
+                        $phone = $m[0];
+                        continue;
+                    }
+                    if (strpos($norm, 'satilmayib') !== false || strpos($norm, 'satilmayan') !== false || $norm === 'unsold') {
+                        $stock_status = 'Satılmayıb';
+                        continue;
+                    }
+                    if (strpos($norm, 'satilib') !== false || $norm === 'sold') {
+                        $stock_status = 'Satılıb';
+                        continue;
+                    }
+                    if ($price <= 0 && preg_match('/^\d+(?:[\.,]\d{1,2})?$/', $part)) {
+                        $price = (float) str_replace(',', '.', $part);
+                        continue;
+                    }
+                    if ($customer_name === '' && preg_match('/^[\p{L}\s]+$/u', $part)) {
+                        $customer_name = $part;
+                    }
+                }
+
+                $game_name = trim(preg_replace('/\b(?:On|Online|Un|Universal|Unversal|Off|Offline)\b\s*$/iu', '', $game_name));
+                if ($game_name === '') {
+                    continue;
+                }
+                if ($stock_status === 'Satılmayıb') {
+                    $customer_name = '';
+                    $phone = '';
+                    $sale_date = '';
+                }
+
+                $rows[] = array(
+                    'game_name' => $game_name,
+                    'account_type' => $account_type,
+                    'email' => $email,
+                    'price' => $price,
+                    'console' => $console,
+                    'customer_name' => $customer_name,
+                    'phone' => $phone,
+                    'sale_date' => $sale_date,
+                    'payment_type' => 'Nağd',
+                    'stock_status' => $stock_status,
+                );
+            }
+
+            if (empty($rows)) {
+                $error = 'PDF-də hesab sətrləri tapılmadı. PDF mətn əsaslı və sütunlu formatda olmalıdır.';
+            }
+            return $rows;
+        }
+
+        private function load_uploaded_pdf_rows($path, &$error = '')
+        {
+            $text = $this->extract_pdf_text($path, $error);
+            if ($text === '') {
+                return array();
+            }
+            return $this->parse_pdf_account_rows($text, $error);
+        }
+
         private function load_legacy_account_rows()
         {
             $php_path = plugin_dir_path(__FILE__) . 'data/old-base-playstation-accounts.php';
@@ -1105,14 +1312,14 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             return sanitize_text_field((string) $value);
         }
 
-        private function maybe_import_legacy_accounts($force = false, $allow_duplicates = false)
+        private function maybe_import_legacy_accounts($force = false, $allow_duplicates = false, $rows_override = null, $source_name = '')
         {
             $repair_mode = ($force === 'repair');
             if (!$force && get_option(self::LEGACY_IMPORT_OPTION_KEY)) {
                 return array('inserted' => 0, 'inserted_sold' => 0, 'inserted_unsold' => 0, 'skipped' => 0, 'already_imported' => true, 'error' => '');
             }
 
-            $legacy_rows = $this->load_legacy_account_rows();
+            $legacy_rows = is_array($rows_override) ? $rows_override : $this->load_legacy_account_rows();
             if (!is_array($legacy_rows) || empty($legacy_rows)) {
                 return array('inserted' => 0, 'inserted_sold' => 0, 'inserted_unsold' => 0, 'skipped' => 0, 'already_imported' => false, 'error' => 'Import məlumat faylı tapılmadı və ya oxunmadı.');
             }
@@ -1255,7 +1462,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
 
             $db_counts = $this->get_database_status_counts();
             update_option(self::LEGACY_IMPORT_OPTION_KEY, array(
-                'source' => 'PlayStation_hesablar_temizlenmis(1).pdf',
+                'source' => $source_name !== '' ? sanitize_file_name($source_name) : 'legacy-data',
                 'source_rows' => count($legacy_rows),
                 'inserted' => $inserted,
                 'inserted_sold' => $inserted_sold,
@@ -1337,14 +1544,25 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
         {
             global $wpdb;
             $table = $this->table_name();
+            $games_table = $this->games_table_name();
+            $links_table = $this->account_games_table_name();
             $this->create_or_update_table();
-            $deleted_links = $wpdb->query("DELETE FROM {$this->account_games_table_name()}");
+
+            // Tam təmizləmə: hesablar, Bundle əlaqələri və ayrıca oyun kataloqu birlikdə silinir.
+            $deleted_links = $wpdb->query("DELETE FROM {$links_table}");
             $deleted = $wpdb->query("DELETE FROM {$table}");
-            if ($deleted === false || $deleted_links === false) {
+            $deleted_games = $wpdb->query("DELETE FROM {$games_table}");
+            if ($deleted === false || $deleted_links === false || $deleted_games === false) {
                 return false;
             }
+
             $wpdb->query("ALTER TABLE {$table} AUTO_INCREMENT = 1");
+            $wpdb->query("ALTER TABLE {$games_table} AUTO_INCREMENT = 1");
+
+            // Köhnə option-kataloqu da sil ki, sonrakı migration köhnə oyun adlarını geri qaytarmasın.
             delete_option(self::LEGACY_IMPORT_OPTION_KEY);
+            delete_option(self::CUSTOMER_CONTACTS_OPTION_KEY);
+            delete_option(self::GAME_CATALOG_OPTION_KEY);
             update_option(self::GAME_RELATION_MIGRATION_OPTION_KEY, self::DB_VERSION, false);
             return true;
         }
@@ -1393,8 +1611,14 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 }
             }
 
+            $parse_error = '';
+            $pdf_rows = $this->load_uploaded_pdf_rows($tmp_name, $parse_error);
+            if (empty($pdf_rows)) {
+                $this->redirect_with_message('error', 'settings', $parse_error !== '' ? $parse_error : 'PDF məlumatları oxunmadı.');
+            }
+
             $this->create_or_update_table();
-            $result = $this->maybe_import_legacy_accounts(true, $clear_before_import);
+            $result = $this->maybe_import_legacy_accounts(true, $clear_before_import, $pdf_rows, $filename);
             if (!is_array($result)) {
                 $result = array('inserted' => 0, 'skipped' => 0, 'error' => 'PDF import nəticəsi oxunmadı.');
             }
@@ -1438,8 +1662,14 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 $this->redirect_with_message('error', 'settings', 'Baza silinmədi.');
             }
 
+            $parse_error = '';
+            $pdf_rows = $this->load_uploaded_pdf_rows($tmp_name, $parse_error);
+            if (empty($pdf_rows)) {
+                $this->redirect_with_message('error', 'settings', $parse_error !== '' ? $parse_error : 'PDF məlumatları oxunmadı.');
+            }
+
             $this->create_or_update_table();
-            $result = $this->maybe_import_legacy_accounts(true, true);
+            $result = $this->maybe_import_legacy_accounts(true, true, $pdf_rows, $filename);
             if (!is_array($result)) {
                 $this->redirect_with_message('error', 'settings', 'Tam PDF import nəticəsi oxunmadı.');
             }
@@ -2229,7 +2459,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'legacy_imported' => 'Köhnə baza import edildi. Satılıb və Satılmayıb bölünməsi qorundu.',
                 'legacy_repaired' => 'Köhnə baza yenidən düz import edildi: Satılıb/Satılmayıb ayrımı yeniləndi.',
                 'legacy_import_no_new' => 'Köhnə bazada əlavə ediləcək yeni hesab tapılmadı. Mövcud hesablar təkrar yazılmadı.',
-                'database_cleared' => 'Baza tam silindi. İndi PDF import edə bilərsən.',
+                'database_cleared' => 'Baza və oyun kataloqu tam silindi. İndi sıfırdan davam edə bilərsən.',
                 'pdf_imported' => 'PDF import edildi. Satılıb və Satılmayıb düzgün bölündü.',
                 'pdf_reset_imported' => 'Baza silindi və PDF tam yükləndi. SQL saylarında Satılıb/Satılmayıb ayrıca görünməlidir.',
                 'mobile_key_regenerated' => 'Mobil APK üçün API açarı yeniləndi.',
@@ -2246,7 +2476,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             return '<div class="mara-account-sale-notice ' . esc_attr($class) . '" data-mara-account-sale-notice="1">' . esc_html($text) . '</div>';
         }
 
-        private function render_panel($context = 'frontend')
+        private function render_panel($context = 'admin')
         {
             if (!is_user_logged_in() || !current_user_can($this->capability())) {
                 return '<div class="mara-account-sale-wrap"><div class="mara-account-sale-locked"><h3>Hesab Satışı paneli</h3><p>Bu paneldən istifadə etmək üçün icazəli istifadəçi kimi daxil olun.</p></div></div>';
@@ -2313,10 +2543,9 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
 
 
                 <section class="mara-account-sale-section" data-mara-tab="settings">
+                    <?php echo $this->render_stats($stats); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                     <?php echo $this->render_settings($settings); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                 </section>
-
-                <?php echo $this->render_stats($stats); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
 
                 <?php echo $this->render_detail_modal(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
                 <?php echo $this->render_customer_modal(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
@@ -2379,7 +2608,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             ?>
             <div class="mara-account-sale-quick-search" data-mara-quick-search>
                 <div class="mara-account-sale-quick-search-row">
-                    <input id="mara-account-sale-global-search" type="search" placeholder="Oyun adı, e-mail, ad soyad, telefon, PS4/PS5, ödəniş və ya stok yaz..." data-global-search-input autocomplete="off">
+                    <input id="mara-account-sale-global-search" type="search" placeholder="Oyun adı, e-mail, ad soyad, telefon, PS4/PS5 və ya stok yaz..." data-global-search-input autocomplete="off">
                     <button type="button" class="mara-account-sale-btn mara-account-sale-btn-outline" data-global-search-clear>Təmizlə</button>
                 </div>
                 <div class="mara-account-sale-quick-search-note" data-global-search-count></div>
@@ -2396,7 +2625,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 <div class="mara-account-sale-card-head mara-account-sale-filter-head">
                     <div>
                         <h2>Ətraflı axtarış / filter</h2>
-                        <p>Oyun, müştəri, telefon, stok, ödəniş, tarix və qiymət üzrə süzgəc.</p>
+                        <p>Oyun, müştəri, telefon, stok, tarix və qiymət üzrə süzgəc.</p>
                     </div>
                     <button type="button" class="mara-account-sale-btn mara-account-sale-btn-outline" data-filter-reset>Filterləri təmizlə</button>
                 </div>
@@ -2419,13 +2648,6 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                             <option value="Online">Online</option>
                             <option value="Universal">Universal</option>
                             <option value="Offline">Offline</option>
-                        </select>
-                    </label>
-                    <label>Ödəniş
-                        <select data-filter-field="payment">
-                            <option value="">Hamısı</option>
-                            <option value="Nağd">Nağd</option>
-                            <option value="Nisyə">Nisyə</option>
                         </select>
                     </label>
                     <label>Stok
@@ -2500,13 +2722,12 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                                 <th>Ad soyad</th>
                                 <th>Telefon</th>
                                 <th>Satış tarixi</th>
-                                <th>Ödəniş</th>
                                 <th>Stok</th>
                             </tr>
                         </thead>
                         <tbody>
                         <?php if (empty($records)) : ?>
-                            <tr class="mara-account-sale-empty-row"><td colspan="10">Məlumat yoxdur.</td></tr>
+                            <tr class="mara-account-sale-empty-row"><td colspan="9">Məlumat yoxdur.</td></tr>
                         <?php else : ?>
                             <?php foreach ($records as $record) :
                                 $record_json = wp_json_encode($this->record_for_json($record));
@@ -2519,7 +2740,6 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                                     data-phone="<?php echo esc_attr(preg_replace('/\D+/', '', $record['phone'])); ?>"
                                     data-console="<?php echo esc_attr($record['console']); ?>"
                                     data-type="<?php echo esc_attr($record['account_type']); ?>"
-                                    data-payment="<?php echo esc_attr($record['payment_type']); ?>"
                                     data-stock="<?php echo esc_attr($record['stock_status']); ?>"
                                     data-date="<?php echo esc_attr($record['sale_date'] ?: ''); ?>"
                                     data-price="<?php echo esc_attr((float) $record['price']); ?>">
@@ -2531,7 +2751,6 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                                     <td data-label="Ad soyad"><?php echo esc_html($record['customer_name'] ?: '—'); ?></td>
                                     <td data-label="Telefon"><?php echo $this->phone_link($record['phone']); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></td>
                                     <td data-label="Satış tarixi"><?php echo esc_html($record['sale_date'] ?: '—'); ?></td>
-                                    <td data-label="Ödəniş"><?php echo $this->badge($record['payment_type'] === 'Nisyə' ? 'credit' : 'cash', $record['payment_type']); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></td>
                                     <td data-label="Stok"><?php echo $this->badge($this->normalize_stock_status_value($record['stock_status']) === 'Satılıb' ? 'sold' : 'unsold', $record['stock_status']); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?></td>
                                 </tr>
                             <?php endforeach; ?>
@@ -2622,12 +2841,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     <label>Satış tarixi *
                         <input type="date" name="sale_date" value="<?php echo esc_attr($record['sale_date']); ?>" data-form-field="sale_date">
                     </label>
-                    <label>Ödəniş növü *
-                        <select name="payment_type" required data-form-field="payment_type">
-                            <option value="Nağd" <?php selected($record['payment_type'], 'Nağd'); ?>>Nağd</option>
-                            <option value="Nisyə" <?php selected($record['payment_type'], 'Nisyə'); ?>>Nisyə</option>
-                        </select>
-                    </label>
+                    <input type="hidden" name="payment_type" value="<?php echo esc_attr(in_array($record['payment_type'], array('Nağd', 'Nisyə'), true) ? $record['payment_type'] : 'Nağd'); ?>" data-form-field="payment_type">
                     <label>Stok *
                         <select name="stock_status" required data-form-field="stock_status" data-stock-select>
                             <option value="Satılıb" <?php selected($record['stock_status'], 'Satılıb'); ?>>Satılıb</option>
@@ -2710,13 +2924,23 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $last_import = get_option(self::LEGACY_IMPORT_OPTION_KEY, array());
             ob_start();
             ?>
-            <div class="mara-account-sale-card mara-account-sale-card-form">
+            <div class="mara-account-sale-settings-nav" aria-label="Ayarlar bölmələri">
+                <a class="mara-account-sale-btn mara-account-sale-btn-light" href="#mara-general-settings">Ümumi ayarlar</a>
+                <a class="mara-account-sale-btn mara-account-sale-btn-light" href="#mara-mobile-api">Mobil API</a>
+                <a class="mara-account-sale-btn mara-account-sale-btn-light" href="#mara-pdf-import">PDF import</a>
+                <a class="mara-account-sale-btn mara-account-sale-btn-light" href="#mara-database-tools">Bazanı təmizlə</a>
+            </div>
+
+            <div class="mara-account-sale-card mara-account-sale-card-form" id="mara-general-settings">
                 <div class="mara-account-sale-card-head">
-                    <h2>Ayarlar</h2>
-                    <p>Shortcode: <code>[ps_hesab_satisi]</code></p>
+                    <div>
+                        <h2>Ümumi ayarlar</h2>
+                        <p>Panel yalnız WordPress admin daxilində idarə olunur.</p>
+                    </div>
                 </div>
                 <form class="mara-account-sale-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
                     <input type="hidden" name="action" value="mara_account_sale_save_settings">
+                    <input type="hidden" name="default_payment_type" value="<?php echo esc_attr(isset($settings['default_payment_type']) ? $settings['default_payment_type'] : 'Nağd'); ?>">
                     <?php wp_nonce_field('mara_account_sale_save_settings', 'mara_account_sale_settings_nonce'); ?>
                     <div class="mara-account-sale-form-grid">
                         <label>Pul vahidi
@@ -2726,12 +2950,6 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                             <select name="default_stock_status">
                                 <option value="Satılıb" <?php selected($settings['default_stock_status'], 'Satılıb'); ?>>Satılıb</option>
                                 <option value="Satılmayıb" <?php selected($settings['default_stock_status'], 'Satılmayıb'); ?>>Satılmayıb</option>
-                            </select>
-                        </label>
-                        <label>Default ödəniş növü
-                            <select name="default_payment_type">
-                                <option value="Nağd" <?php selected($settings['default_payment_type'], 'Nağd'); ?>>Nağd</option>
-                                <option value="Nisyə" <?php selected($settings['default_payment_type'], 'Nisyə'); ?>>Nisyə</option>
                             </select>
                         </label>
                         <label class="mara-account-sale-check-label">
@@ -2745,10 +2963,12 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 </form>
             </div>
 
-            <div class="mara-account-sale-card mara-account-sale-card-form" style="margin-top:16px;">
+            <div class="mara-account-sale-card mara-account-sale-card-form" id="mara-mobile-api">
                 <div class="mara-account-sale-card-head">
-                    <h2>Mobil APK bağlantısı</h2>
-                    <p>Marakana Mobile tətbiqində Admin → Hesab Satışı bölməsi bu REST API açarı ilə WordPress bazasına qoşulur.</p>
+                    <div>
+                        <h2>Mobil APK bağlantısı</h2>
+                        <p>Marakana Mobile → Hesab Satışı bu REST API açarı ilə eyni WordPress bazasına qoşulur.</p>
+                    </div>
                 </div>
                 <div class="mara-account-sale-form-grid">
                     <label>WordPress ünvanı
@@ -2768,74 +2988,64 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 <p class="mara-account-sale-help">API ünvanı: <code><?php echo esc_html(rest_url('marakana-account-sales/v1/')); ?></code></p>
             </div>
 
-            <div class="mara-account-sale-card mara-account-sale-card-form" style="margin-top:16px;">
+            <div class="mara-account-sale-card mara-account-sale-card-form" id="mara-pdf-import">
                 <div class="mara-account-sale-card-head">
-                    <h2>Baza və PDF import</h2>
-                    <p>Köhnə PDF bazası: 726 hesab. Satılıb: 501, Satılmayıb: 225. On/Un/Off növləri Online/Universal/Offline kimi əlavə olunur.</p>
-                    <p><strong>SQL cədvəli:</strong> <code><?php echo esc_html($table_name); ?></code></p>
-                    <p><strong>Hazırkı SQL sayı:</strong> Cəmi <?php echo esc_html($db_counts['total']); ?> / Satılıb <?php echo esc_html($db_counts['sold']); ?> / Satılmayıb <?php echo esc_html($db_counts['unsold']); ?></p>
-                    <?php if (is_array($last_import) && !empty($last_import)) : ?>
-                        <p><strong>Son import:</strong> əlavə edildi <?php echo esc_html(isset($last_import['inserted']) ? (int) $last_import['inserted'] : 0); ?> — Satılıb <?php echo esc_html(isset($last_import['inserted_sold']) ? (int) $last_import['inserted_sold'] : 0); ?> / Satılmayıb <?php echo esc_html(isset($last_import['inserted_unsold']) ? (int) $last_import['inserted_unsold'] : 0); ?><?php echo !empty($last_import['last_error']) ? ' — SQL xəta: ' . esc_html($last_import['last_error']) : ''; ?></p>
-                    <?php endif; ?>
+                    <div>
+                        <h2>PDF import</h2>
+                        <p>Seçilən PDF faylı həqiqətən oxunur və içindəki hesab sətrləri bazaya əlavə edilir.</p>
+                        <p><strong>Hazırkı baza:</strong> Cəmi <?php echo esc_html($db_counts['total']); ?> / Satılıb <?php echo esc_html($db_counts['sold']); ?> / Satılmayıb <?php echo esc_html($db_counts['unsold']); ?></p>
+                        <?php if (is_array($last_import) && !empty($last_import)) : ?>
+                            <p><strong>Son import:</strong> <?php echo esc_html(isset($last_import['source']) ? $last_import['source'] : '—'); ?> — əlavə edildi <?php echo esc_html(isset($last_import['inserted']) ? (int) $last_import['inserted'] : 0); ?></p>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
-                <form class="mara-account-sale-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data" onsubmit="return confirm('Baza tam silinsin və PDF sıfırdan tam yüklənsin?');">
-                    <input type="hidden" name="action" value="mara_account_sale_reset_import_pdf">
-                    <?php wp_nonce_field('mara_account_sale_reset_import_pdf', 'mara_account_sale_reset_import_pdf_nonce'); ?>
-                    <div class="mara-account-sale-form-grid">
-                        <label>PDF faylı seç
-                            <input type="file" name="legacy_pdf_reset" accept="application/pdf,.pdf" required>
-                        </label>
-                    </div>
-                    <div class="mara-account-sale-form-actions">
-                        <button type="submit" class="mara-account-sale-btn mara-account-sale-btn-primary">Bazanı sil + PDF tam yüklə</button>
-                    </div>
-                    <p class="mara-account-sale-help">Əsas istifadə olunacaq düymə budur. Əvvəl bütün hesab bazasını silir, sonra PDF bazanı tam yükləyir və təkrar sətirləri də saxlayır.</p>
-                </form>
-
-                <form class="mara-account-sale-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data" onsubmit="return confirm('PDF içəri aktarılsın? Əgər aşağıdakı silmə seçimini işarələsən, əvvəlcə bütün hesab bazası silinəcək.');" style="margin-top:12px;">
+                <form class="mara-account-sale-form mara-account-sale-tool-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data" onsubmit="return confirm('PDF içəri aktarılsın?');">
                     <input type="hidden" name="action" value="mara_account_sale_import_pdf">
                     <?php wp_nonce_field('mara_account_sale_import_pdf', 'mara_account_sale_import_pdf_nonce'); ?>
-                    <div class="mara-account-sale-form-grid">
+                    <div class="mara-account-sale-tool-grid">
                         <label>PDF faylı seç
                             <input type="file" name="legacy_pdf" accept="application/pdf,.pdf" required>
                         </label>
                         <label class="mara-account-sale-check-label">
                             <input type="checkbox" name="clear_before_import" value="1">
-                            Əvvəl bazanı tam sil, sonra PDF bazanı yüklə
+                            Əvvəl hesab bazasını təmizlə, sonra import et
                         </label>
                     </div>
                     <div class="mara-account-sale-form-actions">
-                        <button type="submit" class="mara-account-sale-btn mara-account-sale-btn-primary">PDF içəri aktar</button>
+                        <button type="submit" class="mara-account-sale-btn mara-account-sale-btn-primary">PDF import et</button>
                     </div>
-                    <p class="mara-account-sale-help">PDF faylını seçib import et. Satılmayıb olanlarda müştəri, telefon və satış tarixi boş saxlanılır.</p>
+                    <p class="mara-account-sale-help">Mətn əsaslı PDF-lər dəstəklənir. Satılmayan hesablarda müştəri məlumatları boş saxlanılır.</p>
                 </form>
 
-                <form class="mara-account-sale-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Diqqət! Bütün hesab bazası silinəcək. Davam edilsin?');" style="margin-top:12px;">
+                <form class="mara-account-sale-form mara-account-sale-tool-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data" onsubmit="return confirm('Baza təmizlənsin və PDF sıfırdan tam yüklənsin?');">
+                    <input type="hidden" name="action" value="mara_account_sale_reset_import_pdf">
+                    <?php wp_nonce_field('mara_account_sale_reset_import_pdf', 'mara_account_sale_reset_import_pdf_nonce'); ?>
+                    <div class="mara-account-sale-tool-grid">
+                        <label>PDF faylı seç
+                            <input type="file" name="legacy_pdf_reset" accept="application/pdf,.pdf" required>
+                        </label>
+                    </div>
+                    <div class="mara-account-sale-form-actions">
+                        <button type="submit" class="mara-account-sale-btn mara-account-sale-btn-warning">Bazanı təmizlə + PDF tam yüklə</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="mara-account-sale-card mara-account-sale-card-form mara-account-sale-danger-zone" id="mara-database-tools">
+                <div class="mara-account-sale-card-head">
+                    <div>
+                        <h2>Bazanı təmizlə</h2>
+                        <p><strong>SQL cədvəli:</strong> <code><?php echo esc_html($table_name); ?></code></p>
+                        <p>Bu əməliyyat hesabları, hesab–oyun əlaqələrini, oyun kataloqunu və ayrıca yaradılmış müştəri kontaktlarını tam silir. Plugin ayarları və Mobil API açarı qalır.</p>
+                    </div>
+                </div>
+                <form class="mara-account-sale-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Diqqət! Bütün hesab bazası, oyun adları və müştəri kontaktları silinəcək. Davam edilsin?');">
                     <input type="hidden" name="action" value="mara_account_sale_clear_database">
                     <?php wp_nonce_field('mara_account_sale_clear_database', 'mara_account_sale_clear_database_nonce'); ?>
                     <div class="mara-account-sale-form-actions">
-                        <button type="submit" class="mara-account-sale-btn mara-account-sale-btn-danger">Bazanı tam sil</button>
+                        <button type="submit" class="mara-account-sale-btn mara-account-sale-btn-danger">Bazanı tam təmizlə</button>
                     </div>
-                    <p class="mara-account-sale-help">Bu düymə yalnız hesab satış bazasını silir. Plugin ayarları qalır.</p>
-                </form>
-
-                <form class="mara-account-sale-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Köhnə baza import edilsin? Mövcud hesablar təkrar yazılmayacaq.');" style="margin-top:12px;">
-                    <input type="hidden" name="action" value="mara_account_sale_import_legacy">
-                    <?php wp_nonce_field('mara_account_sale_import_legacy', 'mara_account_sale_import_legacy_nonce'); ?>
-                    <div class="mara-account-sale-form-actions">
-                        <button type="submit" class="mara-account-sale-btn mara-account-sale-btn-outline">Hazır köhnə bazanı import et</button>
-                    </div>
-                    <p class="mara-account-sale-help">PDF seçmədən hazır köhnə bazanı əlavə etmək üçün istifadə et.</p>
-                </form>
-
-                <form class="mara-account-sale-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" onsubmit="return confirm('Səhv düşən köhnə baza silinib yenidən düzgün bölünsün? Satılıb/Satılmayıb CSV-yə görə yenilənəcək.');" style="margin-top:12px;">
-                    <input type="hidden" name="action" value="mara_account_sale_repair_legacy">
-                    <?php wp_nonce_field('mara_account_sale_repair_legacy', 'mara_account_sale_repair_legacy_nonce'); ?>
-                    <div class="mara-account-sale-form-actions">
-                        <button type="submit" class="mara-account-sale-btn mara-account-sale-btn-outline">Səhv importu düzəlt</button>
-                    </div>
-                    <p class="mara-account-sale-help">Əgər əvvəlki importda hamısı Satılıb kimi düşübsə və ya Satılmayıb siyahısı boşdursa, bu düyməni bas.</p>
                 </form>
             </div>
             <?php

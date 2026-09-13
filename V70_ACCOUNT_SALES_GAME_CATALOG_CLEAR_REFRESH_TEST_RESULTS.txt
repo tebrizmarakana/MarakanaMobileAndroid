@@ -1,0 +1,15 @@
+Marakana Mobile v70 — Game Catalog Clear/Refresh Test Results
+=============================================================
+
+PASS 01 — versionCode = 70
+PASS 02 — versionName = 3.4.47-native-v70
+PASS 03 — game picker OnShow refreshes /overview?section=settings
+PASS 04 — missing/empty game_names replaces in-memory list with new JSONArray()
+PASS 05 — form open refreshes game_names and customers from server every time
+PASS 06 — old in-memory game list is not reused after server database clear
+PASS 07 — Bundle picker still renders after async refresh
+PASS 08 — existing v69 game_id payload support preserved
+PASS 09 — embedded WordPress companion bumped to v1.0.78
+PASS 10 — workflow/artifact metadata bumped to v70
+
+Full Android assembleRelease was not run locally because Android SDK/Gradle wrapper is unavailable in this container.

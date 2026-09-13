@@ -3529,14 +3529,13 @@ public class MainActivity extends Activity {
         EditText price = accountField(body, "Qiymət *", "35.50", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         Spinner console = accountSpinnerField(body, "Konsol *", new String[]{"PS4", "PS5", "PS4/PS5"}, editing ? record.optString("console", "PS5") : "PS5");
 
-        if (accountSalesGameChoices.length() == 0 || (editing && accountSalesCustomerChoices.length() == 0)) {
-            loadAccountSalesJson("/overview?section=settings", result -> {
-                JSONArray loadedGames = result.optJSONArray("game_names");
-                JSONArray loadedCustomers = result.optJSONArray("customers");
-                if (loadedGames != null) accountSalesGameChoices = loadedGames;
-                if (loadedCustomers != null) accountSalesCustomerChoices = loadedCustomers;
-            });
-        }
+        // Server həmişə əsas mənbədir: form açılarkən köhnə in-memory oyun/müştəri siyahısını yenilə.
+        loadAccountSalesJson("/overview?section=settings", result -> {
+            JSONArray loadedGames = result.optJSONArray("game_names");
+            JSONArray loadedCustomers = result.optJSONArray("customers");
+            accountSalesGameChoices = loadedGames == null ? new JSONArray() : loadedGames;
+            accountSalesCustomerChoices = loadedCustomers == null ? new JSONArray() : loadedCustomers;
+        });
 
         if (!editing) {
             TextView note = text("Hesab yaradıldıqda seçilən bütün növlər avtomatik Satılmayıb kimi stokda saxlanılacaq.", 12, MUTED, false);
@@ -3863,7 +3862,15 @@ public class MainActivity extends Activity {
         dialogHolder[0] = dialog;
         dialog.setOnShowListener(d -> {
             updateBundleUi.run();
-            renderHolder[0].run();
+            // Picker hər açılışda WordPress-dən təzə oyun siyahısını alır.
+            // Beləliklə serverdə “Bazanı tam təmizlə” edildikdən sonra köhnə oyun adları RAM-dan geri görünmür.
+            list.removeAllViews();
+            list.addView(empty("Oyun siyahısı yenilənir..."));
+            loadAccountSalesJson("/overview?section=settings", result -> {
+                JSONArray loadedGames = result.optJSONArray("game_names");
+                accountSalesGameChoices = loadedGames == null ? new JSONArray() : loadedGames;
+                renderHolder[0].run();
+            });
         });
         dialog.show();
     }
