@@ -1,4 +1,14 @@
-# Marakana Mobile Native v66
+# Marakana Mobile Native v67
+
+## v67 — Hesab ətraflı məlumat build fix
+
+- GitHub Actions compile xətası düzəldildi: `buildAccountSalesRecordCard(...)` çağırışı yeni 3-parametrli metod imzası ilə uyğunlaşdırıldı.
+- Müştəri alış tarixçəsindəki kartlar `customer` section ilə render olunur; Hesablar/Satılanlar üçün v66-da əlavə olunan Ətraflı məlumat və WhatsApp menyusu dəyişməyib.
+- Node.js 20 deprecation warning build xətasının səbəbi deyil.
+- `versionCode 67`
+- `versionName 3.4.44-native-v67`
+- Release APK: `MarakanaMobile-v67-release.apk`
+
 
 ## v66 — Hesab ətraflı məlumat + WhatsApp göndər
 - Hesablar və Satılanlar bölmələrində hesab kartını 1 saniyə basılı saxlayanda menyu artıq `Düzənlə → Ətraflı məlumat → Məlumatı göndər → Sil` sırası ilə açılır.

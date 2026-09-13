@@ -1,0 +1,22 @@
+V67 build-fix static checks: 11/11 PASS
+
+PASS: method_signature_3_args
+PASS: records_call_3_args
+PASS: customer_call_fixed
+PASS: old_2_arg_call_removed
+PASS: all_calls_have_3_args
+PASS: detail_menu_preserved
+PASS: accounts_sold_gate_preserved
+PASS: v67_code
+PASS: v67_name
+PASS: .github/workflows/main.yml_v67
+PASS: build-apk.yml_v67
+
+Root cause:
+v66 changed buildAccountSalesRecordCard to 3 parameters (row, settings, section), but customer purchase-history code still called the old 2-parameter form at MainActivity.java:4338.
+
+Fix:
+Customer detail now calls buildAccountSalesRecordCard(row, emptySettings, "customer"). This preserves the requested detailed-actions menu only for Accounts/Sold sections.
+
+Note:
+The Node.js 20 deprecation annotation is a warning and is unrelated to the Java compilation failure.

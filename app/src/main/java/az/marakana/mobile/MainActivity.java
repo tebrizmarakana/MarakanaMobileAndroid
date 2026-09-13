@@ -4335,7 +4335,7 @@ public class MainActivity extends Activity {
             for (int i = 0; i < records.length(); i++) {
                 JSONObject row = records.optJSONObject(i);
                 if (row == null) continue;
-                host.addView(buildAccountSalesRecordCard(row, emptySettings));
+                host.addView(buildAccountSalesRecordCard(row, emptySettings, "customer"));
             }
         }, message -> {
             host.removeAllViews();
