@@ -3370,7 +3370,10 @@ public class MainActivity extends Activity {
                 if (soldInfo.length() > 0) soldInfo.append("  •  ");
                 soldInfo.append(saleDateDisplay);
             }
-            if (soldInfo.length() > 0) c.addView(text(soldInfo.toString(), 12, MUTED, false));
+            if (soldInfo.length() > 0) {
+                spacer(c, 4);
+                c.addView(text(soldInfo.toString(), 12, MUTED, false));
+            }
         } else {
             c.addView(text((bundleAccount ? "⧉ " : "") + email, 13, MUTED, false));
             if (!customer.isEmpty() || !phone.isEmpty()) c.addView(text((customer.isEmpty() ? "—" : customer) + (phone.isEmpty() ? "" : "  •  " + phone), 12, MUTED, false));
@@ -3412,10 +3415,10 @@ public class MainActivity extends Activity {
         if (prefix.length() > 0 && !status.isEmpty()) prefix.append(" • ");
 
         if (prefix.length() > 0) {
-            line.addView(text(prefix.toString(), 10, MUTED, true));
+            line.addView(text(prefix.toString(), 11, MUTED, true));
         }
         if (!status.isEmpty()) {
-            line.addView(text(status, 10, accountSalesStatusColor(status), true));
+            line.addView(text(status, 11, accountSalesStatusColor(status), true));
         }
         return line;
     }

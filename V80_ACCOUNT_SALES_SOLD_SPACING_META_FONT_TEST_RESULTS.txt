@@ -1,0 +1,6 @@
+MarakanaMobile v80 yoxlama nəticələri
+
+PASS - Satılanlar info sətrindən əvvəl 4dp vertical boşluq əlavə edildi.
+PASS - Inline account type/console/status göstəricisi 10sp-dən 11sp-ə böyüdü.
+PASS - Dəyişiklik sold/unsold/rental title-row meta göstəricisinə tətbiq olunur.
+PASS - versionCode=80, versionName=3.4.57-native-v80.

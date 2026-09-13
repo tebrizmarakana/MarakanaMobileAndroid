@@ -1,3 +1,13 @@
+# MarakanaMobile v80 — Satılanlar məlumat sətri aralığı + göstərici şrifti
+
+- Satılanlar bölməsində e-mail / müştəri / telefon / satış tarixi sətri oyun adı sətrindən bir az aşağı salındı.
+- Satılanlar, Satılmayanlar və İcarə bölmələrində oyun adı yanında görünən `Universal • PS5 • Satılıb` tipli göstəricilərin şrifti 1 ölçü böyüdü (10sp → 11sp).
+- Status rəngləri və əvvəlki v79 görünüşü saxlanılıb.
+- `versionCode 80`
+- `versionName 3.4.57-native-v80`
+
+---
+
 # Marakana Mobile Native v79
 
 ## v79 — Satılanlarda müştəri məlumatları e-mail sətrində
