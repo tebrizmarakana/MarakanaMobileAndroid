@@ -1,4 +1,15 @@
-# Marakana Mobile Native v72
+# Marakana Mobile Native v73
+
+## v73 — Satılmayan hesabda Sat / İcarə ver sürətli əməliyyatları
+
+- `Satılmayanlar` bölməsində hesab kartına bir dəfə klik etdikdə modern əməliyyat menyusu açılır.
+- `Düzənlə` düyməsinin yuxarısında `Sat` və `İcarə ver` əməliyyatları görünür.
+- `Sat` seçildikdə düzəliş forması `Satılıb` statusu ilə açılır; satış tarixi boşdursa bugünkü tarix avtomatik seçilir.
+- `İcarə ver` seçildikdə forma `İcarə` statusu ilə açılır və mövcud müddət/müştəri validasiyası işləyir.
+- Digər bölmələrin v72 modern tək-klik menyu davranışı dəyişməyib.
+- `versionCode 73`
+- `versionName 3.4.50-native-v73`
+- Release APK: `MarakanaMobile-v73-release.apk`
 
 ## v72 — Hesab kartında tək klik + modern əməliyyat menyusu
 - Hesablar / Satılanlar / Satılmayanlar / İcarə bölmələrində hesab kartına artıq 1 saniyə basılı saxlamaq lazım deyil; bir dəfə klik menyunu açır.

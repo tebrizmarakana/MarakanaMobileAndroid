@@ -1,0 +1,20 @@
+Marakana Mobile v73 — Satılmayan hesab sürətli Sat / İcarə ver
+
+Yoxlamalar:
+- Satılmayanlar bölməsində popup-da Sat düyməsi Düzənlə-dən yuxarıdır.
+- Satılmayanlar bölməsində popup-da İcarə ver düyməsi Düzənlə-dən yuxarıdır.
+- Sat -> forma Satılıb statusu ilə açılır.
+- Satış tarixi boşdursa bugünkü tarix avtomatik qoyulur.
+- İcarə ver -> forma İcarə statusu ilə açılır.
+- İcarə müddəti/müştəri validasiyası əvvəlki v71 axınından istifadə edir.
+- Satılmayıb üçün Ətraflı məlumat / Məlumatı göndər gizli qalır.
+- Düzənlə / Sil qalır.
+- Hesablar / Satılanlar / Satılmayanlar / İcarə kartlarında tək klik davranışı qalır.
+- versionCode/versionName və workflow artifact adları v73-ə qaldırılıb.
+
+Nəticə:
+- 16/16 fokuslu statik/behavior/metadata yoxlaması PASS.
+- Workflow YAML parse PASS.
+- Java delimiter balansı PASS.
+- javac syntax/arity probe PASS; lokal mühitdə Android SDK dependency-ləri olmadığı üçün tam compile edilməyib.
+- ZIP integrity PASS (paketləmədən sonra yoxlanılıb).

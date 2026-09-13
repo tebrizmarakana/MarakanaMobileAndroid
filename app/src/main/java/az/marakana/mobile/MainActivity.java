@@ -3455,6 +3455,25 @@ public class MainActivity extends Activity {
         final AlertDialog[] dialogRef = new AlertDialog[1];
         Runnable dismiss = () -> { if (dialogRef[0] != null) dialogRef[0].dismiss(); };
 
+        boolean unsoldSection = "unsold".equals(section) && unsoldStatus;
+        if (unsoldSection) {
+            LinearLayout sell = accountSalesActionRow(android.R.drawable.ic_menu_send,
+                    "Sat", "Müştəri məlumatlarını daxil edib hesabı sat", GREEN, () -> {
+                        dismiss.run();
+                        showAccountSalesFormForStatus(row, settings, "Satılıb");
+                    });
+            box.addView(sell);
+            spacer(box, 8);
+
+            LinearLayout rent = accountSalesActionRow(android.R.drawable.ic_menu_recent_history,
+                    "İcarə ver", "Müddət seçib hesabı icarəyə ver", ORANGE, () -> {
+                        dismiss.run();
+                        showAccountSalesFormForStatus(row, settings, "İcarə");
+                    });
+            box.addView(rent);
+            spacer(box, 8);
+        }
+
         LinearLayout edit = accountSalesActionRow(android.R.drawable.ic_menu_edit,
                 "Düzənlə", "Hesab məlumatlarını dəyiş", BLUE, () -> {
                     dismiss.run();
@@ -3619,6 +3638,18 @@ public class MainActivity extends Activity {
                         showAccountSales("accounts");
                     });
                 }).show();
+    }
+
+    private void showAccountSalesFormForStatus(JSONObject record, JSONObject settings, String preferredStatus) {
+        JSONObject prepared = record;
+        try {
+            prepared = new JSONObject(record == null ? "{}" : record.toString());
+            prepared.put("stock_status", preferredStatus == null ? "" : preferredStatus);
+            if ("Satılıb".equals(preferredStatus) && prepared.optString("sale_date", "").trim().isEmpty()) {
+                prepared.put("sale_date", new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date()));
+            }
+        } catch (Exception ignored) {}
+        showAccountSalesForm(prepared, settings);
     }
 
     private void showAccountSalesForm(JSONObject record, JSONObject settings) {
