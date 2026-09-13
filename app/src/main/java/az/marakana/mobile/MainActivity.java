@@ -4372,6 +4372,13 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(0, dp(48), 1f);
         if (allowBundle) searchLp.setMargins(dp(8), 0, 0, 0);
         searchRow.addView(search, searchLp);
+
+        Button clearSearch = button("✕", CARD, MUTED);
+        clearSearch.setTextSize(12);
+        clearSearch.setVisibility(View.GONE);
+        LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(dp(44), dp(48));
+        clearLp.setMargins(dp(8), 0, 0, 0);
+        searchRow.addView(clearSearch, clearLp);
         box.addView(searchRow);
         spacer(box, 8);
 
@@ -4404,6 +4411,7 @@ public class MainActivity extends Activity {
         renderHolder[0] = () -> {
             list.removeAllViews();
             String typed = search.getText().toString().trim();
+            clearSearch.setVisibility(typed.isEmpty() ? View.GONE : View.VISIBLE);
             String q = typed.toLowerCase(Locale.ROOT);
             int count = 0;
             boolean exactMatch = false;
@@ -4435,9 +4443,9 @@ public class MainActivity extends Activity {
                 createGame.setTextSize(14);
                 createGame.setOnClickListener(v -> {
                     if (bundleMode[0]) {
-                        showAccountSalesCreateGameDialogForBundle(typed, target, search, dialogHolder[0], selectedGames, renderHolder[0], updateBundleUi);
+                        createAccountSalesGameForBundleFromPicker(typed, target, search, dialogHolder[0], selectedGames, renderHolder[0], updateBundleUi);
                     } else {
-                        showAccountSalesCreateGameDialog(typed, target, dialogHolder[0]);
+                        createAccountSalesGameFromPicker(typed, target, dialogHolder[0]);
                     }
                 });
                 list.addView(createGame, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
@@ -4445,6 +4453,10 @@ public class MainActivity extends Activity {
             updateBundleUi.run();
         };
         search.addTextChangedListener(new SimpleTextWatcher(renderHolder[0]));
+        clearSearch.setOnClickListener(v -> {
+            search.setText("");
+            search.requestFocus();
+        });
 
         if (allowBundle) {
             bundle.setOnClickListener(v -> {
@@ -4556,6 +4568,50 @@ public class MainActivity extends Activity {
                 })
                 .setNegativeButton("Bağla", null)
                 .show();
+    }
+
+    private void createAccountSalesGameForBundleFromPicker(String initialName, EditText target, EditText search,
+                                                           AlertDialog pickerDialog, ArrayList<String> selectedGames,
+                                                           Runnable rerender, Runnable updateBundleUi) {
+        String newName = initialName == null ? "" : initialName.trim();
+        if (newName.isEmpty()) {
+            toast("Oyun adını daxil et.");
+            return;
+        }
+        JSONObject payload = new JSONObject();
+        try { payload.put("game_name", newName); } catch (Exception ignored) {}
+        postAccountSalesJson("/game/save", payload, result -> {
+            JSONArray refreshed = result.optJSONArray("game_names");
+            if (refreshed != null) accountSalesGameChoices = refreshed;
+            String savedName = result.optString("game_name", newName).trim();
+            if (savedName.isEmpty()) savedName = newName;
+            if (!accountSalesGameSelectionContains(selectedGames, savedName)) selectedGames.add(savedName);
+            if (search != null) {
+                search.setText("");
+                search.clearFocus();
+            }
+            if (updateBundleUi != null) updateBundleUi.run();
+            if (rerender != null) rerender.run();
+            toast("Yeni oyun yaradıldı və Bundle-a seçildi.");
+        });
+    }
+
+    private void createAccountSalesGameFromPicker(String initialName, EditText target, AlertDialog pickerDialog) {
+        String newName = initialName == null ? "" : initialName.trim();
+        if (newName.isEmpty()) {
+            toast("Oyun adını daxil et.");
+            return;
+        }
+        JSONObject payload = new JSONObject();
+        try { payload.put("game_name", newName); } catch (Exception ignored) {}
+        postAccountSalesJson("/game/save", payload, result -> {
+            JSONArray refreshed = result.optJSONArray("game_names");
+            if (refreshed != null) accountSalesGameChoices = refreshed;
+            String savedName = result.optString("game_name", newName).trim();
+            target.setText(savedName.isEmpty() ? newName : savedName);
+            toast("Yeni oyun yaradıldı və seçildi.");
+            if (pickerDialog != null) pickerDialog.dismiss();
+        });
     }
 
     private void showAccountSalesCreateGameDialogForBundle(String initialName, EditText target, EditText search,

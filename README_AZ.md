@@ -1,11 +1,12 @@
-# MarakanaMobile v85 — Telefon nömrəsi avtomatik +994 formatı
+# MarakanaMobile v86 — Oyun seçimində bir kliklə yarat + axtarış təmizlə
 
-- Telefon yazılan sahələrdə `0705603030` və ya `705603030` tipli giriş artıq avtomatik `+994705603030` formatına çevrilir.
-- Bu qayda Hesab Satışı daxilindəki satış, düzəliş, yeni müştəri yarat, sürətli müştəri yarat formalarında tətbiq olunur.
-- Eyni telefon formatlama qaydası Borc Dəftərində yeni borclu yarat pəncərəsində də aktivdir.
-- Telefon sahəsi fokusdan çıxanda və yadda saxlayanda da format avtomatik düzəldilir.
-- `versionCode 85`
-- `versionName 3.4.62-native-v85`
+- `Yeni hesab yarat` içində `Oyunun adı` seçim pəncərəsi yeniləndi.
+- Axtarışda uyğun oyun tapılmadıqda görünən **`Yeni oyun yarat`** düyməsi artıq əlavə pəncərə açmır; kliklənən kimi axtarışdakı adı dərhal yaradır.
+- Tək oyun rejimində yeni oyun yaradılan kimi avtomatik seçilir və pəncərə bağlanır.
+- `Bundle` rejimində yeni oyun yaradılan kimi avtomatik Bundle seçiminə əlavə olunur.
+- Axtarış xanasına kiçik **`✕`** təmizləmə düyməsi əlavə edildi; klikləndikdə mətn dərhal silinir.
+- `versionCode 86`
+- `versionName 3.4.63-native-v86`
 
 ---
 
