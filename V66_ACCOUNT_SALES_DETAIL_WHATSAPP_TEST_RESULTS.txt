@@ -1,0 +1,43 @@
+V66 ACCOUNT SALES DETAIL + WHATSAPP TEST RESULTS
+37/37 PASS
+
+PASS: render passes section to record renderer
+PASS: renderer passes section to cards
+PASS: card long hold keeps 1000 ms
+PASS: hold action passes active section
+PASS: accounts/sold detail action gate
+PASS: menu order edit detail send delete
+PASS: unsold keeps edit/delete menu
+PASS: detail action dispatch exists
+PASS: send action dispatch exists
+PASS: detail includes bundle games
+PASS: detail includes email
+PASS: detail includes account type
+PASS: detail includes console
+PASS: detail includes price
+PASS: detail includes customer
+PASS: detail includes phone
+PASS: detail includes sale date
+PASS: detail includes stock status
+PASS: detail includes account id
+PASS: detail includes created and updated
+PASS: WhatsApp phone normalized
+PASS: missing phone blocked
+PASS: WhatsApp uses existing chooser
+PASS: WhatsApp title icon present
+PASS: WhatsApp customer icon present
+PASS: WhatsApp bundle icon present
+PASS: WhatsApp email/type/console/price/date/status/id icons
+PASS: payment type not reintroduced into account sale detail/send block
+PASS: versionCode 66
+PASS: versionName v66
+PASS: workflow artifact v66 both
+PASS: windows helper v66
+PASS: README v66 heading and feature
+PASS: javac syntax probe no syntax-type errors
+PASS: workflow YAML parse
+PASS: single money(double) helper
+PASS: Java bracket/string/comment balance
+
+javac note: local container has no Android SDK classes; syntax-type javac errors = 0.
+WordPress companion plugin unchanged: v1.0.74.

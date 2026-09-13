@@ -3195,7 +3195,7 @@ public class MainActivity extends Activity {
                     records = sortAccountSalesRecordsNewestFirst(records);
                 }
                 final JSONArray finalRecords = records;
-                Runnable render = () -> renderAccountSalesRecords(recordsHost, finalRecords, search.getText().toString(), finalSettings);
+                Runnable render = () -> renderAccountSalesRecords(recordsHost, finalRecords, search.getText().toString(), finalSettings, section);
                 search.addTextChangedListener(new SimpleTextWatcher(render));
                 render.run();
             }
@@ -3280,7 +3280,7 @@ public class MainActivity extends Activity {
         return sorted;
     }
 
-    private void renderAccountSalesRecords(LinearLayout host, JSONArray records, String query, JSONObject settings) {
+    private void renderAccountSalesRecords(LinearLayout host, JSONArray records, String query, JSONObject settings, String section) {
         host.removeAllViews();
         String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         int visible = 0;
@@ -3293,12 +3293,12 @@ public class MainActivity extends Activity {
                     row.optString("stock_status", "");
             if (!q.isEmpty() && !haystack.toLowerCase(Locale.ROOT).contains(q)) continue;
             visible++;
-            host.addView(buildAccountSalesRecordCard(row, settings));
+            host.addView(buildAccountSalesRecordCard(row, settings, section));
         }
         if (visible == 0) host.addView(empty(q.isEmpty() ? "Hesab yoxdur." : "Axtarışa uyğun hesab tapılmadı."));
     }
 
-    private LinearLayout buildAccountSalesRecordCard(JSONObject row, JSONObject settings) {
+    private LinearLayout buildAccountSalesRecordCard(JSONObject row, JSONObject settings, String section) {
         LinearLayout c = card();
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
@@ -3307,9 +3307,10 @@ public class MainActivity extends Activity {
         ArrayList<String> cardGames = parseAccountSalesGameSelection(row.optString("game_name", ""));
         LinearLayout gameColumn = new LinearLayout(this);
         gameColumn.setOrientation(LinearLayout.VERTICAL);
-        if (cardGames.size() > 1) {
+        boolean bundleAccount = cardGames.size() > 1;
+        if (bundleAccount) {
             for (String gameName : cardGames) {
-                TextView gameLine = text("🧩 " + gameName, 15, TEXT, true);
+                TextView gameLine = text(gameName, 15, TEXT, true);
                 gameColumn.addView(gameLine, new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
                 spacer(gameColumn, 2);
@@ -3330,7 +3331,8 @@ public class MainActivity extends Activity {
         top.addView(priceView, new LinearLayout.LayoutParams(dp(112), ViewGroup.LayoutParams.WRAP_CONTENT));
         c.addView(top);
 
-        c.addView(text(row.optString("email", ""), 13, MUTED, false));
+        String email = row.optString("email", "");
+        c.addView(text((bundleAccount ? "⧉ " : "") + email, 13, MUTED, false));
         c.addView(text(row.optString("account_type", "") + "  •  " + row.optString("console", "") + "  •  " + row.optString("stock_status", ""), 12, TEXT, true));
         String customer = row.optString("customer_name", "").trim();
         String phone = row.optString("phone", "").trim();
@@ -3339,18 +3341,18 @@ public class MainActivity extends Activity {
         String saleDateDisplay = accountSalesDateForDisplay(saleDate);
         if (!saleDateDisplay.isEmpty()) c.addView(text(saleDateDisplay, 12, MUTED, false));
         spacer(c, 8);
-        installAccountSalesRecordHoldActions(c, row, settings);
+        installAccountSalesRecordHoldActions(c, row, settings, section);
         return c;
     }
 
-    private void installAccountSalesRecordHoldActions(View card, JSONObject row, JSONObject settings) {
+    private void installAccountSalesRecordHoldActions(View card, JSONObject row, JSONObject settings, String section) {
         final Handler holdHandler = new Handler(Looper.getMainLooper());
         final float[] down = new float[2];
         final boolean[] fired = {false};
         final int moveTolerance = dp(12);
         final Runnable openActions = () -> {
             fired[0] = true;
-            showAccountSalesRecordActions(row, settings);
+            showAccountSalesRecordActions(row, settings, section);
         };
 
         card.setClickable(true);
@@ -3378,19 +3380,122 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void showAccountSalesRecordActions(JSONObject row, JSONObject settings) {
+    private void showAccountSalesRecordActions(JSONObject row, JSONObject settings, String section) {
         String title = row.optString("game_name", "Hesab");
+        boolean detailActions = "accounts".equals(section) || "sold".equals(section);
+        String[] items = detailActions
+                ? new String[]{"Düzənlə", "Ətraflı məlumat", "Məlumatı göndər", "Sil"}
+                : new String[]{"Düzənlə", "Sil"};
         new AlertDialog.Builder(this)
                 .setTitle(title)
-                .setItems(new String[]{"Düzənlə", "Sil"}, (dialog, which) -> {
+                .setItems(items, (dialog, which) -> {
+                    if (!detailActions) {
+                        if (which == 0) showAccountSalesForm(row, settings);
+                        else if (which == 1) confirmDeleteAccountSale(row);
+                        return;
+                    }
                     if (which == 0) {
                         showAccountSalesForm(row, settings);
                     } else if (which == 1) {
+                        showAccountSalesRecordDetail(row);
+                    } else if (which == 2) {
+                        sendAccountSalesInfoWhatsApp(row);
+                    } else if (which == 3) {
                         confirmDeleteAccountSale(row);
                     }
                 })
                 .setNegativeButton("Bağla", null)
                 .show();
+    }
+
+    private void showAccountSalesRecordDetail(JSONObject row) {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(10), dp(18), dp(12));
+        scroll.addView(box, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        ArrayList<String> games = parseAccountSalesGameSelection(row.optString("game_name", ""));
+        if (games.size() > 1) {
+            StringBuilder bundle = new StringBuilder();
+            for (int i = 0; i < games.size(); i++) {
+                if (i > 0) bundle.append("\n");
+                bundle.append("• ").append(games.get(i));
+            }
+            addAccountSalesDetailField(box, "⧉", "Bundle oyunları", bundle.toString());
+        } else {
+            String gameName = games.isEmpty() ? row.optString("game_name", "") : games.get(0);
+            addAccountSalesDetailField(box, "🎮", "Oyun", gameName);
+        }
+        addAccountSalesDetailField(box, "📧", "E-mail", row.optString("email", ""));
+        addAccountSalesDetailField(box, "🏷️", "Növ", row.optString("account_type", ""));
+        addAccountSalesDetailField(box, "🕹️", "Konsol", row.optString("console", ""));
+        addAccountSalesDetailField(box, "💰", "Qiymət", row.optString("price_formatted", money(row.optDouble("price", 0))));
+        addAccountSalesDetailField(box, "👤", "Müştəri", row.optString("customer_name", ""));
+        addAccountSalesDetailField(box, "📱", "Telefon", row.optString("phone", ""));
+        addAccountSalesDetailField(box, "📅", "Satış tarixi", accountSalesDateForDisplay(row.optString("sale_date", "")));
+        addAccountSalesDetailField(box, "📦", "Status", row.optString("stock_status", ""));
+        addAccountSalesDetailField(box, "🆔", "Hesab ID", String.valueOf(row.optInt("id", 0)));
+        addAccountSalesDetailField(box, "🕒", "Yaradılıb", accountSalesDateTimeForDisplay(row.optString("created_at", "")));
+        addAccountSalesDetailField(box, "♻️", "Son dəyişiklik", accountSalesDateTimeForDisplay(row.optString("updated_at", "")));
+
+        new AlertDialog.Builder(this)
+                .setTitle("Ətraflı məlumat")
+                .setView(scroll)
+                .setPositiveButton("Bağla", null)
+                .show();
+    }
+
+    private void addAccountSalesDetailField(LinearLayout box, String icon, String label, String value) {
+        String clean = value == null ? "" : value.trim();
+        if (clean.isEmpty()) clean = "—";
+        TextView line = text(icon + "  " + label + ": " + clean, 14, TEXT, false);
+        line.setPadding(0, dp(6), 0, dp(6));
+        box.addView(line, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
+    private String accountSalesDateTimeForDisplay(String value) {
+        String clean = value == null ? "" : value.trim();
+        if (clean.length() >= 10 && clean.charAt(4) == '-' && clean.charAt(7) == '-') {
+            String date = clean.substring(8, 10) + "-" + clean.substring(5, 7) + "-" + clean.substring(0, 4);
+            return clean.length() > 10 ? date + clean.substring(10) : date;
+        }
+        return clean;
+    }
+
+    private void sendAccountSalesInfoWhatsApp(JSONObject row) {
+        String phone = normalizeWhatsAppPhone(row.optString("phone", ""));
+        if (phone.isEmpty()) {
+            toast("Bu hesab üçün müştəri telefon nömrəsi yoxdur.");
+            return;
+        }
+
+        String customer = row.optString("customer_name", "").trim();
+        ArrayList<String> games = parseAccountSalesGameSelection(row.optString("game_name", ""));
+        StringBuilder message = new StringBuilder();
+        message.append("🎮 *OYUN HESABI MƏLUMATLARI*\n\n");
+        message.append("👤 *Müştəri:* ").append(customer.isEmpty() ? "—" : customer).append("\n");
+        message.append("📱 *Telefon:* ").append(row.optString("phone", "—")).append("\n");
+        if (games.size() > 1) {
+            message.append("⧉ *Bundle oyunları:*\n");
+            for (String game : games) message.append("🎮 ").append(game).append("\n");
+        } else {
+            String gameName = games.isEmpty() ? row.optString("game_name", "—") : games.get(0);
+            message.append("🎮 *Oyun:* ").append(gameName).append("\n");
+        }
+        message.append("📧 *E-mail:* ").append(row.optString("email", "—")).append("\n");
+        message.append("🏷️ *Növ:* ").append(row.optString("account_type", "—")).append("\n");
+        message.append("🕹️ *Konsol:* ").append(row.optString("console", "—")).append("\n");
+        message.append("💰 *Qiymət:* ").append(row.optString("price_formatted", money(row.optDouble("price", 0)))).append("\n");
+        String saleDate = accountSalesDateForDisplay(row.optString("sale_date", ""));
+        if (!saleDate.isEmpty()) message.append("📅 *Satış tarixi:* ").append(saleDate).append("\n");
+        message.append("📦 *Status:* ").append(row.optString("stock_status", "—")).append("\n");
+        message.append("🆔 *Hesab ID:* ").append(row.optInt("id", 0)).append("\n");
+        message.append("\n🎮 *Marakana Game Center*");
+
+        openWhatsAppChooser(phone, message.toString());
     }
 
     private void confirmDeleteAccountSale(JSONObject row) {
