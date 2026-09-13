@@ -1,4 +1,15 @@
-# Marakana Mobile Native v67
+# Marakana Mobile Native v68
+
+## v68 — Satılmamış hesabda məlumat aksiyaları gizlidir
+
+- `Hesablar` bölməsində statusu `Satılmayıb` olan hesabda 1 saniyə basılı saxlayanda `Ətraflı məlumat` və `Məlumatı göndər` görünmür.
+- Satılmamış hesabda yalnız `Düzənlə / Sil` qalır.
+- Satılmış hesabda əvvəlki `Düzənlə / Ətraflı məlumat / Məlumatı göndər / Sil` menyusu saxlanılır.
+- `Satılmayanlar` bölməsinin əvvəlki `Düzənlə / Sil` menyusu dəyişməyib.
+- `versionCode 68`
+- `versionName 3.4.45-native-v68`
+- Release APK: `MarakanaMobile-v68-release.apk`
+
 
 ## v67 — Hesab ətraflı məlumat build fix
 

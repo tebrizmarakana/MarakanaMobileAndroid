@@ -3382,7 +3382,9 @@ public class MainActivity extends Activity {
 
     private void showAccountSalesRecordActions(JSONObject row, JSONObject settings, String section) {
         String title = row.optString("game_name", "Hesab");
-        boolean detailActions = "accounts".equals(section) || "sold".equals(section);
+        boolean accountOrSoldSection = "accounts".equals(section) || "sold".equals(section);
+        boolean unsoldStatus = "Satılmayıb".equalsIgnoreCase(row.optString("stock_status", "").trim());
+        boolean detailActions = accountOrSoldSection && !unsoldStatus;
         String[] items = detailActions
                 ? new String[]{"Düzənlə", "Ətraflı məlumat", "Məlumatı göndər", "Sil"}
                 : new String[]{"Düzənlə", "Sil"};
