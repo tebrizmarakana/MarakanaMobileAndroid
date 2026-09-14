@@ -1,0 +1,5 @@
+Code-flow checks passed.
+- Sell/Rent save returns source section.
+- Edit save returns source section regardless of changed status.
+- Rental return/copy/delete preserve source section.
+- New account/new customer created from a section returns that same section.

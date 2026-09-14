@@ -1,0 +1,6 @@
+Code-flow check:
+- Horizontal right drag starts after 10dp and must dominate vertical movement.
+- Drawer progress follows dx / panelWidth in real time.
+- Release opens by >=34% distance or fast right swipe.
+- Menu button opens the same drawer with smooth animation.
+- Scrim tap and Android back close the drawer.

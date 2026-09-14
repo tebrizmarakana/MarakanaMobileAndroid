@@ -1,3 +1,47 @@
+# MarakanaMobile v100 — ChatGPT tipli barmaqla izləyən sol panel
+
+- Hesab Satışı daxil olmaqla əsas ekranlarda barmağı ekranın ortasından sağa çəkəndə sol menyu artıq birbaşa açılmır; **barmağın hərəkətini canlı izləyərək** sürüşür.
+- Panelin açılma məsafəsi barmağın çəkdiyi məsafəyə uyğundur, sürətli swipe ediləndə isə buraxan kimi tamam açılır.
+- Yarımçıq çəkib buraxanda məsafə/sürətə görə panel açılır və ya geri bağlanır.
+- Menyu düyməsinə klik əvvəlki kimi işləyir, sadəcə artıq yumşaq sürüşmə animasiyası ilə açılır.
+- `versionCode 100`
+- `versionName 3.4.77-native-v100`
+
+---
+
+# MarakanaMobile v99 — Alt panel Satılan/Satılmayan check ikonları
+
+- Alt paneldə **Satılanlar** ikonu qırmızı `✓` oldu.
+- Alt paneldə **Satılmayanlar** ikonu yaşıl `✓` oldu.
+- Digər alt panel ikonlarına toxunulmadı.
+- `versionCode 99`
+- `versionName 3.4.76-native-v99`
+
+---
+
+# MarakanaMobile v98 — Yadda saxlayandan sonra eyni menyuda qal
+
+- Hesab hansı bölmədə əməliyyat olunursa, yadda saxlanandan sonra artıq başqa bölməyə avtomatik keçmir.
+- `Satılmayanlar → Sat` etdikdə satış yadda saxlanır və ekran yenə `Satılmayanlar` bölməsində qalır.
+- `Satılmayanlar → İcarə ver` etdikdə də eyni bölmədə qalır.
+- `Hesablar`, `Satılanlar`, `Satılmayanlar`, `İcarə` bölmələrindən `Düzənlə` ediləndə save sonrası həmin bölməyə qayıdır.
+- `Təhvil aldım`, `Kopyala`, `Sil`, `Yeni hesab yarat` və `Yeni müştəri yarat` əməliyyatlarında da başladığın menyu qorunur.
+- `versionCode 98`
+- `versionName 3.4.75-native-v98`
+
+---
+
+# MarakanaMobile v97 — Boş qiymət + təkrar müştəri nömrəsi blok
+
+- `Yeni hesab yarat` formasında **Qiymət** xanası artıq tam boş açılır; `35.50` nümunəsi də göstərilmir.
+- Yeni müştəri yaradılarkən eyni telefon nömrəsi artıq varsa ikinci dəfə qeydiyyata icazə verilmir.
+- Bu yoxlama həm əsas `Yeni müştəri yarat`, həm də Sat / İcarə içindəki sürətli müştəri yarat pəncərəsində işləyir.
+- Müştəri düzəlişində öz mövcud nömrəsini saxlamaq olar, amma başqa müştərinin nömrəsinə dəyişmək bloklanır.
+- `versionCode 97`
+- `versionName 3.4.74-native-v97`
+
+---
+
 # MarakanaMobile v96 — 30 günlük Zibil qutusu
 
 - `Yenilə` düyməsinin sağında qırmızı **🗑 Zibil qutusu** düyməsi əlavə edildi.

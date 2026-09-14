@@ -38,7 +38,6 @@ import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.PopupWindow;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -150,7 +149,10 @@ public class MainActivity extends Activity {
     private Runnable currentBackAction = null;
     private long lastExitBackPressedAt = 0L;
     private static final long EXIT_BACK_INTERVAL_MS = 2000L;
-    private PopupWindow activeNavigationPopup = null;
+    private FrameLayout activeNavigationOverlay = null;
+    private LinearLayout activeNavigationPanel = null;
+    private View activeNavigationScrim = null;
+    private float navigationDrawerProgress = 0f;
     private static final String[] DEBT_CATEGORIES = {"İşçi", "Müştəri", "Firma"};
     private static final String[] KITCHEN_CATEGORIES = {"Hazırlanır", "Hazırdır"};
     private static final long KITCHEN_LIVE_REFRESH_MS = 750L;
@@ -320,8 +322,8 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (activeNavigationPopup != null && activeNavigationPopup.isShowing()) {
-            activeNavigationPopup.dismiss();
+        if (activeNavigationOverlay != null) {
+            animateNavigationDrawer(false);
             lastExitBackPressedAt = 0L;
             return;
         }
@@ -639,17 +641,48 @@ public class MainActivity extends Activity {
     private void installGlobalDrawerSwipe(View target) {
         final float[] startX = {0f};
         final float[] startY = {0f};
-        final int openThreshold = dp(52);
+        final long[] startTime = {0L};
+        final boolean[] dragging = {false};
+        final int startThreshold = dp(10);
+
         target.setOnTouchListener((v, event) -> {
-            if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
-                startX[0] = event.getX();
-                startY[0] = event.getY();
-            } else if (event.getActionMasked() == MotionEvent.ACTION_UP) {
-                float dx = event.getX() - startX[0];
-                float dy = event.getY() - startY[0];
-                if (dx >= openThreshold && Math.abs(dx) > Math.abs(dy) * 1.15f) {
-                    showNavigationMenu();
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    startX[0] = event.getX();
+                    startY[0] = event.getY();
+                    startTime[0] = System.currentTimeMillis();
+                    dragging[0] = false;
+                    break;
+                case MotionEvent.ACTION_MOVE: {
+                    float dx = event.getX() - startX[0];
+                    float dy = event.getY() - startY[0];
+                    if (!dragging[0] && dx > startThreshold && dx > Math.abs(dy) * 1.10f) {
+                        dragging[0] = true;
+                        ensureNavigationMenuOverlay();
+                        if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(true);
+                    }
+                    if (dragging[0]) {
+                        float width = getNavigationPanelWidth();
+                        setNavigationDrawerProgress(width <= 0f ? 0f : dx / width);
+                        return true;
+                    }
+                    break;
                 }
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (dragging[0]) {
+                        float dx = event.getX() - startX[0];
+                        long elapsed = Math.max(1L, System.currentTimeMillis() - startTime[0]);
+                        float velocity = dx * 1000f / elapsed;
+                        boolean open = navigationDrawerProgress >= 0.34f || velocity >= dp(420);
+                        animateNavigationDrawer(open);
+                        if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(false);
+                        dragging[0] = false;
+                        return true;
+                    }
+                    break;
+                default:
+                    break;
             }
             return false;
         });
@@ -711,16 +744,21 @@ public class MainActivity extends Activity {
         return header;
     }
 
-    private void showNavigationMenu() {
-        if (activeNavigationPopup != null && activeNavigationPopup.isShowing()) {
-            return;
-        }
+    private float getNavigationPanelWidth() {
+        return Math.max(dp(280), getResources().getDisplayMetrics().widthPixels * 0.82f);
+    }
+
+    private void ensureNavigationMenuOverlay() {
+        if (activeNavigationOverlay != null) return;
+        ViewGroup host = findViewById(android.R.id.content);
+        if (host == null) return;
 
         FrameLayout overlay = new FrameLayout(this);
         overlay.setBackgroundColor(Color.TRANSPARENT);
 
         View scrim = new View(this);
         scrim.setBackgroundColor(MENU_SCRIM);
+        scrim.setAlpha(0f);
         overlay.addView(scrim, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         LinearLayout panel = new LinearLayout(this);
@@ -728,8 +766,10 @@ public class MainActivity extends Activity {
         panel.setPadding(dp(18), dp(22), dp(18), dp(18));
         panel.setBackgroundColor(Color.WHITE);
         panel.setElevation(dp(12));
-        FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams((int) (getResources().getDisplayMetrics().widthPixels * 0.82f), ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START);
+        int panelWidth = (int) getNavigationPanelWidth();
+        FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams(panelWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START);
         overlay.addView(panel, panelLp);
+        panel.setTranslationX(-panelWidth);
 
         TextView appTitle = text("Marakana Mobile", 22, TEXT, true);
         panel.addView(appTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
@@ -737,39 +777,16 @@ public class MainActivity extends Activity {
         panel.addView(account, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
         spacer(panel, 8);
 
-        final PopupWindow[] holder = new PopupWindow[1];
-        if (canHall) {
-            addDrawerItem(panel, "Terminallar / Zal", () -> {
-                holder[0].dismiss();
-                switchMobileRole("hall", false, this::showTerminals);
-            });
-        }
-        if (canKitchen) {
-            addDrawerItem(panel, "Mətbəx", () -> {
-                holder[0].dismiss();
-                switchMobileRole("kitchen", false, this::showKitchen);
-            });
-        }
+        if (canHall) addDrawerItem(panel, "Terminallar / Zal", () -> { dismissNavigationMenuImmediate(); switchMobileRole("hall", false, this::showTerminals); });
+        if (canKitchen) addDrawerItem(panel, "Mətbəx", () -> { dismissNavigationMenuImmediate(); switchMobileRole("kitchen", false, this::showKitchen); });
         if (canAdmin) {
-            addDrawerItem(panel, "Borc Dəftəri", () -> {
-                holder[0].dismiss();
-                switchMobileRole("admin", true, () -> showDebt("İşçi"));
-            });
-            addDrawerItem(panel, "İcarə Paneli", () -> {
-                holder[0].dismiss();
-                switchMobileRole("admin", false, () -> showRental("active"));
-            });
-            addDrawerItem(panel, "Hesab Satışı", () -> {
-                holder[0].dismiss();
-                switchMobileRole("admin", false, () -> showAccountSales("accounts"));
-            });
+            addDrawerItem(panel, "Borc Dəftəri", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", true, () -> showDebt("İşçi")); });
+            addDrawerItem(panel, "İcarə Paneli", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, () -> showRental("active")); });
+            addDrawerItem(panel, "Hesab Satışı", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, () -> showAccountSales("accounts")); });
             addDrawerItem(panel, "Admin QR təsdiqi", () -> {
-                holder[0].dismiss();
-                if ("admin".equals(role)) {
-                    startAdminApprovalQrScanner();
-                } else {
-                    switchMobileRole("admin", false, this::startAdminApprovalQrScanner);
-                }
+                dismissNavigationMenuImmediate();
+                if ("admin".equals(role)) startAdminApprovalQrScanner();
+                else switchMobileRole("admin", false, this::startAdminApprovalQrScanner);
             });
         }
 
@@ -784,38 +801,72 @@ public class MainActivity extends Activity {
             soundItem.setBackground(bg(CARD, 14, BORDER));
             soundItem.setClickable(true);
             soundItem.setFocusable(true);
-
             TextView soundTitle = text("Bildiriş səsi", 14, TEXT, true);
             TextView soundValue = text(getKitchenNotificationSoundTitle(), 12, MUTED, false);
             soundValue.setSingleLine(true);
             soundItem.addView(soundTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(23)));
             soundItem.addView(soundValue, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(21)));
-
             LinearLayout.LayoutParams soundLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(60));
             soundLp.setMargins(0, 0, 0, dp(8));
             panel.addView(soundItem, soundLp);
-            soundItem.setOnClickListener(v -> {
-                holder[0].dismiss();
-                chooseKitchenNotificationSound();
-            });
+            soundItem.setOnClickListener(v -> { dismissNavigationMenuImmediate(); chooseKitchenNotificationSound(); });
         }
 
         Button exit = button("Çıxış", Color.rgb(255, 246, 246), Color.rgb(176, 54, 54));
         exit.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
         panel.addView(exit);
 
-        PopupWindow popup = new PopupWindow(overlay, ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, true);
-        holder[0] = popup;
-        activeNavigationPopup = popup;
-        popup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        popup.setOutsideTouchable(true);
-        popup.setOnDismissListener(() -> activeNavigationPopup = null);
-        scrim.setOnClickListener(v -> popup.dismiss());
-        exit.setOnClickListener(v -> {
-            popup.dismiss();
-            logout();
-        });
-        popup.showAtLocation(content, Gravity.START | Gravity.TOP, 0, 0);
+        activeNavigationOverlay = overlay;
+        activeNavigationPanel = panel;
+        activeNavigationScrim = scrim;
+        navigationDrawerProgress = 0f;
+        host.addView(overlay, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        scrim.setOnClickListener(v -> animateNavigationDrawer(false));
+        exit.setOnClickListener(v -> { dismissNavigationMenuImmediate(); logout(); });
+    }
+
+    private void setNavigationDrawerProgress(float progress) {
+        if (activeNavigationPanel == null || activeNavigationScrim == null) return;
+        float p = Math.max(0f, Math.min(1f, progress));
+        navigationDrawerProgress = p;
+        float width = getNavigationPanelWidth();
+        activeNavigationPanel.animate().cancel();
+        activeNavigationScrim.animate().cancel();
+        activeNavigationPanel.setTranslationX(-width * (1f - p));
+        activeNavigationScrim.setAlpha(p);
+    }
+
+    private void animateNavigationDrawer(boolean open) {
+        if (activeNavigationOverlay == null) {
+            if (!open) return;
+            ensureNavigationMenuOverlay();
+        }
+        if (activeNavigationPanel == null || activeNavigationScrim == null) return;
+        float target = open ? 1f : 0f;
+        float distance = Math.abs(target - navigationDrawerProgress);
+        long duration = Math.max(110L, (long) (230L * distance));
+        float width = getNavigationPanelWidth();
+        navigationDrawerProgress = target;
+        activeNavigationPanel.animate().translationX(open ? 0f : -width).setDuration(duration).withEndAction(() -> { if (!open) dismissNavigationMenuImmediate(); }).start();
+        activeNavigationScrim.animate().alpha(open ? 1f : 0f).setDuration(duration).start();
+    }
+
+    private void dismissNavigationMenuImmediate() {
+        if (activeNavigationOverlay == null) return;
+        if (activeNavigationOverlay.getParent() instanceof ViewGroup) {
+            ((ViewGroup) activeNavigationOverlay.getParent()).removeView(activeNavigationOverlay);
+        }
+        activeNavigationOverlay = null;
+        activeNavigationPanel = null;
+        activeNavigationScrim = null;
+        navigationDrawerProgress = 0f;
+    }
+
+    private void showNavigationMenu() {
+        ensureNavigationMenuOverlay();
+        setNavigationDrawerProgress(0f);
+        animateNavigationDrawer(true);
     }
 
     private void addDrawerItem(LinearLayout panel, String label, Runnable action) {
@@ -3270,9 +3321,9 @@ public class MainActivity extends Activity {
             accountSalesCustomerChoices = customerChoices == null ? new JSONArray() : customerChoices;
             JSONObject finalSettings = settings;
             add.setEnabled(true);
-            add.setOnClickListener(v -> showAccountSalesForm(null, finalSettings));
+            add.setOnClickListener(v -> showAccountSalesForm(null, finalSettings, section));
             addCustomer.setEnabled(true);
-            addCustomer.setOnClickListener(v -> showAccountSalesNewCustomer());
+            addCustomer.setOnClickListener(v -> showAccountSalesNewCustomer(section));
 
             if ("settings".equals(section)) {
                 renderAccountSalesSummary(summaryHost, result.optJSONObject("stats"));
@@ -3323,11 +3374,21 @@ public class MainActivity extends Activity {
         footer.setBackground(bg(Color.WHITE, 22, BORDER));
         footer.setElevation(dp(12));
         String[] labels = {"Hesablar", "Satılanlar", "Satılmayanlar", "İcarə", "Müştəri"};
-        String[] icons = {"🎮", "✅", "📦", "⏳", "👥"};
+        String[] icons = {"🎮", "✓", "✓", "⏳", "👥"};
         String[] targets = {"accounts", "sold", "unsold", "rental", "customers"};
         for (int i = 0; i < targets.length; i++) {
             final String target = targets[i];
             LinearLayout tab = buildRentalFooterTab(icons[i], labels[i], target.equals(activeSection));
+            if (tab.getChildCount() > 0 && tab.getChildAt(0) instanceof TextView) {
+                TextView footerIcon = (TextView) tab.getChildAt(0);
+                if ("sold".equals(target)) {
+                    footerIcon.setTextColor(Color.rgb(198, 40, 40));
+                    footerIcon.setTextSize(22);
+                } else if ("unsold".equals(target)) {
+                    footerIcon.setTextColor(GREEN);
+                    footerIcon.setTextSize(22);
+                }
+            }
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
             if (i > 0) lp.setMargins(dp(3), 0, 0, 0);
             tab.setLayoutParams(lp);
@@ -3719,7 +3780,7 @@ public class MainActivity extends Activity {
             LinearLayout sell = accountSalesActionRow(android.R.drawable.ic_menu_send,
                     "Sat", "Müştəri məlumatlarını daxil edib hesabı sat", GREEN, () -> {
                         dismiss.run();
-                        showAccountSalesFormForStatus(row, settings, "Satılıb");
+                        showAccountSalesFormForStatus(row, settings, "Satılıb", section);
                     });
             box.addView(sell);
             spacer(box, 8);
@@ -3727,7 +3788,7 @@ public class MainActivity extends Activity {
             LinearLayout rent = accountSalesActionRow(android.R.drawable.ic_menu_recent_history,
                     "İcarə ver", "Müddət seçib hesabı icarəyə ver", ORANGE, () -> {
                         dismiss.run();
-                        showAccountSalesFormForStatus(row, settings, "İcarə");
+                        showAccountSalesFormForStatus(row, settings, "İcarə", section);
                     });
             box.addView(rent);
             spacer(box, 8);
@@ -3738,7 +3799,7 @@ public class MainActivity extends Activity {
             LinearLayout copy = accountSalesActionRow(android.R.drawable.ic_menu_add,
                     "Kopyala", "Eyni hesabı müştəri və satış tarixi boş Satılmayan kimi yarat", BLUE, () -> {
                         dismiss.run();
-                        confirmCopyAccountSaleAsUnsold(row);
+                        confirmCopyAccountSaleAsUnsold(row, section);
                     });
             box.addView(copy);
             spacer(box, 8);
@@ -3750,7 +3811,7 @@ public class MainActivity extends Activity {
             LinearLayout returned = accountSalesActionRow(android.R.drawable.ic_menu_revert,
                     "Təhvil aldım", "İcarəni bağla və hesabı Satılmayıb-a qaytar", GREEN, () -> {
                         dismiss.run();
-                        confirmAccountSalesRentalReturned(row);
+                        confirmAccountSalesRentalReturned(row, section);
                     });
             box.addView(returned);
             spacer(box, 8);
@@ -3759,7 +3820,7 @@ public class MainActivity extends Activity {
         LinearLayout edit = accountSalesActionRow(android.R.drawable.ic_menu_edit,
                 "Düzənlə", "Hesab məlumatlarını dəyiş", BLUE, () -> {
                     dismiss.run();
-                    showAccountSalesForm(row, settings);
+                    showAccountSalesForm(row, settings, section);
                 });
         box.addView(edit);
         spacer(box, 8);
@@ -3786,7 +3847,7 @@ public class MainActivity extends Activity {
             LinearLayout delete = accountSalesActionRow(android.R.drawable.ic_menu_delete,
                     "Sil", "Hesabı 30 günlük zibil qutusuna köçür", Color.rgb(190, 55, 55), () -> {
                         dismiss.run();
-                        confirmDeleteAccountSale(row);
+                        confirmDeleteAccountSale(row, section);
                     });
             box.addView(delete);
         }
@@ -3909,18 +3970,18 @@ public class MainActivity extends Activity {
         openWhatsAppChooser(phone, message.toString());
     }
 
-    private void confirmAccountSalesRentalReturned(JSONObject row) {
+    private void confirmAccountSalesRentalReturned(JSONObject row, String sourceSection) {
         String title = row.optString("game_name", "Hesab").trim();
         if (title.isEmpty()) title = "Hesab";
         new AlertDialog.Builder(this)
                 .setTitle("Təhvil aldım")
                 .setMessage(title + " hesabının icarəsi bağlansın və Satılmayıb bölməsinə qaytarılsın?")
                 .setNegativeButton("Xeyr", null)
-                .setPositiveButton("Təhvil aldım", (d, w) -> returnAccountSalesRentalToUnsold(row))
+                .setPositiveButton("Təhvil aldım", (d, w) -> returnAccountSalesRentalToUnsold(row, sourceSection))
                 .show();
     }
 
-    private void returnAccountSalesRentalToUnsold(JSONObject row) {
+    private void returnAccountSalesRentalToUnsold(JSONObject row, String sourceSection) {
         JSONObject payload = new JSONObject();
         try {
             payload.put("id", row.optInt("id", 0));
@@ -3942,22 +4003,22 @@ public class MainActivity extends Activity {
 
         postAccountSalesJson("/save", payload, result -> {
             toast("Hesab təhvil alındı və Satılmayanlara qaytarıldı.");
-            showAccountSales("unsold");
+            showAccountSales(normalizeAccountSalesSection(sourceSection));
         });
     }
 
-    private void confirmCopyAccountSaleAsUnsold(JSONObject row) {
+    private void confirmCopyAccountSaleAsUnsold(JSONObject row, String sourceSection) {
         String title = row.optString("game_name", "Hesab").trim();
         if (title.isEmpty()) title = "Hesab";
         new AlertDialog.Builder(this)
                 .setTitle("Hesabı kopyala")
                 .setMessage(title + " hesabının Satılmayan nüsxəsi yaradılsın?\n\nMüştəri məlumatları və satış tarixi boş qalacaq.")
                 .setNegativeButton("Xeyr", null)
-                .setPositiveButton("Kopyala", (d, w) -> copyAccountSaleAsUnsold(row))
+                .setPositiveButton("Kopyala", (d, w) -> copyAccountSaleAsUnsold(row, sourceSection))
                 .show();
     }
 
-    private void copyAccountSaleAsUnsold(JSONObject row) {
+    private void copyAccountSaleAsUnsold(JSONObject row, String sourceSection) {
         try {
             JSONObject payload = new JSONObject();
             String gameName = row.optString("game_name", "");
@@ -3975,7 +4036,7 @@ public class MainActivity extends Activity {
                 int created = result.optInt("created_count", 1);
                 if (created > 0) {
                     toast("Hesabın Satılmayan nüsxəsi yaradıldı.");
-                    showAccountSales("unsold");
+                    showAccountSales(normalizeAccountSalesSection(sourceSection));
                 } else {
                     toast("Hesab kopyalana bilmədi.");
                 }
@@ -3985,7 +4046,7 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void confirmDeleteAccountSale(JSONObject row) {
+    private void confirmDeleteAccountSale(JSONObject row, String sourceSection) {
         String title = row.optString("game_name", "Hesab");
         new AlertDialog.Builder(this)
                 .setTitle("Zibil qutusuna köçür")
@@ -3996,7 +4057,7 @@ public class MainActivity extends Activity {
                     try { payload.put("id", row.optInt("id", 0)); } catch (Exception ignored) {}
                     postAccountSalesJson("/delete", payload, result -> {
                         toast("Hesab zibil qutusuna köçürüldü.");
-                        showAccountSales("accounts");
+                        showAccountSales(normalizeAccountSalesSection(sourceSection));
                     });
                 }).show();
     }
@@ -4112,7 +4173,7 @@ public class MainActivity extends Activity {
                 }).show();
     }
 
-    private void showAccountSalesFormForStatus(JSONObject record, JSONObject settings, String preferredStatus) {
+    private void showAccountSalesFormForStatus(JSONObject record, JSONObject settings, String preferredStatus, String sourceSection) {
         JSONObject prepared = record;
         try {
             prepared = new JSONObject(record == null ? "{}" : record.toString());
@@ -4131,14 +4192,15 @@ public class MainActivity extends Activity {
                 prepared.put("sale_date", new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date()));
             }
         } catch (Exception ignored) {}
-        showAccountSalesTransactionForm(prepared, settings, preferredStatus);
+        showAccountSalesTransactionForm(prepared, settings, preferredStatus, sourceSection);
     }
 
-    private void showAccountSalesTransactionForm(JSONObject record, JSONObject settings, String preferredStatus) {
+    private void showAccountSalesTransactionForm(JSONObject record, JSONObject settings, String preferredStatus, String sourceSection) {
         final boolean rental = "İcarə".equals(preferredStatus);
         final boolean sold = "Satılıb".equals(preferredStatus);
         String screenTitle = rental ? "Hesabı icarəyə ver" : "Hesabı sat";
-        ScrollView sv = screenWithBody(screenTitle, true, () -> showAccountSales("unsold"));
+        final String returnSection = normalizeAccountSalesSection(sourceSection);
+        ScrollView sv = screenWithBody(screenTitle, true, () -> showAccountSales(returnSection));
         LinearLayout body = scrollBody(sv);
 
         TextView infoTitle = text("Hesab məlumatları", 15, TEXT, true);
@@ -4280,14 +4342,19 @@ public class MainActivity extends Activity {
 
             postAccountSalesJson("/save", payload, result -> {
                 toast(rental ? "Hesab icarəyə verildi." : "Hesab satıldı.");
-                showAccountSales(rental ? "rental" : "sold");
+                showAccountSales(returnSection);
             });
         });
     }
 
     private void showAccountSalesForm(JSONObject record, JSONObject settings) {
+        showAccountSalesForm(record, settings, "accounts");
+    }
+
+    private void showAccountSalesForm(JSONObject record, JSONObject settings, String sourceSection) {
         final boolean editing = record != null && record.optInt("id", 0) > 0;
-        ScrollView sv = screenWithBody(editing ? "Hesabı düzəlt" : "Yeni hesab yarat", true, () -> showAccountSales("accounts"));
+        final String returnSection = normalizeAccountSalesSection(sourceSection);
+        ScrollView sv = screenWithBody(editing ? "Hesabı düzəlt" : "Yeni hesab yarat", true, () -> showAccountSales(returnSection));
         LinearLayout body = scrollBody(sv);
 
         EditText game = accountField(body, "Oyunun adı *", "Kliklə seç və ya axtar", editing ? record.optString("game_name", "") : "", InputType.TYPE_CLASS_TEXT);
@@ -4296,7 +4363,7 @@ public class MainActivity extends Activity {
         game.setOnClickListener(v -> showAccountSalesGamePicker(game, true));
         EditText email = accountField(body, "E-mail *", "example@mail.com", editing ? record.optString("email", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         EditText secretCode = accountField(body, "Məxfi kod", "Məsələn: şifrə və ya giriş kodu", editing ? record.optString("secret_code", "") : "", InputType.TYPE_CLASS_TEXT);
-        EditText price = accountField(body, "Qiymət *", "35.50", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText price = accountField(body, "Qiymət *", editing ? "35.50" : "", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         Spinner console = accountSpinnerField(body, "Konsol *", new String[]{"PS4", "PS5", "PS4/PS5"}, editing ? record.optString("console", "PS5") : "PS5");
 
         // Server həmişə əsas mənbədir: form açılarkən köhnə in-memory oyun/müştəri siyahısını yenilə.
@@ -4319,7 +4386,8 @@ public class MainActivity extends Activity {
                     email.getText().toString(),
                     secretCode.getText().toString(),
                     price.getText().toString(),
-                    String.valueOf(console.getSelectedItem())
+                    String.valueOf(console.getSelectedItem()),
+                    returnSection
             ));
             return;
         }
@@ -4424,19 +4492,17 @@ public class MainActivity extends Activity {
             postAccountSalesJson("/save", payload, result -> {
                 if ("İcarə".equals(selectedStatus)) {
                     toast("Hesab icarəyə verildi.");
-                    showAccountSales("rental");
                 } else if ("Satılmayıb".equals(selectedStatus)) {
                     toast("Hesab Satılmayanlara qaytarıldı.");
-                    showAccountSales("unsold");
                 } else {
                     toast("Hesab yeniləndi.");
-                    showAccountSales("accounts");
                 }
+                showAccountSales(returnSection);
             });
         });
     }
 
-    private void showAccountSalesCreateTypeDialog(String gameName, String email, String secretCode, String price, String console) {
+    private void showAccountSalesCreateTypeDialog(String gameName, String email, String secretCode, String price, String console, String sourceSection) {
         String game = gameName == null ? "" : gameName.trim();
         String mail = email == null ? "" : email.trim();
         String secret = secretCode == null ? "" : secretCode.trim();
@@ -4486,7 +4552,7 @@ public class MainActivity extends Activity {
             postAccountSalesJson("/create-accounts", payload, result -> {
                 int created = result.optInt("created_count", selectedTypes.length());
                 toast(created + " hesab yaradıldı. Hamısı Satılmayıb kimi əlavə edildi.");
-                showAccountSales("accounts");
+                showAccountSales(normalizeAccountSalesSection(sourceSection));
             });
         }));
         dialog.show();
@@ -5199,6 +5265,21 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
+    private boolean accountSalesCustomerPhoneExists(String phoneValue, String excludePhone) {
+        String normalized = normalizeAzerbaijanPhone(phoneValue == null ? "" : phoneValue);
+        String excluded = normalizeAzerbaijanPhone(excludePhone == null ? "" : excludePhone);
+        if (normalized.isEmpty()) return false;
+        for (int i = 0; i < accountSalesCustomerChoices.length(); i++) {
+            JSONObject row = accountSalesCustomerChoices.optJSONObject(i);
+            if (row == null) continue;
+            String existing = normalizeAzerbaijanPhone(row.optString("phone", ""));
+            if (existing.isEmpty()) continue;
+            if (!excluded.isEmpty() && existing.equals(excluded)) continue;
+            if (existing.equals(normalized)) return true;
+        }
+        return false;
+    }
+
     private void showAccountSalesQuickCreateCustomerDialog(String initialName, EditText nameTarget, EditText phoneTarget, AlertDialog parentDialog) {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
@@ -5239,6 +5320,11 @@ public class MainActivity extends Activity {
                 customerPhone.requestFocus();
                 return;
             }
+            if (accountSalesCustomerPhoneExists(phoneValue, "")) {
+                toast("Bu telefon nömrəsi ilə müştəri artıq qeydiyyatdadır.");
+                customerPhone.requestFocus();
+                return;
+            }
             JSONObject payload = new JSONObject();
             try {
                 payload.put("customer_name", nameValue);
@@ -5267,8 +5353,9 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
-    private void showAccountSalesNewCustomer() {
-        ScrollView sv = screenWithBody("Yeni müştəri yarat", true, () -> showAccountSales("accounts"));
+    private void showAccountSalesNewCustomer(String sourceSection) {
+        final String returnSection = normalizeAccountSalesSection(sourceSection);
+        ScrollView sv = screenWithBody("Yeni müştəri yarat", true, () -> showAccountSales(returnSection));
         LinearLayout body = scrollBody(sv);
 
         LinearLayout c = card();
@@ -5298,6 +5385,11 @@ public class MainActivity extends Activity {
                 customerPhone.requestFocus();
                 return;
             }
+            if (accountSalesCustomerPhoneExists(phoneValue, "")) {
+                toast("Bu telefon nömrəsi ilə müştəri artıq qeydiyyatdadır.");
+                customerPhone.requestFocus();
+                return;
+            }
             JSONObject payload = new JSONObject();
             try {
                 payload.put("customer_name", nameValue);
@@ -5305,7 +5397,7 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {}
             postAccountSalesJson("/customer/save", payload, result -> {
                 toast("Müştəri yaradıldı.");
-                showAccountSales("customers");
+                showAccountSales(returnSection);
             });
         });
     }
@@ -5482,6 +5574,12 @@ public class MainActivity extends Activity {
             }
             if (phoneValue.isEmpty()) {
                 toast("Telefon boş ola bilməz.");
+                customerPhone.requestFocus();
+                return;
+            }
+            String oldPhoneValue = normalizeAzerbaijanPhone(customer.optString("phone", ""));
+            if (accountSalesCustomerPhoneExists(phoneValue, oldPhoneValue)) {
+                toast("Bu telefon nömrəsi başqa müştəridə artıq qeydiyyatdadır.");
                 customerPhone.requestFocus();
                 return;
             }

@@ -3,7 +3,7 @@
  * Plugin Name: Marakana Playstation Hesab Satışı
  * Plugin URI: https://marakana.local/
  * Description: Playstation oyun hesablarının satışı, stok, müştəri, ödəniş və geniş axtarış idarəetməsi üçün professional Marakana plugin.
- * Version: 1.0.86
+ * Version: 1.0.87
  * Author: Marakana
  * Text Domain: marakana-playstation-hesab-satisi
  * Requires PHP: 7.4
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
     final class Marakana_Playstation_Hesab_Satisi_100
     {
-        const VERSION = '1.0.86';
+        const VERSION = '1.0.87';
         const DB_VERSION = '1.5.0';
         const OPTION_KEY = 'mara_account_sale_settings';
         const DB_OPTION_KEY = 'mara_account_sale_db_version';
@@ -332,8 +332,47 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             return is_array($contacts) ? $contacts : array();
         }
 
-        private function save_customer_contact($customer_name_raw, $phone_raw, &$error = '')
+        private function customer_phone_exists($phone, $exclude_phone = '')
         {
+            global $wpdb;
+            $phone = trim((string) $phone);
+            $exclude_phone = trim((string) $exclude_phone);
+            if ($phone === '') {
+                return false;
+            }
+
+            foreach ($this->get_saved_customer_contacts() as $contact) {
+                if (!is_array($contact)) {
+                    continue;
+                }
+                $existing = isset($contact['phone']) ? trim((string) $contact['phone']) : '';
+                if ($existing === '' || ($exclude_phone !== '' && $existing === $exclude_phone)) {
+                    continue;
+                }
+                if ($existing === $phone) {
+                    return true;
+                }
+            }
+
+            $table = $this->table_name();
+            if ($exclude_phone !== '') {
+                $count = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$table} WHERE deleted_at IS NULL AND phone = %s AND phone <> %s",
+                    $phone,
+                    $exclude_phone
+                ));
+            } else {
+                $count = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$table} WHERE deleted_at IS NULL AND phone = %s",
+                    $phone
+                ));
+            }
+            return $count > 0;
+        }
+
+        private function save_customer_contact($customer_name_raw, $phone_raw, &$error = '', $old_phone_raw = '')
+        {
+            global $wpdb;
             $customer_name = $this->normalize_name(sanitize_text_field((string) $customer_name_raw));
             if ($customer_name === '') {
                 $error = 'Ad soyad boş ola bilməz.';
@@ -351,10 +390,31 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 return null;
             }
 
+            $old_phone = '';
+            if ((string) $old_phone_raw !== '') {
+                $old_phone_error = '';
+                $old_phone = $this->normalize_phone(sanitize_text_field((string) $old_phone_raw), $old_phone_error);
+            }
+
+            if ($this->customer_phone_exists($phone, $old_phone)) {
+                $error = 'Bu telefon nömrəsi ilə müştəri artıq qeydiyyatdadır.';
+                return null;
+            }
+
             $contacts = $this->get_saved_customer_contacts();
             $key = md5($phone);
+            $old_key = $old_phone !== '' ? md5($old_phone) : '';
             $now = current_time('mysql');
-            $created_at = isset($contacts[$key]['created_at']) ? (string) $contacts[$key]['created_at'] : $now;
+            $created_at = $now;
+            if ($old_key !== '' && isset($contacts[$old_key]['created_at'])) {
+                $created_at = (string) $contacts[$old_key]['created_at'];
+            } elseif (isset($contacts[$key]['created_at'])) {
+                $created_at = (string) $contacts[$key]['created_at'];
+            }
+
+            if ($old_key !== '' && $old_key !== $key && isset($contacts[$old_key])) {
+                unset($contacts[$old_key]);
+            }
             $contacts[$key] = array(
                 'customer_name' => $customer_name,
                 'phone' => $phone,
@@ -362,6 +422,21 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'updated_at' => $now,
             );
             update_option(self::CUSTOMER_CONTACTS_OPTION_KEY, $contacts, false);
+
+            // Müştəri düzəlişində əvvəlki satış tarixçəsi də yeni ad/nömrə ilə birlikdə qalsın.
+            $table = $this->table_name();
+            if ($old_phone !== '') {
+                $wpdb->update(
+                    $table,
+                    array('customer_name' => $customer_name, 'phone' => $phone, 'updated_at' => $now),
+                    array('phone' => $old_phone),
+                    array('%s', '%s', '%s'),
+                    array('%s')
+                );
+            } else {
+                // İlk qeydiyyatda yalnız kontakt yaradılır; mövcud eyni nömrə yuxarıdakı yoxlama ilə bloklanır.
+            }
+
             return $contacts[$key];
         }
 
@@ -2798,7 +2873,8 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $saved = $this->save_customer_contact(
                 isset($input['customer_name']) ? $input['customer_name'] : '',
                 isset($input['phone']) ? $input['phone'] : '',
-                $error
+                $error,
+                isset($input['old_phone']) ? $input['old_phone'] : ''
             );
             if (!is_array($saved)) {
                 return new WP_Error(
