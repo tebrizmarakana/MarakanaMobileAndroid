@@ -4058,7 +4058,7 @@ public class MainActivity extends Activity {
         EditText phone = accountField(body, "Telefon *", "0705603030", record.optString("phone", ""), InputType.TYPE_CLASS_PHONE);
         customer.setFocusable(false);
         customer.setClickable(true);
-        customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone, sold));
+        customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone, sold || rental));
 
         EditText transactionPrice = accountField(
                 body,

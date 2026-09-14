@@ -1,3 +1,15 @@
+# MarakanaMobile v95 — Sat / İcarə zamanı sürətli müştəri yarat
+
+- `Hesabı sat` və `İcarə ver` axınında `Ad soyad` seçim pəncərəsi eyni qayda ilə işləyir.
+- Axtarışda uyğun müştəri tapılmadıqda **`Yeni müştəri yarat`** düyməsi görünür.
+- Düyməyə klik edəndə müştərinin ad soyadı və telefon nömrəsi daxil edilərək yaradılır.
+- Yeni müştəri yaradılan kimi həmin satış/icarə formasında avtomatik seçilir.
+- Telefon əvvəlki qayda ilə avtomatik `+994...` formatına çevrilir.
+- `versionCode 95`
+- `versionName 3.4.72-native-v95`
+
+---
+
 # MarakanaMobile v94 — Son əməliyyat və yeni müştəri sıralaması
 
 - Hesablar, Satılanlar, Satılmayanlar və İcarə bölmələrində **ən son əməliyyat edilən / son dəyişən hesab həmişə yuxarıda** göstərilir.
