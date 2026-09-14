@@ -3,7 +3,7 @@
  * Plugin Name: Marakana Playstation Hesab Satışı
  * Plugin URI: https://marakana.local/
  * Description: Playstation oyun hesablarının satışı, stok, müştəri, ödəniş və geniş axtarış idarəetməsi üçün professional Marakana plugin.
- * Version: 1.0.79
+ * Version: 1.0.85
  * Author: Marakana
  * Text Domain: marakana-playstation-hesab-satisi
  * Requires PHP: 7.4
@@ -16,8 +16,8 @@ if (!defined('ABSPATH')) {
 if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
     final class Marakana_Playstation_Hesab_Satisi_100
     {
-        const VERSION = '1.0.79';
-        const DB_VERSION = '1.2.0';
+        const VERSION = '1.0.85';
+        const DB_VERSION = '1.4.0';
         const OPTION_KEY = 'mara_account_sale_settings';
         const DB_OPTION_KEY = 'mara_account_sale_db_version';
         const LEGACY_IMPORT_OPTION_KEY = 'mara_account_sale_legacy_pdf_import_v54';
@@ -130,6 +130,9 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 primary_game_id BIGINT(20) UNSIGNED NULL DEFAULT NULL,
                 account_type VARCHAR(20) NOT NULL,
                 email VARCHAR(190) NOT NULL,
+                account_password VARCHAR(255) NULL DEFAULT '',
+                secret_code VARCHAR(255) NULL DEFAULT '',
+                legacy_row_no BIGINT(20) UNSIGNED NULL DEFAULT NULL,
                 price DECIMAL(10,2) NOT NULL DEFAULT 0.00,
                 console VARCHAR(10) NOT NULL,
                 customer_name VARCHAR(190) NULL DEFAULT '',
@@ -190,6 +193,22 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $wpdb->query("ALTER TABLE {$table} MODIFY customer_name VARCHAR(190) NULL DEFAULT ''");
             $wpdb->query("ALTER TABLE {$table} MODIFY phone VARCHAR(30) NULL DEFAULT ''");
             $wpdb->query("ALTER TABLE {$table} MODIFY sale_date DATE NULL DEFAULT NULL");
+            $password_column = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'account_password'");
+            if (!$password_column) {
+                $wpdb->query("ALTER TABLE {$table} ADD account_password VARCHAR(255) NULL DEFAULT '' AFTER email");
+            } else {
+                $wpdb->query("ALTER TABLE {$table} MODIFY account_password VARCHAR(255) NULL DEFAULT ''");
+            }
+            $secret_column = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'secret_code'");
+            if (!$secret_column) {
+                $wpdb->query("ALTER TABLE {$table} ADD secret_code VARCHAR(255) NULL DEFAULT '' AFTER account_password");
+            } else {
+                $wpdb->query("ALTER TABLE {$table} MODIFY secret_code VARCHAR(255) NULL DEFAULT ''");
+            }
+            $legacy_row_column = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'legacy_row_no'");
+            if (!$legacy_row_column) {
+                $wpdb->query("ALTER TABLE {$table} ADD legacy_row_no BIGINT(20) UNSIGNED NULL DEFAULT NULL AFTER secret_code");
+            }
         }
 
         public function admin_menu()
@@ -313,6 +332,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                         COUNT(*) AS game_count,
                         COALESCE(SUM(CASE WHEN stock_status = 'Satılıb' THEN price ELSE 0 END), 0) AS total_amount,
                         MAX(sale_date) AS last_sale_date,
+                        MIN(created_at) AS first_account_created_at,
                         COALESCE(SUM(CASE WHEN payment_type = 'Nağd' AND stock_status = 'Satılıb' THEN price ELSE 0 END), 0) AS cash_amount,
                         COALESCE(SUM(CASE WHEN payment_type = 'Nisyə' AND stock_status = 'Satılıb' THEN price ELSE 0 END), 0) AS credit_amount,
                         COALESCE(SUM(CASE WHEN payment_type = 'Nağd' AND stock_status = 'Satılıb' THEN 1 ELSE 0 END), 0) AS cash_count,
@@ -330,6 +350,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     continue;
                 }
                 $row['contact_updated_at'] = '';
+                $row['customer_created_at'] = isset($row['first_account_created_at']) ? (string) $row['first_account_created_at'] : '';
                 $merged[$phone] = $row;
             }
 
@@ -342,10 +363,14 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 if ($phone === '' || $name === '') {
                     continue;
                 }
+                $created_at = isset($contact['created_at']) ? (string) $contact['created_at'] : '';
                 $updated_at = isset($contact['updated_at']) ? (string) $contact['updated_at'] : '';
                 if (isset($merged[$phone])) {
                     $merged[$phone]['customer_name'] = $name;
                     $merged[$phone]['contact_updated_at'] = $updated_at;
+                    if ($created_at !== '') {
+                        $merged[$phone]['customer_created_at'] = $created_at;
+                    }
                 } else {
                     $merged[$phone] = array(
                         'phone' => $phone,
@@ -353,28 +378,35 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                         'game_count' => 0,
                         'total_amount' => 0,
                         'last_sale_date' => '',
+                        'first_account_created_at' => '',
                         'cash_amount' => 0,
                         'credit_amount' => 0,
                         'cash_count' => 0,
                         'credit_count' => 0,
                         'contact_updated_at' => $updated_at,
+                        'customer_created_at' => $created_at,
                     );
                 }
             }
 
             $customers = array_values($merged);
             usort($customers, function ($a, $b) {
-                $a_sale = isset($a['last_sale_date']) ? (string) $a['last_sale_date'] : '';
-                $b_sale = isset($b['last_sale_date']) ? (string) $b['last_sale_date'] : '';
-                if ($a_sale !== $b_sale) {
-                    if ($a_sale === '') return 1;
-                    if ($b_sale === '') return -1;
-                    return strcmp($b_sale, $a_sale);
+                $a_created = isset($a['customer_created_at']) ? (string) $a['customer_created_at'] : '';
+                $b_created = isset($b['customer_created_at']) ? (string) $b['customer_created_at'] : '';
+                if ($a_created !== $b_created) {
+                    if ($a_created === '') return 1;
+                    if ($b_created === '') return -1;
+                    return strcmp($b_created, $a_created);
                 }
                 $a_updated = isset($a['contact_updated_at']) ? (string) $a['contact_updated_at'] : '';
                 $b_updated = isset($b['contact_updated_at']) ? (string) $b['contact_updated_at'] : '';
                 if ($a_updated !== $b_updated) {
                     return strcmp($b_updated, $a_updated);
+                }
+                $a_sale = isset($a['last_sale_date']) ? (string) $a['last_sale_date'] : '';
+                $b_sale = isset($b['last_sale_date']) ? (string) $b['last_sale_date'] : '';
+                if ($a_sale !== $b_sale) {
+                    return strcmp($b_sale, $a_sale);
                 }
                 return strcasecmp(
                     isset($a['customer_name']) ? (string) $a['customer_name'] : '',
@@ -390,7 +422,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             if ($value === '') {
                 return array();
             }
-            $parts = preg_split('/\s*(?:,|;|\r?\n|\s+\+\s+|·)\s*/u', $value);
+            $parts = preg_split('/\s*(?:,|;|\r?\n|\s+\+\s+|·|•)\s*/u', $value);
             $names = array();
             $seen = array();
             foreach ($parts as $part) {
@@ -1035,6 +1067,8 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $game_name = isset($_POST['game_name']) ? sanitize_text_field(wp_unslash($_POST['game_name'])) : '';
             $account_type = isset($_POST['account_type']) ? sanitize_text_field(wp_unslash($_POST['account_type'])) : '';
             $email = isset($_POST['email']) ? sanitize_email(wp_unslash($_POST['email'])) : '';
+            $account_password = isset($_POST['account_password']) ? sanitize_text_field(wp_unslash($_POST['account_password'])) : '';
+            $secret_code = isset($_POST['secret_code']) ? sanitize_text_field(wp_unslash($_POST['secret_code'])) : '';
             $price_raw = isset($_POST['price']) ? sanitize_text_field(wp_unslash($_POST['price'])) : '';
             $console = isset($_POST['console']) ? sanitize_text_field(wp_unslash($_POST['console'])) : '';
             $customer_name_raw = isset($_POST['customer_name']) ? sanitize_text_field(wp_unslash($_POST['customer_name'])) : '';
@@ -1085,6 +1119,8 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'game_name' => $game_name,
                 'account_type' => $account_type,
                 'email' => $email,
+                'account_password' => $account_password,
+                'secret_code' => $secret_code,
                 'price' => $price,
                 'console' => $console,
                 'customer_name' => $customer_name,
@@ -1176,6 +1212,279 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
         {
             $value = function_exists('mb_strtolower') ? mb_strtolower((string) $value, 'UTF-8') : strtolower((string) $value);
             return strtr($value, array('ı'=>'i','ə'=>'e','ş'=>'s','ğ'=>'g','ü'=>'u','ö'=>'o','ç'=>'c','İ'=>'i','Ə'=>'e','Ş'=>'s','Ğ'=>'g','Ü'=>'u','Ö'=>'o','Ç'=>'c'));
+        }
+
+        private function repair_import_email($value)
+        {
+            $email = preg_replace('/\s+/u', '', (string) $value);
+            $email = str_ireplace(array('@mailru', '@gmailcom', '@hotmailcom', '@outlookcom', '@yandexcom'), array('@mail.ru', '@gmail.com', '@hotmail.com', '@outlook.com', '@yandex.com'), $email);
+            return sanitize_email($email);
+        }
+
+        private function parse_import_price($value)
+        {
+            $raw = strtoupper(preg_replace('/\s+/u', '', (string) $value));
+            $raw = preg_replace('/[^0-9,\.]/', '', $raw);
+            if ($raw === '') return 0;
+            if (strpos($raw, ',') !== false && strpos($raw, '.') !== false) {
+                $raw = str_replace('.', '', $raw);
+                $raw = str_replace(',', '.', $raw);
+            } elseif (strpos($raw, ',') !== false) {
+                $raw = str_replace(',', '.', $raw);
+            }
+            return max(0, (float) $raw);
+        }
+
+        private function parse_import_date($value)
+        {
+            $raw = preg_replace('/\s+/u', '', (string) $value);
+            if (preg_match('/^(\d{1,2})[\.\/-](\d{1,2})[\.\/-](\d{4})$/', $raw, $m)) {
+                return sprintf('%04d-%02d-%02d', (int) $m[3], (int) $m[2], (int) $m[1]);
+            }
+            if (preg_match('/^(\d{4})[\.\/-](\d{1,2})[\.\/-](\d{1,2})$/', $raw, $m)) {
+                return sprintf('%04d-%02d-%02d', (int) $m[1], (int) $m[2], (int) $m[3]);
+            }
+            return '';
+        }
+
+        private function normalize_import_phone_value($value)
+        {
+            $digits = preg_replace('/\D+/', '', (string) $value);
+            if (strlen($digits) === 10 && strpos($digits, '0') === 0) return '+994' . substr($digits, 1);
+            if (strlen($digits) === 9) return '+994' . $digits;
+            if (strlen($digits) === 12 && strpos($digits, '994') === 0) return '+' . $digits;
+            return trim((string) $value);
+        }
+
+        private function split_import_customer_and_phone($value)
+        {
+            $raw = trim(preg_replace('/\s+/u', ' ', (string) $value));
+            if ($raw === '') return array('', '');
+            if (preg_match('/((?:\+?994|0)[0-9\s]{8,20})$/u', $raw, $m, PREG_OFFSET_CAPTURE)) {
+                $phone_raw = trim($m[1][0]);
+                $name = trim(substr($raw, 0, $m[1][1]));
+                return array($name, $this->normalize_import_phone_value($phone_raw));
+            }
+            return array($raw, '');
+        }
+
+        private function bbox_compact_text($items)
+        {
+            usort($items, function ($a, $b) {
+                if (abs($a['y'] - $b['y']) > 0.5) return $a['y'] < $b['y'] ? -1 : 1;
+                return $a['x'] < $b['x'] ? -1 : 1;
+            });
+            $out = '';
+            foreach ($items as $item) $out .= preg_replace('/\s+/u', '', (string) $item['t']);
+            return trim($out);
+        }
+
+        private function bbox_spaced_text($items)
+        {
+            usort($items, function ($a, $b) {
+                if (abs($a['y'] - $b['y']) > 0.5) return $a['y'] < $b['y'] ? -1 : 1;
+                return $a['x'] < $b['x'] ? -1 : 1;
+            });
+            $lines = array();
+            $current_y = null;
+            $current = array();
+            foreach ($items as $item) {
+                if ($current_y === null || abs($item['y'] - $current_y) < 1.0) {
+                    $current[] = $item;
+                    if ($current_y === null) $current_y = $item['y'];
+                } else {
+                    usort($current, function ($a, $b) { return $a['x'] < $b['x'] ? -1 : 1; });
+                    $lines[] = implode(' ', array_map(function ($v) { return $v['t']; }, $current));
+                    $current = array($item);
+                    $current_y = $item['y'];
+                }
+            }
+            if (!empty($current)) {
+                usort($current, function ($a, $b) { return $a['x'] < $b['x'] ? -1 : 1; });
+                $lines[] = implode(' ', array_map(function ($v) { return $v['t']; }, $current));
+            }
+            return trim(preg_replace('/\s+/u', ' ', implode(' ', $lines)));
+        }
+
+        private function parse_pdf_account_rows_bbox($path, &$error = '')
+        {
+            $error = '';
+            if (!function_exists('shell_exec') || !class_exists('DOMDocument')) {
+                $error = 'Dəqiq PDF import üçün serverdə pdftotext və PHP DOM dəstəyi tələb olunur.';
+                return array();
+            }
+            $disabled = array_map('trim', explode(',', (string) ini_get('disable_functions')));
+            if (in_array('shell_exec', $disabled, true)) {
+                $error = 'Dəqiq PDF import üçün shell_exec deaktiv edilməməlidir.';
+                return array();
+            }
+            $tmp = function_exists('wp_tempnam') ? wp_tempnam('marakana-pdf-bbox.html') : tempnam(sys_get_temp_dir(), 'mara_pdf_');
+            if (!$tmp) {
+                $error = 'PDF üçün müvəqqəti fayl yaradıla bilmədi.';
+                return array();
+            }
+            @unlink($tmp);
+            $cmd = 'pdftotext -bbox-layout ' . escapeshellarg($path) . ' ' . escapeshellarg($tmp) . ' 2>&1';
+            @shell_exec($cmd);
+            if (!is_readable($tmp) || filesize($tmp) < 100) {
+                @unlink($tmp);
+                $error = 'pdftotext -bbox-layout PDF-ni oxuya bilmədi.';
+                return array();
+            }
+            $xml = file_get_contents($tmp);
+            @unlink($tmp);
+            if ($xml === false || $xml === '') {
+                $error = 'PDF koordinat məlumatı boş gəldi.';
+                return array();
+            }
+
+            $dom = new DOMDocument();
+            $old = libxml_use_internal_errors(true);
+            $loaded = $dom->loadXML($xml, LIBXML_NONET | LIBXML_NOWARNING | LIBXML_NOERROR);
+            libxml_clear_errors();
+            libxml_use_internal_errors($old);
+            if (!$loaded) {
+                $error = 'PDF koordinat XML-i oxunmadı.';
+                return array();
+            }
+            $xpath = new DOMXPath($dom);
+            $pages = $xpath->query('//*[local-name()="page"]');
+            if (!$pages || $pages->length === 0) {
+                $error = 'PDF səhifələri tapılmadı.';
+                return array();
+            }
+
+            $rows = array();
+            foreach ($pages as $page_index => $page) {
+                $word_nodes = $xpath->query('.//*[local-name()="word"]', $page);
+                $words = array();
+                $header_y = 0.0;
+                foreach ($word_nodes as $word) {
+                    $t = trim((string) $word->textContent);
+                    if ($t === '') continue;
+                    $x = (float) $word->getAttribute('xMin');
+                    $y = (float) $word->getAttribute('yMin');
+                    $words[] = array('x' => $x, 'y' => $y, 't' => $t);
+                    if ($t === 'Sıra' && ($header_y <= 0 || $y < $header_y)) $header_y = $y;
+                }
+                if ($header_y <= 0) continue;
+
+                $email_y = array();
+                foreach ($words as $w) {
+                    if ($w['x'] >= 223 && $w['x'] < 325 && $w['y'] > $header_y + 20) {
+                        $email_y[number_format($w['y'], 3, '.', '')] = true;
+                    }
+                }
+                $status_anchors = array();
+                $type_anchors = array();
+                foreach ($words as $w) {
+                    $yk = number_format($w['y'], 3, '.', '');
+                    if (!isset($email_y[$yk])) continue;
+                    $norm = $this->normalize_import_header($w['t']);
+                    if ($w['x'] >= 178 && $w['x'] < 223 && (strpos($norm, 'sat') === 0 || strpos($norm, 'ica') === 0)) {
+                        $status_anchors[$yk] = $w['y'];
+                    }
+                    if ($w['x'] >= 155 && $w['x'] < 178 && preg_match('/^(on|un|of|off)$/i', $w['t'])) {
+                        $type_anchors[$yk] = $w['y'];
+                    }
+                }
+                foreach ($type_anchors as $yk => $y) {
+                    foreach ($status_anchors as $sy) {
+                        if (abs($y - $sy) <= 18) {
+                            unset($type_anchors[$yk]);
+                            break;
+                        }
+                    }
+                }
+                $anchors = array_values(array_merge($status_anchors, $type_anchors));
+                sort($anchors, SORT_NUMERIC);
+                if (empty($anchors)) continue;
+
+                $page_end = 805.0;
+                foreach ($words as $w) {
+                    if ($w['t'] !== '1.0' || $w['y'] <= $header_y + 200) continue;
+                    foreach ($words as $w2) {
+                        if ($w2['t'] === 'Playstation' && abs($w2['y'] - $w['y']) < 1.0) {
+                            $page_end = min($page_end, $w['y'] - 1.0);
+                            break;
+                        }
+                    }
+                }
+
+                $id_words = array();
+                foreach ($words as $w) {
+                    if ($w['x'] >= 45 && $w['x'] < 80 && $w['y'] > $header_y + 20 && preg_match('/^\d{1,4}$/', $w['t'])) {
+                        $id_words[] = array('y' => $w['y'], 'id' => (int) $w['t']);
+                    }
+                }
+                usort($id_words, function ($a, $b) { return $a['y'] < $b['y'] ? -1 : 1; });
+
+                $ranges = array(
+                    'game_name' => array(80, 158, false),
+                    'account_type_raw' => array(158, 178, true),
+                    'stock_status_raw' => array(178, 223, true),
+                    'email_raw' => array(223, 325, true),
+                    'account_password' => array(325, 374, true),
+                    'price_raw' => array(374, 400, true),
+                    'console_raw' => array(400, 423, true),
+                    'customer_raw' => array(423, 489, false),
+                    'sale_date_raw' => array(489, 525, true),
+                    'secret_code' => array(525, 999, true),
+                );
+
+                $anchor_count = count($anchors);
+                for ($i = 0; $i < $anchor_count; $i++) {
+                    $start_y = (float) $anchors[$i];
+                    $nominal_end = $i + 1 < $anchor_count ? (float) $anchors[$i + 1] : $page_end;
+                    $candidate_ids = array();
+                    foreach ($id_words as $idw) {
+                        if ($idw['y'] >= $start_y - 10 && $idw['y'] < $nominal_end) $candidate_ids[] = $idw;
+                    }
+                    $legacy_id = !empty($candidate_ids) ? (int) $candidate_ids[0]['id'] : 0;
+                    $end_y = $nominal_end;
+                    if (count($candidate_ids) > 1) $end_y = min($end_y, (float) $candidate_ids[1]['y'] - 6.0);
+
+                    $bucket = array();
+                    foreach ($ranges as $key => $range) $bucket[$key] = array();
+                    foreach ($words as $w) {
+                        if ($w['y'] < $start_y - 0.01 || $w['y'] >= $end_y - 0.01) continue;
+                        foreach ($ranges as $key => $range) {
+                            if ($w['x'] >= $range[0] && $w['x'] < $range[1]) {
+                                $bucket[$key][] = $w;
+                                break;
+                            }
+                        }
+                    }
+
+                    $raw = array();
+                    foreach ($ranges as $key => $range) {
+                        $raw[$key] = $range[2] ? $this->bbox_compact_text($bucket[$key]) : $this->bbox_spaced_text($bucket[$key]);
+                    }
+                    $email = $this->repair_import_email($raw['email_raw']);
+                    $game_name = trim($raw['game_name']);
+                    if ($game_name === '' || $email === '' || !is_email($email)) continue;
+                    list($customer_name, $phone) = $this->split_import_customer_and_phone($raw['customer_raw']);
+                    $sale_date = $this->parse_import_date($raw['sale_date_raw']);
+                    $status = $raw['stock_status_raw'] === '' ? 'Satılmayıb' : $this->normalize_stock_status_value($raw['stock_status_raw']);
+                    $rows[] = array(
+                        'legacy_row_no' => $legacy_id,
+                        'game_name' => $game_name,
+                        'account_type' => $this->normalize_legacy_account_type($raw['account_type_raw']),
+                        'email' => $email,
+                        'account_password' => sanitize_text_field($raw['account_password']),
+                        'secret_code' => sanitize_text_field($raw['secret_code']),
+                        'price' => $this->parse_import_price($raw['price_raw']),
+                        'console' => $this->normalize_legacy_console($raw['console_raw']),
+                        'customer_name' => sanitize_text_field($customer_name),
+                        'phone' => sanitize_text_field($phone),
+                        'sale_date' => $sale_date,
+                        'payment_type' => 'Nağd',
+                        'stock_status' => $status,
+                    );
+                }
+            }
+            if (empty($rows)) $error = 'PDF-də uyğun hesab sətirləri tapılmadı.';
+            return $rows;
         }
 
         private function parse_pdf_account_rows($text, &$error = '')
@@ -1300,13 +1609,184 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             return $rows;
         }
 
-        private function load_uploaded_pdf_rows($path, &$error = '')
+        private function parse_client_pdf_bbox_pages($pages, &$error = '')
         {
-            $text = $this->extract_pdf_text($path, $error);
-            if ($text === '') {
+            $error = '';
+            if (!is_array($pages) || empty($pages)) {
+                $error = 'Brauzer PDF məlumatını göndərmədi.';
                 return array();
             }
-            return $this->parse_pdf_account_rows($text, $error);
+
+            $rows = array();
+            foreach ($pages as $page_index => $page_words) {
+                if (!is_array($page_words) || empty($page_words)) continue;
+                $words = array();
+                $header_y = 0.0;
+                foreach ($page_words as $word) {
+                    if (!is_array($word)) continue;
+                    $t = isset($word['t']) ? trim((string) $word['t']) : '';
+                    if ($t === '') continue;
+                    $x = isset($word['x']) ? (float) $word['x'] : 0.0;
+                    $y = isset($word['y']) ? (float) $word['y'] : 0.0;
+                    $words[] = array('x' => $x, 'y' => $y, 't' => $t);
+                    if ($t === 'Sıra' && ($header_y <= 0 || $y < $header_y)) $header_y = $y;
+                }
+                if ($header_y <= 0) continue;
+
+                $email_y = array();
+                foreach ($words as $w) {
+                    if ($w['x'] >= 223 && $w['x'] < 325 && $w['y'] > $header_y + 20) {
+                        $email_y[number_format($w['y'], 3, '.', '')] = true;
+                    }
+                }
+                $status_anchors = array();
+                $type_anchors = array();
+                foreach ($words as $w) {
+                    $yk = number_format($w['y'], 3, '.', '');
+                    if (!isset($email_y[$yk])) continue;
+                    $norm = $this->normalize_import_header($w['t']);
+                    if ($w['x'] >= 178 && $w['x'] < 223 && (strpos($norm, 'sat') === 0 || strpos($norm, 'ica') === 0)) {
+                        $status_anchors[$yk] = $w['y'];
+                    }
+                    if ($w['x'] >= 155 && $w['x'] < 178 && preg_match('/^(on|un|of|off)$/i', $w['t'])) {
+                        $type_anchors[$yk] = $w['y'];
+                    }
+                }
+                foreach ($type_anchors as $yk => $y) {
+                    foreach ($status_anchors as $sy) {
+                        if (abs($y - $sy) <= 18) {
+                            unset($type_anchors[$yk]);
+                            break;
+                        }
+                    }
+                }
+                $anchors = array_values(array_merge($status_anchors, $type_anchors));
+                sort($anchors, SORT_NUMERIC);
+                if (empty($anchors)) continue;
+
+                $page_end = 805.0;
+                foreach ($words as $w) {
+                    if ($w['t'] !== '1.0' || $w['y'] <= $header_y + 200) continue;
+                    foreach ($words as $w2) {
+                        if ($w2['t'] === 'Playstation' && abs($w2['y'] - $w['y']) < 1.0) {
+                            $page_end = min($page_end, $w['y'] - 1.0);
+                            break;
+                        }
+                    }
+                }
+
+                $id_words = array();
+                foreach ($words as $w) {
+                    if ($w['x'] >= 45 && $w['x'] < 80 && $w['y'] > $header_y + 20 && preg_match('/^\d{1,4}$/', $w['t'])) {
+                        $id_words[] = array('y' => $w['y'], 'id' => (int) $w['t']);
+                    }
+                }
+                usort($id_words, function ($a, $b) { return $a['y'] < $b['y'] ? -1 : 1; });
+
+                $ranges = array(
+                    'game_name' => array(80, 158, false),
+                    'account_type_raw' => array(158, 178, true),
+                    'stock_status_raw' => array(178, 223, true),
+                    'email_raw' => array(223, 325, true),
+                    'account_password' => array(325, 374, true),
+                    'price_raw' => array(374, 400, true),
+                    'console_raw' => array(400, 423, true),
+                    'customer_raw' => array(423, 489, false),
+                    'sale_date_raw' => array(489, 525, true),
+                    'secret_code' => array(525, 999, true),
+                );
+
+                $anchor_count = count($anchors);
+                for ($i = 0; $i < $anchor_count; $i++) {
+                    $start_y = (float) $anchors[$i];
+                    $nominal_end = $i + 1 < $anchor_count ? (float) $anchors[$i + 1] : $page_end;
+                    $candidate_ids = array();
+                    foreach ($id_words as $idw) {
+                        if ($idw['y'] >= $start_y - 10 && $idw['y'] < $nominal_end) $candidate_ids[] = $idw;
+                    }
+                    $legacy_id = !empty($candidate_ids) ? (int) $candidate_ids[0]['id'] : 0;
+                    $end_y = $nominal_end;
+                    if (count($candidate_ids) > 1) $end_y = min($end_y, (float) $candidate_ids[1]['y'] - 6.0);
+
+                    $bucket = array();
+                    foreach ($ranges as $key => $range) $bucket[$key] = array();
+                    foreach ($words as $w) {
+                        if ($w['y'] < $start_y - 0.01 || $w['y'] >= $end_y - 0.01) continue;
+                        foreach ($ranges as $key => $range) {
+                            if ($w['x'] >= $range[0] && $w['x'] < $range[1]) {
+                                $bucket[$key][] = $w;
+                                break;
+                            }
+                        }
+                    }
+
+                    $raw = array();
+                    foreach ($ranges as $key => $range) {
+                        $raw[$key] = $range[2] ? $this->bbox_compact_text($bucket[$key]) : $this->bbox_spaced_text($bucket[$key]);
+                    }
+                    $email = $this->repair_import_email($raw['email_raw']);
+                    $game_name = trim($raw['game_name']);
+                    if ($game_name === '' || $email === '' || !is_email($email)) continue;
+                    list($customer_name, $phone) = $this->split_import_customer_and_phone($raw['customer_raw']);
+                    $sale_date = $this->parse_import_date($raw['sale_date_raw']);
+                    $status = $raw['stock_status_raw'] === '' ? 'Satılmayıb' : $this->normalize_stock_status_value($raw['stock_status_raw']);
+                    $rows[] = array(
+                        'legacy_row_no' => $legacy_id,
+                        'game_name' => $game_name,
+                        'account_type' => $this->normalize_legacy_account_type($raw['account_type_raw']),
+                        'email' => $email,
+                        'account_password' => sanitize_text_field($raw['account_password']),
+                        'secret_code' => sanitize_text_field($raw['secret_code']),
+                        'price' => $this->parse_import_price($raw['price_raw']),
+                        'console' => $this->normalize_legacy_console($raw['console_raw']),
+                        'customer_name' => sanitize_text_field($customer_name),
+                        'phone' => sanitize_text_field($phone),
+                        'sale_date' => $sale_date,
+                        'payment_type' => 'Nağd',
+                        'stock_status' => $status,
+                    );
+                }
+            }
+            if (empty($rows)) $error = 'PDF-də uyğun hesab sətirləri tapılmadı. Brauzer PDF-ni oxudu, amma cədvəl formatı tanınmadı.';
+            return $rows;
+        }
+
+        private function load_client_pdf_rows_from_post(&$error = '')
+        {
+            $error = '';
+            if (empty($_POST['mara_client_pdf_bbox'])) return null;
+            $raw = wp_unslash((string) $_POST['mara_client_pdf_bbox']);
+            if (strlen($raw) > 8 * 1024 * 1024) {
+                $error = 'Brauzerdən gələn PDF məlumatı həddən artıq böyükdür.';
+                return array();
+            }
+            $pages = json_decode($raw, true);
+            if (!is_array($pages)) {
+                $error = 'Brauzerdən gələn PDF məlumatı oxunmadı.';
+                return array();
+            }
+            return $this->parse_client_pdf_bbox_pages($pages, $error);
+        }
+
+        private function load_uploaded_pdf_rows($path, &$error = '')
+        {
+            $bbox_error = '';
+            $rows = $this->parse_pdf_account_rows_bbox($path, $bbox_error);
+            if (!empty($rows)) {
+                $error = '';
+                return $rows;
+            }
+            $text_error = '';
+            $text = $this->extract_pdf_text($path, $text_error);
+            if ($text === '') {
+                $error = $bbox_error !== '' ? $bbox_error : $text_error;
+                return array();
+            }
+            $rows = $this->parse_pdf_account_rows($text, $text_error);
+            if (empty($rows)) {
+                $error = $bbox_error !== '' ? $bbox_error . ' ' . $text_error : $text_error;
+            }
+            return $rows;
         }
 
         private function load_legacy_account_rows()
@@ -1450,7 +1930,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $skipped_unsold = 0;
             $last_error = '';
             $now = current_time('mysql');
-            $formats = array('%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s');
+            $formats = array('%s', '%s', '%s', '%s', '%s', '%d', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%s');
             $repair_deleted_signatures = array();
             $repair_deleted = 0;
 
@@ -1482,11 +1962,6 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
 
                 $phone = isset($row['phone']) ? trim((string) $row['phone']) : '';
                 $customer_name = isset($row['customer_name']) ? trim((string) $row['customer_name']) : '';
-                if ($stock_status === 'Satılmayıb') {
-                    $phone = '';
-                    $customer_name = '';
-                    $sale_date = '';
-                }
 
                 $price = isset($row['price']) ? (float) str_replace(',', '.', (string) $row['price']) : 0;
                 if ($price < 0) {
@@ -1498,6 +1973,9 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     'game_name' => $normalized_game_name,
                     'account_type' => $account_type,
                     'email' => $email,
+                    'account_password' => isset($row['account_password']) ? sanitize_text_field((string) $row['account_password']) : '',
+                    'secret_code' => isset($row['secret_code']) ? sanitize_text_field((string) $row['secret_code']) : '',
+                    'legacy_row_no' => isset($row['legacy_row_no']) ? absint($row['legacy_row_no']) : null,
                     'price' => round($price, 2),
                     'console' => $this->normalize_legacy_console(isset($row['console']) ? $row['console'] : ''),
                     'customer_name' => $customer_name,
@@ -1721,16 +2199,18 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             }
 
             $clear_before_import = (isset($_POST['clear_before_import']) && $_POST['clear_before_import'] === '1');
+            $parse_error = '';
+            $pdf_rows = $this->load_client_pdf_rows_from_post($parse_error);
+            if ($pdf_rows === null) {
+                $pdf_rows = $this->load_uploaded_pdf_rows($tmp_name, $parse_error);
+            }
+            if (empty($pdf_rows)) {
+                $this->redirect_with_message('error', 'settings', $parse_error !== '' ? $parse_error : 'PDF məlumatları oxunmadı. Baza dəyişdirilmədi.');
+            }
             if ($clear_before_import) {
                 if (!$this->clear_account_database()) {
                     $this->redirect_with_message('error', 'settings', 'İmportdan əvvəl baza silinmədi.');
                 }
-            }
-
-            $parse_error = '';
-            $pdf_rows = $this->load_uploaded_pdf_rows($tmp_name, $parse_error);
-            if (empty($pdf_rows)) {
-                $this->redirect_with_message('error', 'settings', $parse_error !== '' ? $parse_error : 'PDF məlumatları oxunmadı.');
             }
 
             $this->create_or_update_table();
@@ -1774,14 +2254,16 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 $this->redirect_with_message('error', 'settings', 'Yalnız PDF faylı yüklə.');
             }
 
+            $parse_error = '';
+            $pdf_rows = $this->load_client_pdf_rows_from_post($parse_error);
+            if ($pdf_rows === null) {
+                $pdf_rows = $this->load_uploaded_pdf_rows($tmp_name, $parse_error);
+            }
+            if (empty($pdf_rows)) {
+                $this->redirect_with_message('error', 'settings', $parse_error !== '' ? $parse_error : 'PDF məlumatları oxunmadı. Baza dəyişdirilmədi.');
+            }
             if (!$this->clear_account_database()) {
                 $this->redirect_with_message('error', 'settings', 'Baza silinmədi.');
-            }
-
-            $parse_error = '';
-            $pdf_rows = $this->load_uploaded_pdf_rows($tmp_name, $parse_error);
-            if (empty($pdf_rows)) {
-                $this->redirect_with_message('error', 'settings', $parse_error !== '' ? $parse_error : 'PDF məlumatları oxunmadı.');
             }
 
             $this->create_or_update_table();
@@ -1848,6 +2330,68 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             return false;
         }
 
+        /**
+         * Eyni e-mailə bağlı Online / Universal / Offline hesablar bir PSN hesabının
+         * fərqli satış növləridir. Bu hesablardan HƏR HANSINDA oyun siyahısı dəyişəndə
+         * digər növlərin oyun siyahısını da eyni vəziyyətə gətirir.
+         *
+         * Bu qayda həm oyun əlavə etməyə, həm də Bundle-dan oyun çıxarmağa aiddir.
+         * Qiymət, status, müştəri, telefon, satış tarixi, məxfi kod və digər sahələrə toxunmur.
+         */
+        private function sync_games_to_email_siblings($source_id, $source_email, $game_ids, $game_name, $now)
+        {
+            $source_email = sanitize_email((string) $source_email);
+            $game_ids = $this->normalize_game_ids($game_ids);
+            $normalized_game_name = $this->normalize_game_names($game_name);
+            if ($source_email === '' || $normalized_game_name === '') {
+                return array('count' => 0, 'types' => array());
+            }
+
+            global $wpdb;
+            $table = $this->table_name();
+            $rows = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT id, account_type FROM {$table}
+                     WHERE email = %s
+                       AND id <> %d
+                       AND account_type IN ('Online', 'Universal', 'Offline')",
+                    $source_email,
+                    absint($source_id)
+                ),
+                ARRAY_A
+            );
+
+            if (!is_array($rows) || empty($rows)) {
+                return array('count' => 0, 'types' => array());
+            }
+
+            $count = 0;
+            $types = array();
+            foreach ($rows as $row) {
+                $target_id = isset($row['id']) ? absint($row['id']) : 0;
+                if ($target_id <= 0) continue;
+
+                $updated = $wpdb->update(
+                    $table,
+                    array(
+                        'game_name' => $normalized_game_name,
+                        'updated_at' => $now,
+                    ),
+                    array('id' => $target_id),
+                    array('%s', '%s'),
+                    array('%d')
+                );
+                if ($updated === false) continue;
+
+                $this->sync_account_game_links($target_id, $game_ids, $normalized_game_name);
+                $count++;
+                $type = isset($row['account_type']) ? (string) $row['account_type'] : '';
+                if ($type !== '' && !in_array($type, $types, true)) $types[] = $type;
+            }
+
+            return array('count' => $count, 'types' => $types);
+        }
+
         public function handle_save()
         {
             if (!current_user_can($this->capability())) {
@@ -1862,6 +2406,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $errors = array();
             $data = $this->sanitize_record_from_post($errors);
             $id = isset($_POST['id']) ? absint($_POST['id']) : 0;
+            $before_record = $id > 0 ? $wpdb->get_row($wpdb->prepare("SELECT id, email, account_type, game_name FROM {$table} WHERE id = %d", $id), ARRAY_A) : null;
             $return_tab = isset($_POST['mara_return_tab']) ? sanitize_key(wp_unslash($_POST['mara_return_tab'])) : 'accounts';
             if (empty($errors) && $id > 0) {
                 $this->preserve_existing_rental_window($id, $data);
@@ -1872,7 +2417,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             }
 
             $now = current_time('mysql');
-            $base_formats = array('%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s');
+            $base_formats = array('%s', '%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s');
 
             if ($id > 0) {
                 $data['updated_at'] = $now;
@@ -1886,7 +2431,21 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 if ($updated === false) {
                     $this->redirect_with_message('error', $return_tab, 'Düzəliş zamanı xəta baş verdi.');
                 }
-                $this->sync_account_game_links($id, array(), isset($data['game_name']) ? $data['game_name'] : '');
+                $admin_game_ids = $this->game_ids_from_names(isset($data['game_name']) ? $data['game_name'] : '');
+                $this->sync_account_game_links($id, $admin_game_ids, isset($data['game_name']) ? $data['game_name'] : '');
+                if (is_array($before_record)) {
+                    $before_games = $this->normalize_game_names(isset($before_record['game_name']) ? $before_record['game_name'] : '');
+                    $after_games = $this->normalize_game_names(isset($data['game_name']) ? $data['game_name'] : '');
+                    if ($before_games !== $after_games) {
+                        $this->sync_games_to_email_siblings(
+                            $id,
+                            isset($data['email']) ? $data['email'] : (isset($before_record['email']) ? $before_record['email'] : ''),
+                            $admin_game_ids,
+                            $after_games,
+                            $now
+                        );
+                    }
+                }
                 $this->redirect_with_message('updated', 'accounts');
             }
 
@@ -2049,6 +2608,9 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'games' => isset($record['games']) && is_array($record['games']) ? $record['games'] : array(),
                 'account_type' => isset($record['account_type']) ? (string) $record['account_type'] : '',
                 'email' => isset($record['email']) ? (string) $record['email'] : '',
+                'account_password' => isset($record['account_password']) ? (string) $record['account_password'] : '',
+                'secret_code' => isset($record['secret_code']) ? (string) $record['secret_code'] : '',
+                'legacy_row_no' => isset($record['legacy_row_no']) ? (int) $record['legacy_row_no'] : 0,
                 'price' => isset($record['price']) ? (float) $record['price'] : 0,
                 'price_formatted' => $this->format_price(isset($record['price']) ? $record['price'] : 0),
                 'console' => isset($record['console']) ? (string) $record['console'] : '',
@@ -2081,6 +2643,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'cash_count' => isset($customer['cash_count']) ? (int) $customer['cash_count'] : 0,
                 'credit_count' => isset($customer['credit_count']) ? (int) $customer['credit_count'] : 0,
                 'last_sale_date' => isset($customer['last_sale_date']) ? (string) $customer['last_sale_date'] : '',
+                'customer_created_at' => isset($customer['customer_created_at']) ? (string) $customer['customer_created_at'] : '',
             );
         }
 
@@ -2213,6 +2776,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $game_name = $this->normalize_game_names(isset($input['game_name']) ? sanitize_text_field((string) $input['game_name']) : '');
             $account_type = isset($input['account_type']) ? sanitize_text_field((string) $input['account_type']) : '';
             $email = isset($input['email']) ? sanitize_email((string) $input['email']) : '';
+            $secret_code = isset($input['secret_code']) ? sanitize_text_field((string) $input['secret_code']) : '';
             $price_raw = isset($input['price']) ? sanitize_text_field((string) $input['price']) : '';
             $console = isset($input['console']) ? sanitize_text_field((string) $input['console']) : '';
             $customer_name_raw = isset($input['customer_name']) ? sanitize_text_field((string) $input['customer_name']) : '';
@@ -2262,6 +2826,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'game_name' => $game_name,
                 'account_type' => $account_type,
                 'email' => $email,
+                'secret_code' => $secret_code,
                 'price' => $price,
                 'console' => $console,
                 'customer_name' => $customer_name,
@@ -2292,11 +2857,17 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
 
             $table = $this->table_name();
             $id = isset($input['id']) ? absint($input['id']) : 0;
+            $before_record = $id > 0 ? $wpdb->get_row($wpdb->prepare("SELECT id, email, account_type, game_name FROM {$table} WHERE id = %d", $id), ARRAY_A) : null;
             if ($id > 0) {
+                // Köhnə mobil versiya və Sat / İcarə axını secret_code göndərməsə, mövcud dəyəri silmə.
+                if (!array_key_exists('secret_code', $input)) {
+                    $existing_secret = $wpdb->get_var($wpdb->prepare("SELECT secret_code FROM {$table} WHERE id = %d", $id));
+                    $data['secret_code'] = $existing_secret === null ? '' : (string) $existing_secret;
+                }
                 $this->preserve_existing_rental_window($id, $data);
             }
             $now = current_time('mysql');
-            $base_formats = array('%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s');
+            $base_formats = array('%s', '%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s');
             $auto_universal_created = false;
 
             if ($id > 0) {
@@ -2323,6 +2894,20 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
 
             $game_ids = $this->game_ids_from_input($input, isset($data['game_name']) ? $data['game_name'] : '');
             $this->sync_account_game_links($id, $game_ids, isset($data['game_name']) ? $data['game_name'] : '');
+            $bundle_sync = array('count' => 0, 'types' => array());
+            if ($id > 0 && is_array($before_record)) {
+                $before_games = $this->normalize_game_names(isset($before_record['game_name']) ? $before_record['game_name'] : '');
+                $after_games = $this->normalize_game_names(isset($data['game_name']) ? $data['game_name'] : '');
+                if ($before_games !== $after_games) {
+                    $bundle_sync = $this->sync_games_to_email_siblings(
+                        $id,
+                        isset($data['email']) ? $data['email'] : (isset($before_record['email']) ? $before_record['email'] : ''),
+                        $game_ids,
+                        $after_games,
+                        $now
+                    );
+                }
+            }
             if (empty($input['id'])) {
                 $auto_universal_created = $this->maybe_create_auto_universal_account($data, $base_formats, $now);
             }
@@ -2332,6 +2917,8 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'id' => $id,
                 'record' => is_array($record) ? $this->mobile_record_payload($record) : null,
                 'auto_universal_created' => $auto_universal_created ? 1 : 0,
+                'bundle_synced_records' => isset($bundle_sync['count']) ? (int) $bundle_sync['count'] : 0,
+                'bundle_synced_types' => isset($bundle_sync['types']) && is_array($bundle_sync['types']) ? array_values($bundle_sync['types']) : array(),
             ));
         }
 
@@ -2400,7 +2987,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
 
             $table = $this->table_name();
             $now = current_time('mysql');
-            $formats = array('%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s');
+            $formats = array('%s', '%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s');
             $created_ids = array();
             $created_types = array();
             $wpdb->query('START TRANSACTION');
@@ -2410,6 +2997,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     'game_name' => isset($input['game_name']) ? $input['game_name'] : '',
                     'account_type' => $type,
                     'email' => isset($input['email']) ? $input['email'] : '',
+                    'secret_code' => isset($input['secret_code']) ? $input['secret_code'] : '',
                     'price' => isset($input['price']) ? $input['price'] : '',
                     'console' => isset($input['console']) ? $input['console'] : '',
                     'customer_name' => '',
@@ -2594,8 +3182,8 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'legacy_repaired' => 'Köhnə baza yenidən düz import edildi: Satılıb/Satılmayıb ayrımı yeniləndi.',
                 'legacy_import_no_new' => 'Köhnə bazada əlavə ediləcək yeni hesab tapılmadı. Mövcud hesablar təkrar yazılmadı.',
                 'database_cleared' => 'Baza və oyun kataloqu tam silindi. İndi sıfırdan davam edə bilərsən.',
-                'pdf_imported' => 'PDF import edildi. Satılıb və Satılmayıb düzgün bölündü.',
-                'pdf_reset_imported' => 'Baza silindi və PDF tam yükləndi. SQL saylarında Satılıb/Satılmayıb ayrıca görünməlidir.',
+                'pdf_imported' => 'PDF import edildi. Oyun, növ, status, e-mail, şifrə, qiymət, konsol, müştəri, telefon, satış tarixi və məxfi kod qorundu.',
+                'pdf_reset_imported' => 'PDF əvvəl tam oxundu, sonra baza yeniləndi. PDF-dəki əsas hesab sahələri və köhnə sıra nömrəsi qorundu.',
                 'mobile_key_regenerated' => 'Mobil APK üçün API açarı yeniləndi.',
                 'error' => 'Əməliyyat tamamlanmadı.',
             );
@@ -2944,6 +3532,8 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'game_name' => '',
                 'account_type' => 'Online',
                 'email' => '',
+                'account_password' => '',
+                'secret_code' => '',
                 'price' => '',
                 'console' => 'PS5',
                 'customer_name' => '',
@@ -2980,6 +3570,12 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     </label>
                     <label>E-mail *
                         <input type="email" name="email" required placeholder="example@mail.com" value="<?php echo esc_attr($record['email']); ?>" data-form-field="email">
+                    </label>
+                    <label>Şifrə
+                        <input type="text" name="account_password" placeholder="Hesab şifrəsi" value="<?php echo esc_attr(isset($record['account_password']) ? $record['account_password'] : ''); ?>" data-form-field="account_password" autocomplete="off">
+                    </label>
+                    <label>Məxfi kod
+                        <input type="text" name="secret_code" placeholder="Məxfi kod" value="<?php echo esc_attr($record['secret_code']); ?>" data-form-field="secret_code" autocomplete="off">
                     </label>
                     <label>Qiymət *
                         <input type="text" name="price" required inputmode="decimal" placeholder="35.50" value="<?php echo esc_attr($record['price']); ?>" class="mara-account-sale-price-input" data-form-field="price">
@@ -3171,12 +3767,13 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     </div>
                 </div>
 
-                <form class="mara-account-sale-form mara-account-sale-tool-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data" onsubmit="return confirm('PDF içəri aktarılsın?');">
+                <form class="mara-account-sale-form mara-account-sale-tool-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data" data-mara-pdf-import-form="1" data-mara-pdf-confirm="PDF içəri aktarılsın?">
                     <input type="hidden" name="action" value="mara_account_sale_import_pdf">
+                    <input type="hidden" name="mara_client_pdf_bbox" value="" data-mara-client-pdf-bbox>
                     <?php wp_nonce_field('mara_account_sale_import_pdf', 'mara_account_sale_import_pdf_nonce'); ?>
                     <div class="mara-account-sale-tool-grid">
                         <label>PDF faylı seç
-                            <input type="file" name="legacy_pdf" accept="application/pdf,.pdf" required>
+                            <input type="file" name="legacy_pdf" accept="application/pdf,.pdf" required data-mara-pdf-file>
                         </label>
                         <label class="mara-account-sale-check-label">
                             <input type="checkbox" name="clear_before_import" value="1">
@@ -3186,20 +3783,23 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     <div class="mara-account-sale-form-actions">
                         <button type="submit" class="mara-account-sale-btn mara-account-sale-btn-primary">PDF import et</button>
                     </div>
-                    <p class="mara-account-sale-help">Mətn əsaslı PDF-lər dəstəklənir. Satılmayan hesablarda müştəri məlumatları boş saxlanılır.</p>
+                    <p class="mara-account-sale-help">PDF brauzerdə oxunur; serverdə pdftotext və PHP DOM tələb olunmur. Şifrə, məxfi kod, status, müştəri və köhnə sıra nömrəsi qorunur.</p>
+                    <p class="mara-account-sale-help" data-mara-pdf-status hidden></p>
                 </form>
 
-                <form class="mara-account-sale-form mara-account-sale-tool-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data" onsubmit="return confirm('Baza təmizlənsin və PDF sıfırdan tam yüklənsin?');">
+                <form class="mara-account-sale-form mara-account-sale-tool-form" method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" enctype="multipart/form-data" data-mara-pdf-import-form="1" data-mara-pdf-confirm="Baza təmizlənsin və PDF sıfırdan tam yüklənsin?">
                     <input type="hidden" name="action" value="mara_account_sale_reset_import_pdf">
+                    <input type="hidden" name="mara_client_pdf_bbox" value="" data-mara-client-pdf-bbox>
                     <?php wp_nonce_field('mara_account_sale_reset_import_pdf', 'mara_account_sale_reset_import_pdf_nonce'); ?>
                     <div class="mara-account-sale-tool-grid">
                         <label>PDF faylı seç
-                            <input type="file" name="legacy_pdf_reset" accept="application/pdf,.pdf" required>
+                            <input type="file" name="legacy_pdf_reset" accept="application/pdf,.pdf" required data-mara-pdf-file>
                         </label>
                     </div>
                     <div class="mara-account-sale-form-actions">
                         <button type="submit" class="mara-account-sale-btn mara-account-sale-btn-warning">Bazanı təmizlə + PDF tam yüklə</button>
                     </div>
+                    <p class="mara-account-sale-help" data-mara-pdf-status hidden></p>
                 </form>
             </div>
 

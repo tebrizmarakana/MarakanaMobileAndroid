@@ -1,0 +1,4 @@
+Manual/source check passed.
+- accounts/sold/unsold/rental: updated_at DESC, created_at DESC, id DESC.
+- customers: customer_created_at DESC.
+- bundled WordPress API updated to plugin v1.0.85 payload.

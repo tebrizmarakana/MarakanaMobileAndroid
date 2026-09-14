@@ -1,3 +1,14 @@
+# MarakanaMobile v94 — Son əməliyyat və yeni müştəri sıralaması
+
+- Hesablar, Satılanlar, Satılmayanlar və İcarə bölmələrində **ən son əməliyyat edilən / son dəyişən hesab həmişə yuxarıda** göstərilir.
+- Sıralama əvvəlcə `updated_at`, sonra `created_at`, sonra ID ilə aparılır.
+- Müştəri bölməsində **ən son yaradılan müştəri həmişə ən yuxarıda** göstərilir.
+- Dəqiq müştəri yaradılma sıralaması üçün plugin v1.0.85 `customer_created_at` sahəsini Mobil API-yə əlavə edir.
+- `versionCode 94`
+- `versionName 3.4.71-native-v94`
+
+---
+
 # MarakanaMobile v93 — İcarədə hər zaman Təhvil aldım, Sil gizlidir
 
 - `İcarə` bölməsində müddət bitib-bitməməsindən asılı olmayaraq bütün aktiv icarə hesablarında **Təhvil aldım** düyməsi görünür.

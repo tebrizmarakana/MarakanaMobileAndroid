@@ -3276,6 +3276,7 @@ public class MainActivity extends Activity {
             if ("customers".equals(section)) {
                 JSONArray customers = result.optJSONArray("customers");
                 if (customers == null) customers = new JSONArray();
+                customers = sortAccountSalesCustomersNewestCreatedFirst(customers);
                 final JSONArray finalCustomers = customers;
                 Runnable render = () -> renderAccountSalesCustomers(recordsHost, finalCustomers, search.getText().toString());
                 search.addTextChangedListener(new SimpleTextWatcher(render));
@@ -3285,8 +3286,8 @@ public class MainActivity extends Activity {
             } else {
                 JSONArray records = result.optJSONArray("records");
                 if (records == null) records = new JSONArray();
-                if ("accounts".equals(section)) {
-                    records = sortAccountSalesRecordsNewestFirst(records);
+                if ("accounts".equals(section) || "sold".equals(section) || "unsold".equals(section) || "rental".equals(section)) {
+                    records = sortAccountSalesRecordsLatestActivityFirst(records);
                 }
                 final JSONArray finalRecords = records;
                 Runnable render = () -> renderAccountSalesRecords(recordsHost, finalRecords, search.getText().toString(), finalSettings, section);
@@ -3348,7 +3349,16 @@ public class MainActivity extends Activity {
         return String.format(Locale.US, "%.2f AZN", value);
     }
 
-    private JSONArray sortAccountSalesRecordsNewestFirst(JSONArray records) {
+    private int compareNewestTimestamp(String a, String b) {
+        String left = a == null ? "" : a.trim();
+        String right = b == null ? "" : b.trim();
+        if (left.equals(right)) return 0;
+        if (left.isEmpty()) return 1;
+        if (right.isEmpty()) return -1;
+        return right.compareTo(left);
+    }
+
+    private JSONArray sortAccountSalesRecordsLatestActivityFirst(JSONArray records) {
         ArrayList<JSONObject> rows = new ArrayList<>();
         if (records != null) {
             for (int i = 0; i < records.length(); i++) {
@@ -3356,19 +3366,33 @@ public class MainActivity extends Activity {
                 if (row != null) rows.add(row);
             }
         }
-        for (int i = 0; i < rows.size(); i++) {
-            int best = i;
-            for (int j = i + 1; j < rows.size(); j++) {
-                if (rows.get(j).optInt("id", 0) > rows.get(best).optInt("id", 0)) {
-                    best = j;
-                }
-            }
-            if (best != i) {
-                JSONObject tmp = rows.get(i);
-                rows.set(i, rows.get(best));
-                rows.set(best, tmp);
+        java.util.Collections.sort(rows, (a, b) -> {
+            int cmp = compareNewestTimestamp(a.optString("updated_at", ""), b.optString("updated_at", ""));
+            if (cmp != 0) return cmp;
+            cmp = compareNewestTimestamp(a.optString("created_at", ""), b.optString("created_at", ""));
+            if (cmp != 0) return cmp;
+            return Integer.compare(b.optInt("id", 0), a.optInt("id", 0));
+        });
+        JSONArray sorted = new JSONArray();
+        for (JSONObject row : rows) sorted.put(row);
+        return sorted;
+    }
+
+    private JSONArray sortAccountSalesCustomersNewestCreatedFirst(JSONArray customers) {
+        ArrayList<JSONObject> rows = new ArrayList<>();
+        if (customers != null) {
+            for (int i = 0; i < customers.length(); i++) {
+                JSONObject row = customers.optJSONObject(i);
+                if (row != null) rows.add(row);
             }
         }
+        java.util.Collections.sort(rows, (a, b) -> {
+            int cmp = compareNewestTimestamp(a.optString("customer_created_at", ""), b.optString("customer_created_at", ""));
+            if (cmp != 0) return cmp;
+            cmp = compareNewestTimestamp(a.optString("last_sale_date", ""), b.optString("last_sale_date", ""));
+            if (cmp != 0) return cmp;
+            return a.optString("customer_name", "").compareToIgnoreCase(b.optString("customer_name", ""));
+        });
         JSONArray sorted = new JSONArray();
         for (JSONObject row : rows) sorted.put(row);
         return sorted;
