@@ -1,0 +1,9 @@
+MarakanaMobile v102 static flow check
+
+- Hesablar / Satılanlar / Satılmayanlar əməliyyat popup-unun ən aşağı action sətrinə “Demo izlə” əlavə edildi.
+- Tək oyunlu hesabda Demo izlə birbaşa YouTube axtarışını açır.
+- Bundle/çoxoyunlu hesabda oyun adları ayrıca seçim siyahısında göstərilir.
+- Siyahıdan oyuna klik ediləndə həmin oyun üçün YouTube “<oyun adı> gameplay” axtarışı açılır.
+- Əvvəlcə YouTube tətbiqi yoxlanır, açılmasa brauzerdə youtube.com/results fallback işləyir.
+- İcarə bölməsinə Demo izlə əlavə edilməyib.
+- versionCode 102 / versionName 3.4.79-native-v102.

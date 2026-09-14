@@ -3913,6 +3913,17 @@ public class MainActivity extends Activity {
                         confirmDeleteAccountSale(row, section);
                     });
             box.addView(delete);
+            spacer(box, 8);
+        }
+
+        boolean demoSection = "accounts".equals(section) || "sold".equals(section) || "unsold".equals(section);
+        if (demoSection) {
+            LinearLayout demo = accountSalesActionRow(android.R.drawable.ic_media_play,
+                    "Demo izlə", "YouTube-da oyunun videosunu axtar", Color.rgb(229, 57, 53), () -> {
+                        dismiss.run();
+                        showAccountSalesDemoChooser(row);
+                    });
+            box.addView(demo);
         }
 
         TextView close = text("Bağla", 14, BLUE, true);
@@ -3929,6 +3940,56 @@ public class MainActivity extends Activity {
             if (window != null) window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         });
         dialog.show();
+    }
+
+    private void showAccountSalesDemoChooser(JSONObject row) {
+        ArrayList<String> games = parseAccountSalesGameSelection(row == null ? "" : row.optString("game_name", ""));
+        if (games.isEmpty()) {
+            toast("Oyun adı tapılmadı.");
+            return;
+        }
+
+        if (games.size() == 1) {
+            openAccountSalesYouTubeSearch(games.get(0));
+            return;
+        }
+
+        String[] items = games.toArray(new String[0]);
+        new AlertDialog.Builder(this)
+                .setTitle("Demo izlə")
+                .setItems(items, (dialog, which) -> {
+                    if (which >= 0 && which < games.size()) {
+                        openAccountSalesYouTubeSearch(games.get(which));
+                    }
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
+    }
+
+    private void openAccountSalesYouTubeSearch(String gameName) {
+        String clean = gameName == null ? "" : gameName.trim();
+        if (clean.isEmpty()) {
+            toast("Oyun adı tapılmadı.");
+            return;
+        }
+
+        String query = clean + " gameplay";
+        try {
+            Intent appIntent = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("vnd.youtube://results?search_query=" + Uri.encode(query)));
+            appIntent.setPackage("com.google.android.youtube");
+            startActivity(appIntent);
+            return;
+        } catch (Exception ignored) {
+        }
+
+        try {
+            Intent webIntent = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query)));
+            startActivity(webIntent);
+        } catch (Exception e) {
+            toast("YouTube açılmadı.");
+        }
     }
 
     private void showAccountSalesRecordDetail(JSONObject row) {
