@@ -153,6 +153,12 @@ public class MainActivity extends Activity {
     private LinearLayout activeNavigationPanel = null;
     private View activeNavigationScrim = null;
     private float navigationDrawerProgress = 0f;
+    // v101: sol panel artıq ekranın istənilən nöqtəsindən sağa swipe ilə interaktiv açılır.
+    private float globalDrawerSwipeStartX = 0f;
+    private float globalDrawerSwipeStartY = 0f;
+    private long globalDrawerSwipeStartTime = 0L;
+    private boolean globalDrawerSwipeTracking = false;
+    private boolean globalDrawerSwipeDragging = false;
     private static final String[] DEBT_CATEGORIES = {"İşçi", "Müştəri", "Firma"};
     private static final String[] KITCHEN_CATEGORIES = {"Hazırlanır", "Hazırdır"};
     private static final long KITCHEN_LIVE_REFRESH_MS = 750L;
@@ -636,6 +642,63 @@ public class MainActivity extends Activity {
             badge.setVisibility(View.VISIBLE);
             badge.setText(count > 99 ? "99+" : String.valueOf(count));
         }
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        // v101: yalnız ScrollView/ekranın ortası deyil — giriş edilmiş bütün əsas ekranlarda
+        // barmaq haradan başlayırsa başlasın sağa üfüqi sürüşdürmə sol paneli barmaqla birlikdə açır.
+        if (event != null && sessionToken != null && !sessionToken.isEmpty()) {
+            final int action = event.getActionMasked();
+
+            if (action == MotionEvent.ACTION_DOWN) {
+                // Panel artıq açıqdırsa onun öz toxunma davranışına qarışmırıq.
+                globalDrawerSwipeTracking = activeNavigationOverlay == null;
+                globalDrawerSwipeDragging = false;
+                globalDrawerSwipeStartX = event.getX();
+                globalDrawerSwipeStartY = event.getY();
+                globalDrawerSwipeStartTime = System.currentTimeMillis();
+            } else if (globalDrawerSwipeTracking && action == MotionEvent.ACTION_MOVE) {
+                float dx = event.getX() - globalDrawerSwipeStartX;
+                float dy = event.getY() - globalDrawerSwipeStartY;
+                int startThreshold = dp(10);
+
+                if (!globalDrawerSwipeDragging
+                        && dx > startThreshold
+                        && dx > Math.abs(dy) * 1.10f) {
+                    globalDrawerSwipeDragging = true;
+                    ensureNavigationMenuOverlay();
+
+                    // ACTION_DOWN almış alt elementdə klik/scroll əməliyyatını dayandırırıq.
+                    MotionEvent cancelEvent = MotionEvent.obtain(event);
+                    cancelEvent.setAction(MotionEvent.ACTION_CANCEL);
+                    super.dispatchTouchEvent(cancelEvent);
+                    cancelEvent.recycle();
+                }
+
+                if (globalDrawerSwipeDragging) {
+                    float width = getNavigationPanelWidth();
+                    setNavigationDrawerProgress(width <= 0f ? 0f : dx / width);
+                    return true;
+                }
+            } else if (globalDrawerSwipeTracking
+                    && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)) {
+                if (globalDrawerSwipeDragging) {
+                    float dx = event.getX() - globalDrawerSwipeStartX;
+                    long elapsed = Math.max(1L, System.currentTimeMillis() - globalDrawerSwipeStartTime);
+                    float velocity = dx * 1000f / elapsed;
+                    boolean open = navigationDrawerProgress >= 0.34f || velocity >= dp(420);
+                    animateNavigationDrawer(open);
+                    globalDrawerSwipeTracking = false;
+                    globalDrawerSwipeDragging = false;
+                    return true;
+                }
+                globalDrawerSwipeTracking = false;
+                globalDrawerSwipeDragging = false;
+            }
+        }
+
+        return super.dispatchTouchEvent(event);
     }
 
     private void installGlobalDrawerSwipe(View target) {

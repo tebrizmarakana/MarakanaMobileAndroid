@@ -1,0 +1,9 @@
+Marakana Mobile v101
+
+Dəyişiklik:
+- Sol panel üçün interaktiv swipe artıq yalnız mərkəzi ScrollView sahəsinə bağlı deyil.
+- Ekranın istənilən nöqtəsindən barmağı sağa sürüşdürəndə panel barmaqla birlikdə açılır.
+- Şaquli scroll və normal kliklər yalnız aydın sağa üfüqi swipe başladıqda ləğv edilir.
+- Panel artıq açıq olduqda mövcud panel toxunma davranışına müdaxilə edilmir.
+
+Version: 3.4.78-native-v101 / 101
