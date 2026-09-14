@@ -1,0 +1,4 @@
+Manual code check passed.
+- Rental section: Təhvil aldım always visible for stock_status=İcarə.
+- Rental section: Sil action hidden.
+- Return flow sends stock_status=Satılmayıb and clears customer/phone/rental duration.

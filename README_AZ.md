@@ -1,3 +1,14 @@
+# MarakanaMobile v93 — İcarədə hər zaman Təhvil aldım, Sil gizlidir
+
+- `İcarə` bölməsində müddət bitib-bitməməsindən asılı olmayaraq bütün aktiv icarə hesablarında **Təhvil aldım** düyməsi görünür.
+- `Təhvil aldım` hesabı dərhal `Satılmayıb` statusuna qaytarır və müştəri/icarə sahələrini təmizləyir.
+- `İcarə` bölməsində **Sil** düyməsi tam gizlədildi ki, səhvən hesab bazadan silinməsin.
+- Digər bölmələrdə Sil davranışı dəyişməyib.
+- `versionCode 93`
+- `versionName 3.4.70-native-v93`
+
+---
+
 # MarakanaMobile v92 — Sat/İcarə qiyməti + Təhvil aldım
 
 - `Satılmayanlar → Sat` və `Satılmayanlar → İcarə ver` axınlarında qiymət artıq ayrıca redaktə edilə bilir.

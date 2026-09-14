@@ -3714,9 +3714,9 @@ public class MainActivity extends Activity {
             spacer(box, 8);
         }
 
-        boolean expiredRental = "İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim())
-                && "expired".equalsIgnoreCase(row.optString("rental_state", "").trim());
-        if (expiredRental) {
+        boolean rentalSectionAccount = "rental".equals(section)
+                && "İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim());
+        if (rentalSectionAccount) {
             LinearLayout returned = accountSalesActionRow(android.R.drawable.ic_menu_revert,
                     "Təhvil aldım", "İcarəni bağla və hesabı Satılmayıb-a qaytar", GREEN, () -> {
                         dismiss.run();
@@ -3752,12 +3752,14 @@ public class MainActivity extends Activity {
             spacer(box, 8);
         }
 
-        LinearLayout delete = accountSalesActionRow(android.R.drawable.ic_menu_delete,
-                "Sil", "Hesabı bazadan sil", Color.rgb(190, 55, 55), () -> {
-                    dismiss.run();
-                    confirmDeleteAccountSale(row);
-                });
-        box.addView(delete);
+        if (!"rental".equals(section)) {
+            LinearLayout delete = accountSalesActionRow(android.R.drawable.ic_menu_delete,
+                    "Sil", "Hesabı bazadan sil", Color.rgb(190, 55, 55), () -> {
+                        dismiss.run();
+                        confirmDeleteAccountSale(row);
+                    });
+            box.addView(delete);
+        }
 
         TextView close = text("Bağla", 14, BLUE, true);
         close.setGravity(Gravity.CENTER);
