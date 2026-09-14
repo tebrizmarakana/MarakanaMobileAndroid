@@ -3218,6 +3218,12 @@ public class MainActivity extends Activity {
         refreshLp.setMargins(dp(8), 0, 0, 0);
         topActions.addView(refresh, refreshLp);
         refresh.setOnClickListener(v -> showAccountSales(section));
+        Button trash = button("🗑", CARD, Color.rgb(190, 55, 55));
+        trash.setTextSize(17);
+        LinearLayout.LayoutParams trashLp = new LinearLayout.LayoutParams(dp(52), dp(48));
+        trashLp.setMargins(dp(8), 0, 0, 0);
+        topActions.addView(trash, trashLp);
+        trash.setOnClickListener(v -> showAccountSalesTrash());
         body.addView(topActions);
         spacer(body, 10);
 
@@ -3778,7 +3784,7 @@ public class MainActivity extends Activity {
 
         if (!"rental".equals(section)) {
             LinearLayout delete = accountSalesActionRow(android.R.drawable.ic_menu_delete,
-                    "Sil", "Hesabı bazadan sil", Color.rgb(190, 55, 55), () -> {
+                    "Sil", "Hesabı 30 günlük zibil qutusuna köçür", Color.rgb(190, 55, 55), () -> {
                         dismiss.run();
                         confirmDeleteAccountSale(row);
                     });
@@ -3982,15 +3988,126 @@ public class MainActivity extends Activity {
     private void confirmDeleteAccountSale(JSONObject row) {
         String title = row.optString("game_name", "Hesab");
         new AlertDialog.Builder(this)
-                .setTitle("Hesabı sil")
-                .setMessage(title + " silinsin?")
+                .setTitle("Zibil qutusuna köçür")
+                .setMessage(title + " zibil qutusuna köçürülsün?\n\nHesab 30 gün ərzində geri qaytarıla bilər.")
                 .setNegativeButton("Xeyr", null)
                 .setPositiveButton("Sil", (d, w) -> {
                     JSONObject payload = new JSONObject();
                     try { payload.put("id", row.optInt("id", 0)); } catch (Exception ignored) {}
                     postAccountSalesJson("/delete", payload, result -> {
-                        toast("Hesab silindi.");
+                        toast("Hesab zibil qutusuna köçürüldü.");
                         showAccountSales("accounts");
+                    });
+                }).show();
+    }
+
+    private void showAccountSalesTrash() {
+        ScrollView sv = screenWithBody("Zibil qutusu", true, () -> showAccountSales("accounts"));
+        LinearLayout body = scrollBody(sv);
+
+        LinearLayout info = card();
+        info.addView(text("🗑 Zibil qutusu", 18, TEXT, true));
+        TextView note = text("Silinən hesablar burada 30 gün saxlanılır. 30 gün tamam olduqda server onları avtomatik birdəfəlik silir.", 12, MUTED, false);
+        note.setPadding(0, dp(5), 0, 0);
+        info.addView(note);
+        body.addView(info);
+
+        EditText search = input("Silinən hesabları oyun və ya e-mail ilə axtar");
+        body.addView(search);
+        spacer(body, 10);
+
+        LinearLayout host = new LinearLayout(this);
+        host.setOrientation(LinearLayout.VERTICAL);
+        host.addView(empty("Zibil qutusu yüklənir..."));
+        body.addView(host);
+
+        loadAccountSalesJson("/trash", result -> {
+            JSONArray records = result.optJSONArray("records");
+            final JSONArray trashRecords = records == null ? new JSONArray() : records;
+            Runnable render = () -> renderAccountSalesTrash(host, trashRecords, search.getText().toString());
+            search.addTextChangedListener(new SimpleTextWatcher(render));
+            render.run();
+        }, message -> {
+            host.removeAllViews();
+            host.addView(empty(message));
+        });
+    }
+
+    private void renderAccountSalesTrash(LinearLayout host, JSONArray records, String query) {
+        host.removeAllViews();
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        int shown = 0;
+        for (int i = 0; i < records.length(); i++) {
+            JSONObject row = records.optJSONObject(i);
+            if (row == null) continue;
+            String haystack = (row.optString("game_name", "") + " " + row.optString("email", "") + " "
+                    + row.optString("customer_name", "") + " " + row.optString("phone", "")).toLowerCase(Locale.ROOT);
+            if (!q.isEmpty() && !haystack.contains(q)) continue;
+            shown++;
+
+            LinearLayout c = card();
+            LinearLayout top = new LinearLayout(this);
+            top.setOrientation(LinearLayout.HORIZONTAL);
+            TextView title = text(row.optString("game_name", "Hesab"), 15, TEXT, true);
+            top.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            TextView price = text(row.optString("price_formatted", money(row.optDouble("price", 0))), 13, GREEN, true);
+            top.addView(price);
+            c.addView(top);
+
+            String email = row.optString("email", "");
+            if (!email.isEmpty()) c.addView(text(email, 12, MUTED, false));
+            c.addView(text(row.optString("account_type", "") + "  •  " + row.optString("console", "") + "  •  " + row.optString("stock_status", ""), 12, TEXT, true));
+
+            String deletedAt = accountSalesDateTimeForDisplay(row.optString("deleted_at", ""));
+            int days = row.optInt("trash_days_remaining", 0);
+            TextView deleted = text("Silinib: " + (deletedAt.isEmpty() ? "—" : deletedAt) + "  •  Qalan: " + days + " gün", 12, Color.rgb(190, 55, 55), true);
+            deleted.setPadding(0, dp(4), 0, 0);
+            c.addView(deleted);
+            c.setClickable(true);
+            c.setOnClickListener(v -> showAccountSalesTrashActions(row));
+            host.addView(c);
+        }
+        if (shown == 0) host.addView(empty(q.isEmpty() ? "Zibil qutusu boşdur." : "Axtarışa uyğun silinmiş hesab tapılmadı."));
+    }
+
+    private void showAccountSalesTrashActions(JSONObject row) {
+        String title = row.optString("game_name", "Hesab");
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setItems(new String[]{"↩ Geri yüklə", "🗑 Birdəfəlik sil"}, (dialog, which) -> {
+                    if (which == 0) confirmAccountSalesTrashRestore(row);
+                    else confirmAccountSalesTrashPermanentDelete(row);
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
+    }
+
+    private void confirmAccountSalesTrashRestore(JSONObject row) {
+        new AlertDialog.Builder(this)
+                .setTitle("Hesabı geri yüklə")
+                .setMessage(row.optString("game_name", "Hesab") + " əvvəlki məlumatları ilə geri qaytarılsın?")
+                .setNegativeButton("Xeyr", null)
+                .setPositiveButton("Geri yüklə", (d, w) -> {
+                    JSONObject payload = new JSONObject();
+                    try { payload.put("id", row.optInt("id", 0)); } catch (Exception ignored) {}
+                    postAccountSalesJson("/trash/restore", payload, result -> {
+                        toast("Hesab geri yükləndi.");
+                        showAccountSalesTrash();
+                    });
+                }).show();
+    }
+
+    private void confirmAccountSalesTrashPermanentDelete(JSONObject row) {
+        new AlertDialog.Builder(this)
+                .setTitle("Birdəfəlik sil")
+                .setMessage(row.optString("game_name", "Hesab") + " birdəfəlik silinsin? Bu əməliyyatı geri qaytarmaq mümkün deyil.")
+                .setNegativeButton("Xeyr", null)
+                .setPositiveButton("Birdəfəlik sil", (d, w) -> {
+                    JSONObject payload = new JSONObject();
+                    try { payload.put("id", row.optInt("id", 0)); } catch (Exception ignored) {}
+                    postAccountSalesJson("/trash/delete", payload, result -> {
+                        toast("Hesab birdəfəlik silindi.");
+                        showAccountSalesTrash();
                     });
                 }).show();
     }

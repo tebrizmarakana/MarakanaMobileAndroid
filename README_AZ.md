@@ -1,3 +1,15 @@
+# MarakanaMobile v96 — 30 günlük Zibil qutusu
+
+- `Yenilə` düyməsinin sağında qırmızı **🗑 Zibil qutusu** düyməsi əlavə edildi.
+- Hesab silinəndə artıq birbaşa bazadan yox olmur; 30 günlük zibil qutusuna köçürülür.
+- Zibil qutusunda hesabın üzərinə klik edib **Geri yüklə** və ya **Birdəfəlik sil** etmək olur.
+- Silinmə tarixi və neçə gün qaldığı göstərilir.
+- 30 gün tamam olduqda server köhnə zibil qeydlərini avtomatik təmizləyir.
+- `versionCode 96`
+- `versionName 3.4.73-native-v96`
+
+---
+
 # MarakanaMobile v95 — Sat / İcarə zamanı sürətli müştəri yarat
 
 - `Hesabı sat` və `İcarə ver` axınında `Ad soyad` seçim pəncərəsi eyni qayda ilə işləyir.

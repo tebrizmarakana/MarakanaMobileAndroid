@@ -3,7 +3,7 @@
  * Plugin Name: Marakana Playstation Hesab Satışı
  * Plugin URI: https://marakana.local/
  * Description: Playstation oyun hesablarının satışı, stok, müştəri, ödəniş və geniş axtarış idarəetməsi üçün professional Marakana plugin.
- * Version: 1.0.85
+ * Version: 1.0.86
  * Author: Marakana
  * Text Domain: marakana-playstation-hesab-satisi
  * Requires PHP: 7.4
@@ -16,8 +16,8 @@ if (!defined('ABSPATH')) {
 if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
     final class Marakana_Playstation_Hesab_Satisi_100
     {
-        const VERSION = '1.0.85';
-        const DB_VERSION = '1.4.0';
+        const VERSION = '1.0.86';
+        const DB_VERSION = '1.5.0';
         const OPTION_KEY = 'mara_account_sale_settings';
         const DB_OPTION_KEY = 'mara_account_sale_db_version';
         const LEGACY_IMPORT_OPTION_KEY = 'mara_account_sale_legacy_pdf_import_v54';
@@ -144,6 +144,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 rental_duration_unit VARCHAR(10) NULL DEFAULT NULL,
                 rental_started_at DATETIME NULL DEFAULT NULL,
                 rental_ends_at DATETIME NULL DEFAULT NULL,
+                deleted_at DATETIME NULL DEFAULT NULL,
                 created_at DATETIME NOT NULL,
                 updated_at DATETIME NOT NULL,
                 PRIMARY KEY  (id),
@@ -151,6 +152,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 KEY phone (phone),
                 KEY stock_status (stock_status),
                 KEY rental_ends_at (rental_ends_at),
+                KEY deleted_at (deleted_at),
                 KEY payment_type (payment_type),
                 KEY sale_date (sale_date),
                 KEY console (console),
@@ -209,6 +211,11 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             if (!$legacy_row_column) {
                 $wpdb->query("ALTER TABLE {$table} ADD legacy_row_no BIGINT(20) UNSIGNED NULL DEFAULT NULL AFTER secret_code");
             }
+            $deleted_at_column = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'deleted_at'");
+            if (!$deleted_at_column) {
+                $wpdb->query("ALTER TABLE {$table} ADD deleted_at DATETIME NULL DEFAULT NULL AFTER rental_ends_at");
+                $wpdb->query("ALTER TABLE {$table} ADD KEY deleted_at (deleted_at)");
+            }
         }
 
         public function admin_menu()
@@ -265,11 +272,47 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             echo $this->render_panel('admin'); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
         }
 
-        private function get_records()
+        private function purge_expired_trash()
         {
             global $wpdb;
             $table = $this->table_name();
-            $records = $wpdb->get_results("SELECT * FROM {$table} ORDER BY sale_date DESC, id DESC", ARRAY_A);
+            $cutoff = date('Y-m-d H:i:s', current_time('timestamp') - (30 * DAY_IN_SECONDS));
+            $ids = $wpdb->get_col($wpdb->prepare(
+                "SELECT id FROM {$table} WHERE deleted_at IS NOT NULL AND deleted_at <= %s",
+                $cutoff
+            ));
+            foreach (is_array($ids) ? $ids : array() as $id) {
+                $id = absint($id);
+                if ($id <= 0) continue;
+                $this->delete_account_game_links($id);
+                $wpdb->delete($table, array('id' => $id), array('%d'));
+            }
+            return is_array($ids) ? count($ids) : 0;
+        }
+
+        private function get_trash_records()
+        {
+            $this->purge_expired_trash();
+            global $wpdb;
+            $table = $this->table_name();
+            $records = $wpdb->get_results("SELECT * FROM {$table} WHERE deleted_at IS NOT NULL ORDER BY deleted_at DESC, id DESC", ARRAY_A);
+            if (!is_array($records)) return array();
+            foreach ($records as &$record) {
+                $record['stock_status'] = $this->normalize_stock_status_value(isset($record['stock_status']) ? $record['stock_status'] : '');
+                $record['account_type'] = $this->normalize_legacy_account_type(isset($record['account_type']) ? $record['account_type'] : 'Online');
+                $record['console'] = $this->normalize_legacy_console(isset($record['console']) ? $record['console'] : '');
+                $this->hydrate_record_games($record);
+            }
+            unset($record);
+            return $records;
+        }
+
+        private function get_records()
+        {
+            $this->purge_expired_trash();
+            global $wpdb;
+            $table = $this->table_name();
+            $records = $wpdb->get_results("SELECT * FROM {$table} WHERE deleted_at IS NULL ORDER BY sale_date DESC, id DESC", ARRAY_A);
             if (!is_array($records)) {
                 return array();
             }
@@ -338,7 +381,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                         COALESCE(SUM(CASE WHEN payment_type = 'Nağd' AND stock_status = 'Satılıb' THEN 1 ELSE 0 END), 0) AS cash_count,
                         COALESCE(SUM(CASE WHEN payment_type = 'Nisyə' AND stock_status = 'Satılıb' THEN 1 ELSE 0 END), 0) AS credit_count
                  FROM {$table}
-                 WHERE phone <> '' AND stock_status = 'Satılıb'
+                 WHERE deleted_at IS NULL AND phone <> '' AND stock_status = 'Satılıb'
                  GROUP BY phone",
                 ARRAY_A
             );
@@ -805,7 +848,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             global $wpdb;
             $table = $this->table_name();
             $records = $wpdb->get_results(
-                $wpdb->prepare("SELECT * FROM {$table} WHERE phone = %s ORDER BY sale_date DESC, id DESC", $phone),
+                $wpdb->prepare("SELECT * FROM {$table} WHERE deleted_at IS NULL AND phone = %s ORDER BY sale_date DESC, id DESC", $phone),
                 ARRAY_A
             );
             foreach (is_array($records) ? $records : array() as &$record) $this->hydrate_record_games($record);
@@ -2010,7 +2053,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 if (!$allow_duplicates) {
                     $duplicate = (int) $wpdb->get_var(
                         $wpdb->prepare(
-                            "SELECT COUNT(*) FROM {$table} WHERE email = %s AND account_type = %s AND game_name = %s AND stock_status = %s AND COALESCE(phone, '') = %s AND COALESCE(sale_date, '') = %s",
+                            "SELECT COUNT(*) FROM {$table} WHERE deleted_at IS NULL AND email = %s AND account_type = %s AND game_name = %s AND stock_status = %s AND COALESCE(phone, '') = %s AND COALESCE(sale_date, '') = %s",
                             $data['email'],
                             $data['account_type'],
                             $data['game_name'],
@@ -2354,6 +2397,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                     "SELECT id, account_type FROM {$table}
                      WHERE email = %s
                        AND id <> %d
+                       AND deleted_at IS NULL
                        AND account_type IN ('Online', 'Universal', 'Offline')",
                     $source_email,
                     absint($source_id)
@@ -2473,10 +2517,16 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             }
             check_admin_referer('mara_account_sale_delete_' . $id);
             global $wpdb;
-            $this->delete_account_game_links($id);
-            $deleted = $wpdb->delete($this->table_name(), array('id' => $id), array('%d'));
+            $now = current_time('mysql');
+            $deleted = $wpdb->update(
+                $this->table_name(),
+                array('deleted_at' => $now, 'updated_at' => $now),
+                array('id' => $id),
+                array('%s', '%s'),
+                array('%d')
+            );
             if ($deleted === false) {
-                $this->redirect_with_message('error', 'accounts', 'Silmə zamanı xəta baş verdi.');
+                $this->redirect_with_message('error', 'accounts', 'Zibil qutusuna köçürmə zamanı xəta baş verdi.');
             }
             $this->redirect_with_message('deleted', 'accounts');
         }
@@ -2572,6 +2622,21 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'callback' => array($this, 'rest_mobile_delete'),
                 'permission_callback' => array($this, 'rest_mobile_permission'),
             ));
+            register_rest_route($namespace, '/trash', array(
+                'methods' => WP_REST_Server::READABLE,
+                'callback' => array($this, 'rest_mobile_trash'),
+                'permission_callback' => array($this, 'rest_mobile_permission'),
+            ));
+            register_rest_route($namespace, '/trash/restore', array(
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => array($this, 'rest_mobile_trash_restore'),
+                'permission_callback' => array($this, 'rest_mobile_permission'),
+            ));
+            register_rest_route($namespace, '/trash/delete', array(
+                'methods' => WP_REST_Server::CREATABLE,
+                'callback' => array($this, 'rest_mobile_trash_delete'),
+                'permission_callback' => array($this, 'rest_mobile_permission'),
+            ));
             register_rest_route($namespace, '/settings', array(
                 'methods' => WP_REST_Server::CREATABLE,
                 'callback' => array($this, 'rest_mobile_save_settings'),
@@ -2625,6 +2690,8 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'rental_ends_at' => isset($record['rental_ends_at']) ? (string) $record['rental_ends_at'] : '',
                 'created_at' => isset($record['created_at']) ? (string) $record['created_at'] : '',
                 'updated_at' => isset($record['updated_at']) ? (string) $record['updated_at'] : '',
+                'deleted_at' => isset($record['deleted_at']) && $record['deleted_at'] !== null ? (string) $record['deleted_at'] : '',
+                'trash_days_remaining' => (!empty($record['deleted_at'])) ? max(0, 30 - (int) floor((current_time('timestamp') - strtotime($record['deleted_at'])) / DAY_IN_SECONDS)) : 0,
             ), $runtime);
         }
 
@@ -3050,10 +3117,69 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             if ($id <= 0) {
                 return new WP_Error('mara_account_sale_mobile_delete_id', 'Silinəcək hesab tapılmadı.', array('status' => 400));
             }
+            $now = current_time('mysql');
+            $deleted = $wpdb->update(
+                $this->table_name(),
+                array('deleted_at' => $now, 'updated_at' => $now),
+                array('id' => $id, 'deleted_at' => null),
+                array('%s', '%s'),
+                array('%d', '%s')
+            );
+            if ($deleted === false) {
+                return new WP_Error('mara_account_sale_mobile_delete_failed', 'Zibil qutusuna köçürmə zamanı xəta baş verdi.', array('status' => 500));
+            }
+            return rest_ensure_response(array('ok' => true, 'id' => $id, 'deleted_at' => $now, 'trash_days' => 30));
+        }
+
+        public function rest_mobile_trash($request)
+        {
+            $records = $this->get_trash_records();
+            return rest_ensure_response(array(
+                'ok' => true,
+                'retention_days' => 30,
+                'records' => array_map(array($this, 'mobile_record_payload'), $records),
+            ));
+        }
+
+        public function rest_mobile_trash_restore($request)
+        {
+            global $wpdb;
+            $input = $request->get_json_params();
+            $id = is_array($input) && isset($input['id']) ? absint($input['id']) : 0;
+            if ($id <= 0) {
+                return new WP_Error('mara_account_sale_mobile_restore_id', 'Geri qaytarılacaq hesab tapılmadı.', array('status' => 400));
+            }
+            $now = current_time('mysql');
+            $restored = $wpdb->query($wpdb->prepare(
+                "UPDATE {$this->table_name()} SET deleted_at = NULL, updated_at = %s WHERE id = %d AND deleted_at IS NOT NULL",
+                $now,
+                $id
+            ));
+            if ($restored === false) {
+                return new WP_Error('mara_account_sale_mobile_restore_failed', 'Hesab geri qaytarılmadı.', array('status' => 500));
+            }
+            return rest_ensure_response(array('ok' => true, 'id' => $id));
+        }
+
+        public function rest_mobile_trash_delete($request)
+        {
+            global $wpdb;
+            $input = $request->get_json_params();
+            $id = is_array($input) && isset($input['id']) ? absint($input['id']) : 0;
+            if ($id <= 0) {
+                return new WP_Error('mara_account_sale_mobile_trash_delete_id', 'Silinəcək hesab tapılmadı.', array('status' => 400));
+            }
+            $exists = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$this->table_name()} WHERE id = %d AND deleted_at IS NOT NULL",
+                $id
+            ));
+            if ($exists <= 0) {
+                return new WP_Error('mara_account_sale_mobile_trash_delete_missing', 'Hesab zibil qutusunda tapılmadı.', array('status' => 404));
+            }
             $this->delete_account_game_links($id);
             $deleted = $wpdb->delete($this->table_name(), array('id' => $id), array('%d'));
             if ($deleted === false) {
-                return new WP_Error('mara_account_sale_mobile_delete_failed', 'Silmə zamanı xəta baş verdi.', array('status' => 500));
+                return new WP_Error('mara_account_sale_mobile_trash_delete_failed', 'Hesab birdəfəlik silinmədi.', array('status' => 500));
             }
             return rest_ensure_response(array('ok' => true, 'id' => $id));
         }
