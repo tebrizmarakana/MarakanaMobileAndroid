@@ -3916,6 +3916,16 @@ public class MainActivity extends Activity {
             spacer(box, 8);
         }
 
+        if ("accounts".equals(section)) {
+            LinearLayout psApp = accountSalesActionRow(android.R.drawable.ic_menu_share,
+                    "PS App giriş", "E-maili kopyala və PlayStation App-i aç", BLUE, () -> {
+                        dismiss.run();
+                        openPlayStationAppForAccount(row);
+                    });
+            box.addView(psApp);
+            spacer(box, 8);
+        }
+
         boolean demoSection = "accounts".equals(section) || "sold".equals(section) || "unsold".equals(section);
         if (demoSection) {
             LinearLayout demo = accountSalesActionRow(android.R.drawable.ic_media_play,
@@ -3940,6 +3950,51 @@ public class MainActivity extends Activity {
             if (window != null) window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         });
         dialog.show();
+    }
+
+    private void openPlayStationAppForAccount(JSONObject row) {
+        String email = row == null ? "" : row.optString("email", "").trim();
+        if (email.isEmpty()) {
+            toast("Hesabın e-mail məlumatı yoxdur.");
+            return;
+        }
+
+        try {
+            android.content.ClipboardManager clipboard =
+                    (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard != null) {
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("PSN e-mail", email));
+            }
+        } catch (Exception ignored) {
+        }
+
+        try {
+            Intent launch = getPackageManager().getLaunchIntentForPackage("com.scee.psxandroid");
+            if (launch != null) {
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(launch);
+                toast("E-mail kopyalandı. PS App giriş xanasına yapışdır.");
+                return;
+            }
+        } catch (Exception ignored) {
+        }
+
+        toast("PlayStation App tapılmadı.");
+        try {
+            Intent market = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("market://details?id=com.scee.psxandroid"));
+            startActivity(market);
+            return;
+        } catch (Exception ignored) {
+        }
+
+        try {
+            Intent web = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://play.google.com/store/apps/details?id=com.scee.psxandroid"));
+            startActivity(web);
+        } catch (Exception e) {
+            toast("PlayStation App açıla bilmədi.");
+        }
     }
 
     private void showAccountSalesDemoChooser(JSONObject row) {

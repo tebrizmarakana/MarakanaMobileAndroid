@@ -1,0 +1,7 @@
+v103 static code-flow check
+- Hesablar action popup includes PS App giriş.
+- Button copies account e-mail to Android clipboard.
+- Button launches official PlayStation App package com.scee.psxandroid when installed.
+- If PlayStation App is missing, opens its Google Play page.
+- Password is never copied or auto-filled.
+- Direct e-mail field auto-fill is not used because PlayStation App exposes no supported public intent extra for login e-mail prefill.
