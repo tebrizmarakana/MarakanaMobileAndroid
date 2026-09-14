@@ -3684,7 +3684,7 @@ public class MainActivity extends Activity {
         final AlertDialog[] dialogRef = new AlertDialog[1];
         Runnable dismiss = () -> { if (dialogRef[0] != null) dialogRef[0].dismiss(); };
 
-        boolean unsoldSection = "unsold".equals(section) && unsoldStatus;
+        boolean unsoldSection = ("unsold".equals(section) || "accounts".equals(section)) && unsoldStatus;
         if (unsoldSection) {
             LinearLayout sell = accountSalesActionRow(android.R.drawable.ic_menu_send,
                     "Sat", "Müştəri məlumatlarını daxil edib hesabı sat", GREEN, () -> {
@@ -3711,6 +3711,18 @@ public class MainActivity extends Activity {
                         confirmCopyAccountSaleAsUnsold(row);
                     });
             box.addView(copy);
+            spacer(box, 8);
+        }
+
+        boolean expiredRental = "İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim())
+                && "expired".equalsIgnoreCase(row.optString("rental_state", "").trim());
+        if (expiredRental) {
+            LinearLayout returned = accountSalesActionRow(android.R.drawable.ic_menu_revert,
+                    "Təhvil aldım", "İcarəni bağla və hesabı Satılmayıb-a qaytar", GREEN, () -> {
+                        dismiss.run();
+                        confirmAccountSalesRentalReturned(row);
+                    });
+            box.addView(returned);
             spacer(box, 8);
         }
 
@@ -3865,6 +3877,43 @@ public class MainActivity extends Activity {
         openWhatsAppChooser(phone, message.toString());
     }
 
+    private void confirmAccountSalesRentalReturned(JSONObject row) {
+        String title = row.optString("game_name", "Hesab").trim();
+        if (title.isEmpty()) title = "Hesab";
+        new AlertDialog.Builder(this)
+                .setTitle("Təhvil aldım")
+                .setMessage(title + " hesabının icarəsi bağlansın və Satılmayıb bölməsinə qaytarılsın?")
+                .setNegativeButton("Xeyr", null)
+                .setPositiveButton("Təhvil aldım", (d, w) -> returnAccountSalesRentalToUnsold(row))
+                .show();
+    }
+
+    private void returnAccountSalesRentalToUnsold(JSONObject row) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("id", row.optInt("id", 0));
+            payload.put("game_name", row.optString("game_name", ""));
+            payload.put("game_ids", accountSalesGameIdsForSelection(row.optString("game_name", "")));
+            payload.put("account_type", row.optString("account_type", "Online"));
+            payload.put("email", row.optString("email", ""));
+            payload.put("price", String.valueOf(row.optDouble("price", 0)));
+            payload.put("console", row.optString("console", "PS5"));
+            payload.put("customer_name", "");
+            payload.put("phone", "");
+            payload.put("sale_date", "");
+            String paymentType = row.optString("payment_type", "Nağd").trim();
+            payload.put("payment_type", paymentType.isEmpty() ? "Nağd" : paymentType);
+            payload.put("stock_status", "Satılmayıb");
+            payload.put("rental_duration_value", "0");
+            payload.put("rental_duration_unit", "day");
+        } catch (Exception ignored) {}
+
+        postAccountSalesJson("/save", payload, result -> {
+            toast("Hesab təhvil alındı və Satılmayanlara qaytarıldı.");
+            showAccountSales("unsold");
+        });
+    }
+
     private void confirmCopyAccountSaleAsUnsold(JSONObject row) {
         String title = row.optString("game_name", "Hesab").trim();
         if (title.isEmpty()) title = "Hesab";
@@ -3985,6 +4034,14 @@ public class MainActivity extends Activity {
         customer.setClickable(true);
         customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone, sold));
 
+        EditText transactionPrice = accountField(
+                body,
+                rental ? "İcarə qiyməti *" : "Satış qiyməti *",
+                "Məsələn: 30.00",
+                String.valueOf(record.optDouble("price", 0)),
+                InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL
+        );
+
         EditText date = null;
         if (sold) {
             String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
@@ -4019,12 +4076,26 @@ public class MainActivity extends Activity {
         final EditText saleDateField = date;
         final EditText rentalDurationField = rentalDuration;
         final Spinner rentalUnitField = rentalUnit;
+        final EditText transactionPriceField = transactionPrice;
         save.setOnClickListener(v -> {
             String customerValue = customer.getText().toString().trim();
             String phoneValue = normalizeAzerbaijanPhone(phone.getText().toString().trim());
             phone.setText(phoneValue);
             if (customerValue.isEmpty() || phoneValue.isEmpty()) {
                 toast((rental ? "İcarə" : "Satış") + " üçün müştəri adı və telefon məcburidir.");
+                return;
+            }
+
+            String transactionPriceValue = transactionPriceField == null ? "" : transactionPriceField.getText().toString().trim().replace(',', '.');
+            double parsedTransactionPrice;
+            try {
+                parsedTransactionPrice = Double.parseDouble(transactionPriceValue);
+            } catch (Exception ex) {
+                toast((rental ? "İcarə" : "Satış") + " qiymətini düzgün daxil et.");
+                return;
+            }
+            if (parsedTransactionPrice < 0) {
+                toast((rental ? "İcarə" : "Satış") + " qiyməti mənfi ola bilməz.");
                 return;
             }
 
@@ -4050,7 +4121,7 @@ public class MainActivity extends Activity {
                 payload.put("game_ids", accountSalesGameIdsForSelection(record.optString("game_name", "")));
                 payload.put("account_type", record.optString("account_type", "Online"));
                 payload.put("email", record.optString("email", ""));
-                payload.put("price", String.valueOf(record.optDouble("price", 0)));
+                payload.put("price", transactionPriceValue);
                 payload.put("console", record.optString("console", "PS5"));
                 payload.put("customer_name", customerValue);
                 payload.put("phone", phoneValue);

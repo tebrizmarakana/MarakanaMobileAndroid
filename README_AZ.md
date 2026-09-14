@@ -1,12 +1,12 @@
-# MarakanaMobile v90 — Yeni hesab yaratda Məxfi kod xanası
+# MarakanaMobile v92 — Sat/İcarə qiyməti + Təhvil aldım
 
-- `Yeni hesab yarat` formasına yeni **`Məxfi kod`** xanasi əlavə edildi.
-- Yazılan məxfi kod yeni yaradılan hesablarla birlikdə serverə göndərilir.
-- Eyni sahə `Hesabı düzəlt` ekranına da əlavə olundu ki, sonradan dəyişmək mümkün olsun.
-- Sat / İcarə ver axınında hesab məlumatları baxış hissəsində `Məxfi kod` da görünür.
-- Ətraflı məlumat və WhatsApp ilə məlumat göndərmə mətninə də `Məxfi kod` əlavə edildi.
-- `versionCode 90`
-- `versionName 3.4.67-native-v90`
+- `Satılmayanlar → Sat` və `Satılmayanlar → İcarə ver` axınlarında qiymət artıq ayrıca redaktə edilə bilir.
+- Satış zamanı `Satış qiyməti`, icarə zamanı `İcarə qiyməti` sahəsi cari qiymətlə açılır və əməliyyatdan əvvəl dəyişdirilə bilir.
+- İcarə müddəti bitmiş hesabın əməliyyat menyusunda **`Təhvil aldım`** düyməsi görünür.
+- `Təhvil aldım` təsdiqlənəndə icarə bağlanır, müştəri/telefon/icarə müddəti təmizlənir və hesab avtomatik **Satılmayıb** statusuna keçir.
+- Təhvil alınan hesab birbaşa `Satılmayanlar` bölməsində açılır.
+- `versionCode 92`
+- `versionName 3.4.69-native-v92`
 
 ---
 

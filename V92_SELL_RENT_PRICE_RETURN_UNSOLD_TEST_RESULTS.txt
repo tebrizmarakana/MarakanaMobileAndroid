@@ -1,0 +1,5 @@
+Manual code-path check passed.
+- Sat və İcarə ver formalarında qiymət sahəsi editable-dir.
+- Qiymət düzgün rəqəm kimi yoxlanır və /save payload-ına yeni dəyər göndərilir.
+- Müddəti bitmiş İcarə hesabında Təhvil aldım görünür.
+- Təhvil aldım stock_status=Satılmayıb, customer/phone/sale_date boş və rental duration sıfır göndərir.
