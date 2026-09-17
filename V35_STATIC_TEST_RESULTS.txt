@@ -1,9 +1,0 @@
-V35 STATIC TEST RESULTS
-=======================
-PASS - versionCode 35
-PASS - versionName 3.4.12-native-v35
-PASS - GitHub workflow artifact v35
-PASS - release APK name MarakanaMobile-v35-release.apk
-PASS - MainActivity kitchen notification disables system contextual actions on API 29+
-PASS - KitchenBackgroundService kitchen notification disables system contextual actions on API 29+
-PASS - background service channel id bumped to v35
