@@ -1,5 +1,0 @@
-Manual UI check passed.
-- Yeni hesab yarat -> Oyun adı pickerində uyğun oyun tapılmadıqda Yeni oyun yarat bir kliklə yaradır.
-- Tək oyun rejimində yaradılan oyun seçilir və picker bağlanır.
-- Bundle rejimində yaradılan oyun seçilmişlərə əlavə olunur.
-- Axtarış sətrindəki ✕ düyməsi yazını təmizləyir.
