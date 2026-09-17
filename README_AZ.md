@@ -1,3 +1,18 @@
+# Marakana Mobile v109 — Hesab kartı səliqə düzəlişləri
+
+Bu versiya v108 bazasından davam edir.
+
+- `versionCode 109`
+- `versionName 3.4.81-native-v109`
+- Hesablar / Satılanlar / Satılmayanlar / İcarə kartlarında sağ meta sütunu sağ kənardan təxminən bir hərflik içəri çəkildi; `Satılmayıb` sözü tam görünür və qalın qalır.
+- `Satılıb` statusunda satış tarixi statusun dərhal altına keçirildi və qalın şriftlə göstərilir.
+- Satılmış hesabda Məxfi kod varsa tarix sətrinin altında qalın göstərilir.
+- Sol tərəfdə oyun adı ilə e-mail arasındakı artıq boşluq aradan qaldırıldı.
+- E-mail sətri qalın şriftlə göstərilir; ad-soyad və telefon sətri də qalın qalır.
+- v108-dəki ayrıca Məxfi kod məntiqi və bütün əvvəlki funksiyalar saxlanılıb.
+
+---
+
 # Marakana Mobile v108 — Hesab kartı göstəriciləri
 
 Bu versiya v107 bazasından davam edir.

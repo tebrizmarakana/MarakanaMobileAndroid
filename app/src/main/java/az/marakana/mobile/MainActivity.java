@@ -3619,13 +3619,46 @@ public class MainActivity extends Activity {
                 if (gameIndex < cardGames.size() - 1) spacer(gameColumn, 2);
             }
         }
+        String email = row.optString("email", "").trim();
+        String customer = row.optString("customer_name", "").trim();
+        String phone = row.optString("phone", "").trim();
+        String saleDate = row.optString("sale_date", "").trim();
+        String saleDateDisplay = accountSalesDateForDisplay(saleDate);
+        String secretCode = row.optString("secret_code", "").trim();
+        String stockStatus = row.optString("stock_status", "").trim();
+        boolean soldAccount = "Satılıb".equalsIgnoreCase(stockStatus);
+
+        // v109: əsas hesab kartlarında sol sütunun məlumatlarını oyun adının dərhal altında saxla.
+        // Beləliklə sağdakı 3-5 sətir sol tərəfdə lazımsız böyük boşluq yaratmır.
+        if (mainAccountSection) {
+            if (!email.isEmpty()) {
+                spacer(gameColumn, 2);
+                gameColumn.addView(text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, true));
+            }
+            if (!customer.isEmpty() || !phone.isEmpty()) {
+                gameColumn.addView(text((customer.isEmpty() ? "—" : customer) +
+                        (phone.isEmpty() ? "" : "  •  " + phone), 12, TEXT, true));
+            }
+            // Satılmış hesabın tarixi və Məxfi kodu sağ sütunda, Satılıb statusunun altında göstərilir.
+            if (!soldAccount) {
+                if (!saleDateDisplay.isEmpty()) {
+                    gameColumn.addView(text(saleDateDisplay, 12, MUTED, true));
+                }
+                if (!secretCode.isEmpty()) {
+                    gameColumn.addView(text("Məxfi kod: " + secretCode, 12, TEXT, true));
+                }
+            }
+        }
+
         LinearLayout.LayoutParams gameLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
-        gameLp.setMargins(0, 0, dp(8), 0);
+        gameLp.setMargins(0, 0, dp(6), 0);
         top.addView(gameColumn, gameLp);
 
         if (mainAccountSection) {
-            top.addView(buildAccountSalesPriceMetaColumn(row),
-                    new LinearLayout.LayoutParams(dp(138), ViewGroup.LayoutParams.WRAP_CONTENT));
+            LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(dp(146), ViewGroup.LayoutParams.WRAP_CONTENT);
+            // Sağ kənardan təxminən bir hərflik nəfəs yeri saxlanılır; “Satılmayıb” tam görünür.
+            metaLp.setMargins(0, 0, dp(8), 0);
+            top.addView(buildAccountSalesPriceMetaColumn(row), metaLp);
         } else {
             String price = row.optString("price_formatted", money(row.optDouble("price", 0)));
             TextView priceView = text(price, 14, GREEN, true);
@@ -3634,28 +3667,8 @@ public class MainActivity extends Activity {
         }
         c.addView(top);
 
-        String email = row.optString("email", "").trim();
-        String customer = row.optString("customer_name", "").trim();
-        String phone = row.optString("phone", "").trim();
-        String saleDate = row.optString("sale_date", "").trim();
-        String saleDateDisplay = accountSalesDateForDisplay(saleDate);
-        String secretCode = row.optString("secret_code", "").trim();
-
         if (mainAccountSection) {
-            if (!email.isEmpty()) {
-                spacer(c, 4);
-                c.addView(text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, false));
-            }
-            if (!customer.isEmpty() || !phone.isEmpty()) {
-                c.addView(text((customer.isEmpty() ? "—" : customer) +
-                        (phone.isEmpty() ? "" : "  •  " + phone), 12, TEXT, true));
-            }
-            if (!saleDateDisplay.isEmpty()) {
-                c.addView(text(saleDateDisplay, 12, MUTED, false));
-            }
-            if (!secretCode.isEmpty()) {
-                c.addView(text("Məxfi kod: " + secretCode, 12, TEXT, true));
-            }
+            // Məlumatlar artıq gameColumn daxilindədir.
         } else if ("customer".equals(section)) {
             StringBuilder customerInfo = new StringBuilder();
             if (bundleAccount) customerInfo.append("🎁 ");
@@ -3735,6 +3748,25 @@ public class MainActivity extends Activity {
             statusView.setGravity(Gravity.END);
             column.addView(statusView, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+
+        // v109: Satılmış hesabda tarix Satılıb statusunun dərhal altında və qalın göstərilir.
+        // Məxfi kod varsa əvvəlki qaydaya uyğun olaraq tarixin altında qalır.
+        if ("Satılıb".equalsIgnoreCase(status)) {
+            String saleDateDisplay = accountSalesDateForDisplay(row.optString("sale_date", "").trim());
+            if (!saleDateDisplay.isEmpty()) {
+                TextView dateView = text(saleDateDisplay, 11, TEXT, true);
+                dateView.setGravity(Gravity.END);
+                column.addView(dateView, new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            }
+            String secretCode = row.optString("secret_code", "").trim();
+            if (!secretCode.isEmpty()) {
+                TextView secretView = text("Məxfi kod: " + secretCode, 11, TEXT, true);
+                secretView.setGravity(Gravity.END);
+                column.addView(secretView, new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            }
         }
         return column;
     }

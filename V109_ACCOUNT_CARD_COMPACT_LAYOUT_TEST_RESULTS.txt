@@ -1,0 +1,12 @@
+Marakana Mobile v109 - Account Card Compact Layout
+
+Static checks:
+[OK] Main sections: accounts / sold / unsold / rental use the same compact card path.
+[OK] Right meta column shifted left with 8dp right margin and widened to 146dp.
+[OK] Status text remains bold; Satılmayıb has right breathing room.
+[OK] Sold sale_date is rendered under Satılıb in bold.
+[OK] Sold secret_code is rendered under sale_date in bold when present.
+[OK] Email moved into left game column and rendered bold.
+[OK] Customer name + phone remains bold.
+[OK] Non-sold date/secret behavior remains in left column.
+[OK] versionCode=109; versionName=3.4.81-native-v109.
