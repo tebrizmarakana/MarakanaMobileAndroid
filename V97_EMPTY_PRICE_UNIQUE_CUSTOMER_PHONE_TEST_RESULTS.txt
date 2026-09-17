@@ -1,4 +1,0 @@
-Code flow check passed.
-- New account price field has no initial value or hint.
-- Duplicate customer phone is blocked locally on create.
-- Customer edit allows own number and blocks another customer number.
