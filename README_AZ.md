@@ -1,3 +1,16 @@
+# Marakana Mobile v111 — Müştəri hesab kartları + səhifədə qalma
+
+- `versionCode 111`
+- `versionName 3.4.81-native-v111`
+- Müştəri bölməsində müştərinin hesab kartları Hesablar / Satılanlar / Satılmayanlar / İcarə bölmələri ilə eyni kompakt kart görünüşünə keçirildi.
+- Qiymət, `Növ • Konsol`, status, tarix və Məxfi kod əsas kartlarla eyni düzülüşdə göstərilir.
+- E-mail və müştəri məlumatlarının qalın/kompakt görünüşü də əsas hesab kartları ilə eynidir.
+- `secret_code` boş deyilsə Müştəri detalındakı hesab kartında da görünür.
+- Müştəri detalından hesabı `Düzənlə` edib yadda saxlayanda əsas Hesablar menyusuna atılmır; həmin müştərinin detal səhifəsi yenidən açılır və hesablar serverdən təzə yüklənir.
+- Düzənlə ekranında geri düyməsi də eyni müştəri detalına qaytarır.
+- Müştəri detalından hesab silinərsə əməliyyatdan sonra da həmin müştəri səhifəsində qalır.
+- v110 drawer/vertical-scroll qoruması və əvvəlki funksiyalar saxlanılıb.
+
 # Marakana Mobile v110 — Sol panel təsadüfi açılma düzəlişi
 
 ## Versiya

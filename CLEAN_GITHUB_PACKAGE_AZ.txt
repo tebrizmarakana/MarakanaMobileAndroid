@@ -1,0 +1,4 @@
+Bu paket GitHub web upload ucun temizlenib.
+Kohne Vxx TEST_RESULTS/CHECK/LOG fayllari, WordPress API nusxesi ve backup workflow silinib.
+Android layihesinin build ucun lazim olan esas fayllari ve .github/workflows/main.yml saxlanilib.
+Funksional kod v111 ile eynidir.

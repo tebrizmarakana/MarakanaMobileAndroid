@@ -114,6 +114,8 @@ public class MainActivity extends Activity {
     private static final String[] ACCOUNT_SALES_SECTIONS = {"accounts", "sold", "unsold", "rental", "customers", "settings"};
     private JSONArray accountSalesGameChoices = new JSONArray();
     private JSONArray accountSalesCustomerChoices = new JSONArray();
+    // v111: Müştəri detalında hesab düzəlişindən sonra eyni səhifəyə qayıtmaq üçün kontekst.
+    private JSONObject accountSalesCustomerDetailContext = null;
 
     private static final int BG = Color.rgb(240, 245, 250);
     private static final int CARD = Color.WHITE;
@@ -3291,6 +3293,17 @@ public class MainActivity extends Activity {
         return "accounts";
     }
 
+    // v111: Müştəri detalından açılan hesab əməliyyatı bitəndə əsas Hesablar səhifəsinə deyil,
+    // istifadəçinin olduğu həmin müştəri detalına qayıt.
+    private void returnToAccountSalesSource(String sourceSection) {
+        String source = sourceSection == null ? "" : sourceSection.trim().toLowerCase(Locale.ROOT);
+        if ("customer".equals(source) && accountSalesCustomerDetailContext != null) {
+            showAccountSalesCustomerDetail(accountSalesCustomerDetailContext);
+            return;
+        }
+        showAccountSales(normalizeAccountSalesSection(sourceSection));
+    }
+
     private void showAccountSalesConnection() {
         ScrollView sv = screenWithBody("Hesab Satışı • Bağlantı", false, null);
         LinearLayout body = scrollBody(sv);
@@ -3623,7 +3636,7 @@ public class MainActivity extends Activity {
         gameColumn.setOrientation(LinearLayout.VERTICAL);
         boolean bundleAccount = cardGames.size() > 1;
         boolean mainAccountSection = "accounts".equals(section) || "sold".equals(section) ||
-                "unsold".equals(section) || "rental".equals(section);
+                "unsold".equals(section) || "rental".equals(section) || "customer".equals(section);
 
         String firstGameName = cardGames.isEmpty() ? row.optString("game_name", "Hesab") : cardGames.get(0);
         LinearLayout firstGameRow = new LinearLayout(this);
@@ -4355,7 +4368,7 @@ public class MainActivity extends Activity {
                     try { payload.put("id", row.optInt("id", 0)); } catch (Exception ignored) {}
                     postAccountSalesJson("/delete", payload, result -> {
                         toast("Hesab zibil qutusuna köçürüldü.");
-                        showAccountSales(normalizeAccountSalesSection(sourceSection));
+                        returnToAccountSalesSource(sourceSection);
                     });
                 }).show();
     }
@@ -4668,7 +4681,8 @@ public class MainActivity extends Activity {
     private void showAccountSalesForm(JSONObject record, JSONObject settings, String sourceSection) {
         final boolean editing = record != null && record.optInt("id", 0) > 0;
         final String returnSection = normalizeAccountSalesSection(sourceSection);
-        ScrollView sv = screenWithBody(editing ? "Hesabı düzəlt" : "Yeni hesab yarat", true, () -> showAccountSales(returnSection));
+        final String returnSource = sourceSection;
+        ScrollView sv = screenWithBody(editing ? "Hesabı düzəlt" : "Yeni hesab yarat", true, () -> returnToAccountSalesSource(returnSource));
         LinearLayout body = scrollBody(sv);
 
         EditText game = accountField(body, "Oyunun adı *", "Kliklə seç və ya axtar", editing ? record.optString("game_name", "") : "", InputType.TYPE_CLASS_TEXT);
@@ -4818,7 +4832,7 @@ public class MainActivity extends Activity {
                 } else {
                     toast("Hesab yeniləndi.");
                 }
-                showAccountSales(returnSection);
+                returnToAccountSalesSource(returnSource);
             });
         });
     }
@@ -5836,6 +5850,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAccountSalesCustomerDetail(JSONObject customer) {
+        accountSalesCustomerDetailContext = customer;
         String phone = customer.optString("phone", "");
         ScrollView sv = screenWithBody("Müştəri • " + customer.optString("customer_name", ""), true, () -> showAccountSales("customers"));
         LinearLayout body = scrollBody(sv);
