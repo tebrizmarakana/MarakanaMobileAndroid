@@ -1,7 +1,0 @@
-Marakana Mobile v79 — Satılanlar kartında müştəri məlumatları e-mail sətrində
-
-PASS 01 — Satılanlar bölməsində e-mail, müştəri adı, telefon və satış tarixi eyni sətir mətninə birləşdirilir.
-PASS 02 — Ayırıcı olaraq “ • ” istifadə olunur.
-PASS 03 — Müştəri/telefon/tarix üçün ayrıca alt sətirlər Satılanlar bölməsində çıxarılmır.
-PASS 04 — Satılmayanlar və İcarə bölmələrinin əvvəlki düzülüşü saxlanılır.
-PASS 05 — versionCode=79, versionName=3.4.56-native-v79.
