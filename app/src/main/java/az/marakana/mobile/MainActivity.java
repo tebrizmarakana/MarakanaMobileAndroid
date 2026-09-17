@@ -3395,7 +3395,9 @@ public class MainActivity extends Activity {
         add.setEnabled(false);
         addCustomer.setEnabled(false);
 
-        EditText search = input("Oyun, e-mail, müştəri və ya telefonla axtar");
+        EditText search = input("customers".equals(section)
+                ? "Ad soyad və ya telefonla axtar"
+                : "Oyun, e-mail, müştəri, telefon və ya məxfi kodla axtar");
         if (!"settings".equals(section)) {
             body.addView(search);
             spacer(body, 10);
@@ -3574,8 +3576,9 @@ public class MainActivity extends Activity {
             if (row == null) continue;
             String haystack = row.optString("game_name", "") + " " + row.optString("email", "") + " " +
                     row.optString("customer_name", "") + " " + row.optString("phone", "") + " " +
-                    row.optString("console", "") + " " + row.optString("account_type", "") + " " +
-                    row.optString("stock_status", "") + " " + row.optString("rental_remaining_text", "");
+                    row.optString("secret_code", "") + " " + row.optString("console", "") + " " +
+                    row.optString("account_type", "") + " " + row.optString("stock_status", "") + " " +
+                    row.optString("rental_remaining_text", "");
             if (!q.isEmpty() && !haystack.toLowerCase(Locale.ROOT).contains(q)) continue;
             visible++;
             host.addView(buildAccountSalesRecordCard(row, settings, section));
@@ -4289,7 +4292,7 @@ public class MainActivity extends Activity {
         info.addView(note);
         body.addView(info);
 
-        EditText search = input("Silinən hesabları oyun və ya e-mail ilə axtar");
+        EditText search = input("Silinən hesabları oyun, e-mail və ya məxfi kodla axtar");
         body.addView(search);
         spacer(body, 10);
 
@@ -4318,7 +4321,8 @@ public class MainActivity extends Activity {
             JSONObject row = records.optJSONObject(i);
             if (row == null) continue;
             String haystack = (row.optString("game_name", "") + " " + row.optString("email", "") + " "
-                    + row.optString("customer_name", "") + " " + row.optString("phone", "")).toLowerCase(Locale.ROOT);
+                    + row.optString("customer_name", "") + " " + row.optString("phone", "") + " "
+                    + row.optString("secret_code", "")).toLowerCase(Locale.ROOT);
             if (!q.isEmpty() && !haystack.contains(q)) continue;
             shown++;
 
@@ -4423,7 +4427,7 @@ public class MainActivity extends Activity {
         body.addView(infoTitle);
         spacer(body, 6);
 
-        // Sat / İcarə ver zamanı oyun-hesab məlumatları yalnız görünüşdür, dəyişdirilə bilməz.
+        // Satışda Məxfi kod istəyə bağlı redaktə olunur; qalan oyun-hesab məlumatları yalnız görünüşdür.
         LinearLayout info = card();
         ArrayList<String> games = parseAccountSalesGameSelection(record.optString("game_name", ""));
         if (games.size() > 1) {
@@ -4438,7 +4442,18 @@ public class MainActivity extends Activity {
             addAccountSalesDetailField(info, "🎮", "Oyun", gameName);
         }
         addAccountSalesDetailField(info, "📧", "E-mail", record.optString("email", ""));
-        addAccountSalesDetailField(info, "🔐", "Məxfi kod", record.optString("secret_code", ""));
+        EditText transactionSecretCode = null;
+        if (sold) {
+            transactionSecretCode = accountField(
+                    info,
+                    "Məxfi kod (istəyə bağlı)",
+                    "Boş saxlamaq olar",
+                    record.optString("secret_code", ""),
+                    InputType.TYPE_CLASS_TEXT
+            );
+        } else {
+            addAccountSalesDetailField(info, "🔐", "Məxfi kod", record.optString("secret_code", ""));
+        }
         addAccountSalesDetailField(info, "🏷️", "Növ", record.optString("account_type", ""));
         addAccountSalesDetailField(info, "🕹️", "Konsol", record.optString("console", ""));
         addAccountSalesDetailField(info, "💰", "Qiymət", record.optString("price_formatted", money(record.optDouble("price", 0))));
@@ -4486,7 +4501,7 @@ public class MainActivity extends Activity {
 
         TextView note = text(
                 rental ? "Oyun məlumatları yalnız baxış üçündür. Müştəri və icarə müddətini daxil et."
-                        : "Oyun məlumatları yalnız baxış üçündür. Müştəri və satış tarixini daxil et.",
+                        : "Məxfi kodu istəsən dəyişə və ya boş saxlaya bilərsən. Müştəri və satış tarixini daxil et.",
                 12, MUTED, false);
         note.setPadding(dp(4), dp(4), dp(4), dp(10));
         body.addView(note);
@@ -4498,6 +4513,7 @@ public class MainActivity extends Activity {
         final EditText rentalDurationField = rentalDuration;
         final Spinner rentalUnitField = rentalUnit;
         final EditText transactionPriceField = transactionPrice;
+        final EditText transactionSecretCodeField = transactionSecretCode;
         save.setOnClickListener(v -> {
             String customerValue = customer.getText().toString().trim();
             String phoneValue = normalizeAzerbaijanPhone(phone.getText().toString().trim());
@@ -4542,6 +4558,9 @@ public class MainActivity extends Activity {
                 payload.put("game_ids", accountSalesGameIdsForSelection(record.optString("game_name", "")));
                 payload.put("account_type", record.optString("account_type", "Online"));
                 payload.put("email", record.optString("email", ""));
+                payload.put("secret_code", sold && transactionSecretCodeField != null
+                        ? transactionSecretCodeField.getText().toString()
+                        : record.optString("secret_code", ""));
                 payload.put("price", transactionPriceValue);
                 payload.put("console", record.optString("console", "PS5"));
                 payload.put("customer_name", customerValue);
