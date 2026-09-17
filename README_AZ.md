@@ -1,3 +1,13 @@
+# Marakana Mobile v113 — E-mail / müştəri ayırıcı xətti
+
+- `versionCode 113`
+- `versionName 3.4.81-native-v113`
+- **Hesablar** və **Satılanlar** bölmələrində hesab kartında e-mail ilə ad-soyad/telefon sətrinin arasına incə boz ayırıcı xətt əlavə edildi.
+- Xətt yalnız həm e-mail, həm də müştəri məlumatı olduqda görünür; digər bölmələrin kart görünüşünə toxunulmayıb.
+- v112-dəki bütün e-mail qalın şriftləri, v111 Müştəri axını və əvvəlki funksiyalar saxlanılıb.
+
+---
+
 # Marakana Mobile v112 — E-mail bütün hesab bölmələrində qalın
 
 - `versionCode 112`

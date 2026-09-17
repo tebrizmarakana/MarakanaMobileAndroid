@@ -3674,6 +3674,17 @@ public class MainActivity extends Activity {
                 spacer(gameColumn, 2);
                 gameColumn.addView(text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, true));
             }
+            // v113: Hesablar və Satılanlar bölmələrində e-mail ilə müştəri sətrini
+            // vizual olaraq ayırmaq üçün incə xətt göstərilir.
+            if (("accounts".equals(section) || "sold".equals(section)) &&
+                    !email.isEmpty() && (!customer.isEmpty() || !phone.isEmpty())) {
+                View customerDivider = new View(this);
+                customerDivider.setBackgroundColor(Color.parseColor("#D8DDE3"));
+                LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, dp(1));
+                dividerLp.setMargins(0, dp(4), 0, dp(4));
+                gameColumn.addView(customerDivider, dividerLp);
+            }
             if (!customer.isEmpty() || !phone.isEmpty()) {
                 gameColumn.addView(text((customer.isEmpty() ? "—" : customer) +
                         (phone.isEmpty() ? "" : "  •  " + phone), 12, TEXT, true));
