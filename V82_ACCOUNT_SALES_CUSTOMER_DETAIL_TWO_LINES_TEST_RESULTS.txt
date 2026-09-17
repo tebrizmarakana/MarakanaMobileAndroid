@@ -1,5 +1,0 @@
-Manual UI check passed.
-- Müşteri detalında alış kartında məlumatlar 2 sətirdə göstərilir.
-- 1-ci sətir: email • müştəri • telefon • tarix.
-- 2-ci sətir: hesab növü • konsol • status.
-- Kart aksiyaları əvvəlki kimi saxlanılıb.
