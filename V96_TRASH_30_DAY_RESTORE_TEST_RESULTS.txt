@@ -1,7 +1,0 @@
-Code flow check:
-- Yenilə sağında 🗑 düyməsi.
-- /delete soft-delete.
-- /trash list.
-- /trash/restore restore.
-- /trash/delete permanent delete.
-- 30 günlük retention plugin tərəfdə.
