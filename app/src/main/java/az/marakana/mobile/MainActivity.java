@@ -3730,7 +3730,7 @@ public class MainActivity extends Activity {
             }
             c.addView(buildAccountSalesMetaLine(row));
         } else {
-            c.addView(text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, false));
+            c.addView(text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, true));
             if (!customer.isEmpty() || !phone.isEmpty()) {
                 c.addView(text((customer.isEmpty() ? "—" : customer) +
                         (phone.isEmpty() ? "" : "  •  " + phone), 12, TEXT, true));
@@ -4428,7 +4428,7 @@ public class MainActivity extends Activity {
             c.addView(top);
 
             String email = row.optString("email", "");
-            if (!email.isEmpty()) c.addView(text(email, 12, MUTED, false));
+            if (!email.isEmpty()) c.addView(text(email, 12, MUTED, true));
             c.addView(text(row.optString("account_type", "") + "  •  " + row.optString("console", "") + "  •  " + row.optString("stock_status", ""), 12, TEXT, true));
 
             String deletedAt = accountSalesDateTimeForDisplay(row.optString("deleted_at", ""));

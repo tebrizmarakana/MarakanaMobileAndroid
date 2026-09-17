@@ -1,3 +1,13 @@
+# Marakana Mobile v112 — E-mail bütün hesab bölmələrində qalın
+
+- `versionCode 112`
+- `versionName 3.4.81-native-v112`
+- Hesab kartlarında e-mail bütün bölmələrdə qalın şriftlə göstərilir.
+- Hesablar / Satılanlar / Satılmayanlar / İcarə / Müştəri və Zibil qutusu görünüşlərində e-mail qalın saxlanılır.
+- v111 Müştəri kart görünüşü və səhifədə qalma məntiqi, v110 drawer qoruması və əvvəlki funksiyalar saxlanılıb.
+
+---
+
 # Marakana Mobile v111 — Müştəri hesab kartları + səhifədə qalma
 
 - `versionCode 111`

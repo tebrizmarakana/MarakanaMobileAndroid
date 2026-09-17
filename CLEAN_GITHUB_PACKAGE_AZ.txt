@@ -1,4 +1,7 @@
-Bu paket GitHub web upload ucun temizlenib.
-Kohne Vxx TEST_RESULTS/CHECK/LOG fayllari, WordPress API nusxesi ve backup workflow silinib.
-Android layihesinin build ucun lazim olan esas fayllari ve .github/workflows/main.yml saxlanilib.
-Funksional kod v111 ile eynidir.
+Marakana Mobile v112 — CLEAN GITHUB PAKETI
+
+Bu paket GitHub web upload ucun temiz saxlanilib ve 100 fayl limitinden asagidadir.
+Funksional baza v111-den davam edir.
+Yeni: Hesab kartlarinda e-mail butun bolmelerde qalin sriftle gosterilir.
+
+Lazimsiz test loglari, backup workflow-lar ve tekrar API nusxeleri pakete daxil edilmeyib.
