@@ -3794,7 +3794,7 @@ public class MainActivity extends Activity {
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         }
         if (!status.isEmpty()) {
-            TextView statusView = text(status, 11, accountSalesStatusColor(status), true);
+            TextView statusView = text(status, 13, accountSalesStatusColor(status), true); // v115: status yazıları bütün hesab görünüşlərində +2sp
             statusView.setGravity(Gravity.END);
             column.addView(statusView, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -3842,7 +3842,7 @@ public class MainActivity extends Activity {
             line.addView(text(prefix.toString(), 11, MUTED, true));
         }
         if (!status.isEmpty()) {
-            line.addView(text(status, 11, accountSalesStatusColor(status), true));
+            line.addView(text(status, 13, accountSalesStatusColor(status), true)); // v115: +2sp
         }
         return line;
     }
@@ -3865,7 +3865,7 @@ public class MainActivity extends Activity {
         if (prefix.length() > 0 && !status.isEmpty()) prefix.append("  •  ");
 
         if (prefix.length() > 0) line.addView(text(prefix.toString(), 12, TEXT, true));
-        if (!status.isEmpty()) line.addView(text(status, 12, accountSalesStatusColor(status), true));
+        if (!status.isEmpty()) line.addView(text(status, 14, accountSalesStatusColor(status), true)); // v115: +2sp
         return line;
     }
 
