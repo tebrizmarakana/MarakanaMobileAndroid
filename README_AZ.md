@@ -1,3 +1,18 @@
+# Marakana Mobile v106 — Hər hesab üçün ayrıca Məxfi kod
+
+- Yeni hesab yaradarkən Online / Universal / Offline növləri üçün Məxfi kod ayrı-ayrı yazılır.
+- Hər kod istəyə bağlıdır və boş saxlanıla bilər.
+- Eyni e-maildə olan hesabların Məxfi kodu bir-birinə bağlanmır; hər record ID öz kodunu saxlayır.
+- Kopyalanmış hesab yeni ID ilə yaradılır və Məxfi kodu boş başlayır; Sat və ya Düzənlə ekranından həmin nüsxəyə ayrıca kod təyin edilə bilər.
+- Bir hesabın Məxfi kodunu Düzənlə ilə dəyişmək eyni e-maildəki başqa Online / Universal / Offline və ya kopyalanmış hesabların koduna toxunmur.
+- Axtarış v105-dəki kimi hər hesabın öz Məxfi koduna görə nəticə tapır.
+- Companion WordPress plugin: v1.0.88.
+- `versionCode 106`
+- `versionName 3.4.81-native-v106`
+- Release APK: `MarakanaMobile-v106-release.apk`
+
+---
+
 # MarakanaMobile v100 — ChatGPT tipli barmaqla izləyən sol panel
 
 - Hesab Satışı daxil olmaqla əsas ekranlarda barmağı ekranın ortasından sağa çəkəndə sol menyu artıq birbaşa açılmır; **barmağın hərəkətini canlı izləyərək** sürüşür.

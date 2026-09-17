@@ -3,7 +3,7 @@
  * Plugin Name: Marakana Playstation Hesab Satışı
  * Plugin URI: https://marakana.local/
  * Description: Playstation oyun hesablarının satışı, stok, müştəri, ödəniş və geniş axtarış idarəetməsi üçün professional Marakana plugin.
- * Version: 1.0.87
+ * Version: 1.0.88
  * Author: Marakana
  * Text Domain: marakana-playstation-hesab-satisi
  * Requires PHP: 7.4
@@ -16,7 +16,7 @@ if (!defined('ABSPATH')) {
 if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
     final class Marakana_Playstation_Hesab_Satisi_100
     {
-        const VERSION = '1.0.87';
+        const VERSION = '1.0.88';
         const DB_VERSION = '1.5.0';
         const OPTION_KEY = 'mara_account_sale_settings';
         const DB_OPTION_KEY = 'mara_account_sale_db_version';
@@ -2424,6 +2424,9 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
 
             $universal = $data;
             $universal['account_type'] = 'Universal';
+            // Auto yaradılan Universal ayrıca hesab sətridir; Online hesabın məxfi kodunu
+            // miras almır. Sonradan həmin Universal sətrində ayrıca təyin edilə bilər.
+            $universal['secret_code'] = '';
             $universal['customer_name'] = '';
             $universal['phone'] = '';
             $universal['sale_date'] = null;
@@ -3131,16 +3134,24 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
             $table = $this->table_name();
             $now = current_time('mysql');
             $formats = array('%s', '%s', '%s', '%s', '%f', '%s', '%s', '%s', '%s', '%s', '%s', '%d', '%s', '%s', '%s', '%s', '%s');
+            // v1.0.88: hər yaradılan hesab sətri üçün ayrıca məxfi kod.
+            // Yeni mobil secret_codes={Online:..., Universal:..., Offline:...} göndərir.
+            // Köhnə mobil ilə geriyə uyğunluq üçün secret_code fallback saxlanılır.
+            $secret_codes = isset($input['secret_codes']) && is_array($input['secret_codes']) ? $input['secret_codes'] : array();
+            $legacy_secret_code = isset($input['secret_code']) ? sanitize_text_field((string) $input['secret_code']) : '';
             $created_ids = array();
             $created_types = array();
             $wpdb->query('START TRANSACTION');
 
             foreach ($selected_types as $type) {
+                $type_secret_code = array_key_exists($type, $secret_codes)
+                    ? sanitize_text_field((string) $secret_codes[$type])
+                    : $legacy_secret_code;
                 $row_input = array(
                     'game_name' => isset($input['game_name']) ? $input['game_name'] : '',
                     'account_type' => $type,
                     'email' => isset($input['email']) ? $input['email'] : '',
-                    'secret_code' => isset($input['secret_code']) ? $input['secret_code'] : '',
+                    'secret_code' => $type_secret_code,
                     'price' => isset($input['price']) ? $input['price'] : '',
                     'console' => isset($input['console']) ? $input['console'] : '',
                     'customer_name' => '',
@@ -3181,6 +3192,7 @@ if (!class_exists('Marakana_Playstation_Hesab_Satisi_100')) {
                 'created_count' => count($created_ids),
                 'created_ids' => $created_ids,
                 'created_types' => $created_types,
+                'separate_secret_codes' => 1,
                 'stock_status' => 'Satılmayıb',
             ));
         }

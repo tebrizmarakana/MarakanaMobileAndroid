@@ -4231,7 +4231,7 @@ public class MainActivity extends Activity {
         if (title.isEmpty()) title = "Hesab";
         new AlertDialog.Builder(this)
                 .setTitle("Hesabı kopyala")
-                .setMessage(title + " hesabının Satılmayan nüsxəsi yaradılsın?\n\nMüştəri məlumatları və satış tarixi boş qalacaq.")
+                .setMessage(title + " hesabının Satılmayan nüsxəsi yaradılsın?\n\nMüştəri məlumatları, satış tarixi və Məxfi kod boş qalacaq. Yeni nüsxənin Məxfi kodunu Sat və ya Düzənlə ekranından ayrıca təyin edə bilərsən.")
                 .setNegativeButton("Xeyr", null)
                 .setPositiveButton("Kopyala", (d, w) -> copyAccountSaleAsUnsold(row, sourceSection))
                 .show();
@@ -4248,8 +4248,13 @@ public class MainActivity extends Activity {
             payload.put("console", row.optString("console", "PS5"));
 
             JSONArray accountTypes = new JSONArray();
-            accountTypes.put(row.optString("account_type", "Online"));
+            String copyType = row.optString("account_type", "Online");
+            accountTypes.put(copyType);
             payload.put("account_types", accountTypes);
+            JSONObject copySecretCodes = new JSONObject();
+            copySecretCodes.put(copyType, "");
+            payload.put("secret_codes", copySecretCodes);
+            payload.put("secret_code", "");
 
             postAccountSalesJson("/create-accounts", payload, result -> {
                 int created = result.optInt("created_count", 1);
@@ -4597,7 +4602,12 @@ public class MainActivity extends Activity {
         game.setClickable(true);
         game.setOnClickListener(v -> showAccountSalesGamePicker(game, true));
         EditText email = accountField(body, "E-mail *", "example@mail.com", editing ? record.optString("email", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
-        EditText secretCode = accountField(body, "Məxfi kod", "Məsələn: şifrə və ya giriş kodu", editing ? record.optString("secret_code", "") : "", InputType.TYPE_CLASS_TEXT);
+        EditText secretCode = null;
+        if (editing) {
+            // Məxfi kod bu konkret hesab sətrinə/ID-yə aiddir. Eyni e-maildəki başqa
+            // Online / Universal / Offline və kopyalanmış hesabların koduna toxunmur.
+            secretCode = accountField(body, "Məxfi kod", "Məsələn: şifrə və ya giriş kodu", record.optString("secret_code", ""), InputType.TYPE_CLASS_TEXT);
+        }
         EditText price = accountField(body, "Qiymət *", editing ? "35.50" : "", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         Spinner console = accountSpinnerField(body, "Konsol *", new String[]{"PS4", "PS5", "PS4/PS5"}, editing ? record.optString("console", "PS5") : "PS5");
 
@@ -4610,7 +4620,7 @@ public class MainActivity extends Activity {
         });
 
         if (!editing) {
-            TextView note = text("Hesab yaradıldıqda seçilən bütün növlər avtomatik Satılmayıb kimi stokda saxlanılacaq.", 12, MUTED, false);
+            TextView note = text("Hesab növlərini seçəndə hər Online / Universal / Offline üçün Məxfi kod ayrıca yazılır. Kodlar bir-birindən müstəqildir və boş qala bilər.", 12, MUTED, false);
             note.setPadding(dp(4), dp(4), dp(4), dp(10));
             body.addView(note);
 
@@ -4619,7 +4629,6 @@ public class MainActivity extends Activity {
             save.setOnClickListener(v -> showAccountSalesCreateTypeDialog(
                     game.getText().toString(),
                     email.getText().toString(),
-                    secretCode.getText().toString(),
                     price.getText().toString(),
                     String.valueOf(console.getSelectedItem()),
                     returnSection
@@ -4699,7 +4708,7 @@ public class MainActivity extends Activity {
                 payload.put("game_ids", accountSalesGameIdsForSelection(game.getText().toString()));
                 payload.put("account_type", String.valueOf(type.getSelectedItem()));
                 payload.put("email", email.getText().toString());
-                payload.put("secret_code", secretCode.getText().toString());
+                payload.put("secret_code", secretCode == null ? "" : secretCode.getText().toString());
                 payload.put("price", price.getText().toString());
                 payload.put("console", String.valueOf(console.getSelectedItem()));
                 // Satılmış hesab Satılmayıb statusuna qaytarılanda əvvəlki satış/müştəri izi saxlanmır.
@@ -4737,10 +4746,9 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void showAccountSalesCreateTypeDialog(String gameName, String email, String secretCode, String price, String console, String sourceSection) {
+    private void showAccountSalesCreateTypeDialog(String gameName, String email, String price, String console, String sourceSection) {
         String game = gameName == null ? "" : gameName.trim();
         String mail = email == null ? "" : email.trim();
-        String secret = secretCode == null ? "" : secretCode.trim();
         String amount = price == null ? "" : price.trim();
         String consoleName = console == null ? "" : console.trim();
         if (game.isEmpty()) {
@@ -4756,29 +4764,87 @@ public class MainActivity extends Activity {
             return;
         }
 
-        String[] types = {"Online", "Universal", "Offline"};
-        boolean[] checked = {false, false, false};
+        final String[] types = {"Online", "Universal", "Offline"};
+        final CheckBox[] checks = new CheckBox[types.length];
+        final EditText[] secretFields = new EditText[types.length];
+
+        ScrollView dialogScroll = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(12), dp(18), dp(8));
+        dialogScroll.addView(box, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView info = text(
+                "Hər seçilən hesab növünün Məxfi kodu ayrıdır. İstəsən boş saxlaya bilərsən.",
+                13, MUTED, false);
+        info.setPadding(0, 0, 0, dp(10));
+        box.addView(info);
+
+        for (int i = 0; i < types.length; i++) {
+            final int index = i;
+            CheckBox check = new CheckBox(this);
+            check.setText(types[i]);
+            check.setTextSize(15);
+            check.setTextColor(TEXT);
+            check.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            check.setPadding(0, dp(2), 0, dp(2));
+            box.addView(check, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            checks[i] = check;
+
+            EditText code = input(types[i] + " məxfi kod (istəyə bağlı)");
+            code.setInputType(InputType.TYPE_CLASS_TEXT);
+            code.setEnabled(false);
+            code.setAlpha(0.55f);
+            box.addView(code);
+            secretFields[i] = code;
+            spacer(box, 10);
+
+            check.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                secretFields[index].setEnabled(isChecked);
+                secretFields[index].setAlpha(isChecked ? 1f : 0.55f);
+                if (isChecked) secretFields[index].requestFocus();
+            });
+        }
+
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Hesab növünü seç")
-                .setMultiChoiceItems(types, checked, (d, which, isChecked) -> checked[which] = isChecked)
+                .setTitle("Hesab növü və məxfi kodlar")
+                .setView(dialogScroll)
                 .setNegativeButton("Ləğv et", null)
                 .setPositiveButton("Yarat", null)
                 .create();
+
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             JSONArray selectedTypes = new JSONArray();
+            JSONObject secretCodes = new JSONObject();
+            String firstSelectedSecret = "";
+            boolean firstSecretSet = false;
             for (int i = 0; i < types.length; i++) {
-                if (checked[i]) selectedTypes.put(types[i]);
+                if (!checks[i].isChecked()) continue;
+                String value = secretFields[i].getText().toString().trim();
+                selectedTypes.put(types[i]);
+                try { secretCodes.put(types[i], value); } catch (Exception ignored) {}
+                if (!firstSecretSet) {
+                    firstSelectedSecret = value;
+                    firstSecretSet = true;
+                }
             }
             if (selectedTypes.length() == 0) {
                 toast("Ən azı bir hesab növü seç.");
                 return;
             }
+
             JSONObject payload = new JSONObject();
             try {
                 payload.put("game_name", game);
                 payload.put("game_ids", accountSalesGameIdsForSelection(game));
                 payload.put("email", mail);
-                payload.put("secret_code", secret);
+                // v106 server hər növ üçün secret_codes xəritəsini istifadə edir.
+                // secret_code yalnız geriyə uyğunluq üçündür; birdən çox növ seçiləndə
+                // köhnə serverin eyni kodu bütün sətrlərə yaymaması üçün boş göndərilir.
+                payload.put("secret_codes", secretCodes);
+                payload.put("secret_code", selectedTypes.length() == 1 ? firstSelectedSecret : "");
                 payload.put("price", amount);
                 payload.put("console", consoleName);
                 payload.put("account_types", selectedTypes);
@@ -4786,7 +4852,7 @@ public class MainActivity extends Activity {
             dialog.dismiss();
             postAccountSalesJson("/create-accounts", payload, result -> {
                 int created = result.optInt("created_count", selectedTypes.length());
-                toast(created + " hesab yaradıldı. Hamısı Satılmayıb kimi əlavə edildi.");
+                toast(created + " hesab yaradıldı. Məxfi kodlar ayrı-ayrı saxlanıldı.");
                 showAccountSales(normalizeAccountSalesSection(sourceSection));
             });
         }));
