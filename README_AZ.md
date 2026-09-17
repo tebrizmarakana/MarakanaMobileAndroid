@@ -1,3 +1,13 @@
+# Marakana Mobile v107 — Build fix (Məxfi kod lambda)
+
+- GitHub Actions-da `MainActivity.java:4711 local variables referenced from a lambda expression must be final or effectively final` xətası düzəldildi.
+- `secretCode` üçün lambda daxilində istifadə olunan `final` istinad yaradıldı.
+- Funksional davranış dəyişməyib: hər hesabın Məxfi kodu ayrıca qalır.
+- `versionCode 107`
+- `versionName 3.4.81-native-v107`
+
+---
+
 # Marakana Mobile v106 — Hər hesab üçün ayrıca Məxfi kod
 
 - Yeni hesab yaradarkən Online / Universal / Offline növləri üçün Məxfi kod ayrı-ayrı yazılır.

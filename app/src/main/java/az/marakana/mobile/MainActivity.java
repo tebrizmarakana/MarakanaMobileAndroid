@@ -4602,12 +4602,15 @@ public class MainActivity extends Activity {
         game.setClickable(true);
         game.setOnClickListener(v -> showAccountSalesGamePicker(game, true));
         EditText email = accountField(body, "E-mail *", "example@mail.com", editing ? record.optString("email", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
-        EditText secretCode = null;
+        EditText secretCodeField = null;
         if (editing) {
             // Məxfi kod bu konkret hesab sətrinə/ID-yə aiddir. Eyni e-maildəki başqa
             // Online / Universal / Offline və kopyalanmış hesabların koduna toxunmur.
-            secretCode = accountField(body, "Məxfi kod", "Məsələn: şifrə və ya giriş kodu", record.optString("secret_code", ""), InputType.TYPE_CLASS_TEXT);
+            secretCodeField = accountField(body, "Məxfi kod", "Məsələn: şifrə və ya giriş kodu", record.optString("secret_code", ""), InputType.TYPE_CLASS_TEXT);
         }
+        // Lambda daxilində istifadə olunduğu üçün final istinad saxlayırıq.
+        // Bu yalnız Java compile xətasını aradan qaldırır, məntiqi dəyişmir.
+        final EditText secretCode = secretCodeField;
         EditText price = accountField(body, "Qiymət *", editing ? "35.50" : "", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         Spinner console = accountSpinnerField(body, "Konsol *", new String[]{"PS4", "PS5", "PS4/PS5"}, editing ? record.optString("console", "PS5") : "PS5");
 
