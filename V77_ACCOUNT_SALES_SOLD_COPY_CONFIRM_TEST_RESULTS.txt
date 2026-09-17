@@ -1,9 +1,0 @@
-Marakana Mobile v77 — Satılan hesabı kopyalama təsdiqi
-
-Yoxlamalar:
-- Satılanlar əməliyyat menyusunda Kopyala düyməsi saxlanıldı.
-- Kopyala seçiləndə əvvəlcə AlertDialog açılır.
-- Xeyr düyməsi heç bir API çağırışı etmir.
-- Kopyala düyməsi yalnız təsdiqdən sonra copyAccountSaleAsUnsold(...) metodunu çağırır.
-- Mövcud v76 kopyalama payload-u dəyişdirilməyib: oyun/bundle, e-mail, növ, konsol və qiymət kopyalanır; müştəri məlumatları və satış tarixi boş qalır.
-- versionCode 77 / versionName 3.4.54-native-v77
