@@ -3596,7 +3596,8 @@ public class MainActivity extends Activity {
         LinearLayout gameColumn = new LinearLayout(this);
         gameColumn.setOrientation(LinearLayout.VERTICAL);
         boolean bundleAccount = cardGames.size() > 1;
-        boolean compactStatusInTitle = "sold".equals(section) || "rental".equals(section);
+        boolean mainAccountSection = "accounts".equals(section) || "sold".equals(section) ||
+                "unsold".equals(section) || "rental".equals(section);
 
         String firstGameName = cardGames.isEmpty() ? row.optString("game_name", "Hesab") : cardGames.get(0);
         LinearLayout firstGameRow = new LinearLayout(this);
@@ -3606,14 +3607,6 @@ public class MainActivity extends Activity {
         TextView firstGameTitle = text(firstGameName, bundleAccount ? 15 : 16, TEXT, true);
         firstGameRow.addView(firstGameTitle, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-        if (compactStatusInTitle) {
-            LinearLayout metaInline = buildAccountSalesInlineMeta(row);
-            LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-            metaLp.setMargins(dp(6), 0, 0, 0);
-            firstGameRow.addView(metaInline, metaLp);
-        }
         gameColumn.addView(firstGameRow, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -3630,10 +3623,15 @@ public class MainActivity extends Activity {
         gameLp.setMargins(0, 0, dp(8), 0);
         top.addView(gameColumn, gameLp);
 
-        String price = row.optString("price_formatted", money(row.optDouble("price", 0)));
-        TextView priceView = text(price, 14, GREEN, true);
-        priceView.setGravity(Gravity.END | Gravity.TOP);
-        top.addView(priceView, new LinearLayout.LayoutParams(dp(112), ViewGroup.LayoutParams.WRAP_CONTENT));
+        if (mainAccountSection) {
+            top.addView(buildAccountSalesPriceMetaColumn(row),
+                    new LinearLayout.LayoutParams(dp(138), ViewGroup.LayoutParams.WRAP_CONTENT));
+        } else {
+            String price = row.optString("price_formatted", money(row.optDouble("price", 0)));
+            TextView priceView = text(price, 14, GREEN, true);
+            priceView.setGravity(Gravity.END | Gravity.TOP);
+            top.addView(priceView, new LinearLayout.LayoutParams(dp(112), ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
         c.addView(top);
 
         String email = row.optString("email", "").trim();
@@ -3641,26 +3639,22 @@ public class MainActivity extends Activity {
         String phone = row.optString("phone", "").trim();
         String saleDate = row.optString("sale_date", "").trim();
         String saleDateDisplay = accountSalesDateForDisplay(saleDate);
+        String secretCode = row.optString("secret_code", "").trim();
 
-        if ("sold".equals(section)) {
-            StringBuilder soldInfo = new StringBuilder();
-            if (bundleAccount) soldInfo.append("🎁 ");
-            if (!email.isEmpty()) soldInfo.append(email);
-            if (!customer.isEmpty()) {
-                if (soldInfo.length() > 0) soldInfo.append("  •  ");
-                soldInfo.append(customer);
+        if (mainAccountSection) {
+            if (!email.isEmpty()) {
+                spacer(c, 4);
+                c.addView(text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, false));
             }
-            if (!phone.isEmpty()) {
-                if (soldInfo.length() > 0) soldInfo.append("  •  ");
-                soldInfo.append(phone);
+            if (!customer.isEmpty() || !phone.isEmpty()) {
+                c.addView(text((customer.isEmpty() ? "—" : customer) +
+                        (phone.isEmpty() ? "" : "  •  " + phone), 12, TEXT, true));
             }
             if (!saleDateDisplay.isEmpty()) {
-                if (soldInfo.length() > 0) soldInfo.append("  •  ");
-                soldInfo.append(saleDateDisplay);
+                c.addView(text(saleDateDisplay, 12, MUTED, false));
             }
-            if (soldInfo.length() > 0) {
-                spacer(c, 4);
-                c.addView(text(soldInfo.toString(), 12, MUTED, false));
+            if (!secretCode.isEmpty()) {
+                c.addView(text("Məxfi kod: " + secretCode, 12, TEXT, true));
             }
         } else if ("customer".equals(section)) {
             StringBuilder customerInfo = new StringBuilder();
@@ -3684,30 +3678,16 @@ public class MainActivity extends Activity {
             }
             c.addView(buildAccountSalesMetaLine(row));
         } else {
-            if ("unsold".equals(section)) {
-                LinearLayout emailMetaRow = new LinearLayout(this);
-                emailMetaRow.setOrientation(LinearLayout.HORIZONTAL);
-                emailMetaRow.setGravity(Gravity.CENTER_VERTICAL);
-
-                TextView emailView = text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, false);
-                emailMetaRow.addView(emailView, new LinearLayout.LayoutParams(
-                        0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-
-                LinearLayout metaInline = buildAccountSalesInlineMeta(row);
-                LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                metaLp.setMargins(dp(6), 0, 0, 0);
-                emailMetaRow.addView(metaInline, metaLp);
-                c.addView(emailMetaRow);
-            } else {
-                c.addView(text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, false));
+            c.addView(text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, false));
+            if (!customer.isEmpty() || !phone.isEmpty()) {
+                c.addView(text((customer.isEmpty() ? "—" : customer) +
+                        (phone.isEmpty() ? "" : "  •  " + phone), 12, TEXT, true));
             }
-            if (!customer.isEmpty() || !phone.isEmpty()) c.addView(text((customer.isEmpty() ? "—" : customer) + (phone.isEmpty() ? "" : "  •  " + phone), 12, MUTED, false));
             if (!saleDateDisplay.isEmpty()) c.addView(text(saleDateDisplay, 12, MUTED, false));
-        }
-        if (!compactStatusInTitle && !"customer".equals(section) && !"unsold".equals(section)) {
+            if (!secretCode.isEmpty()) c.addView(text("Məxfi kod: " + secretCode, 12, TEXT, true));
             c.addView(buildAccountSalesMetaLine(row));
         }
+
         if ("İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim())) {
             String rentalState = row.optString("rental_state", "");
             String rentalText = row.optString("rental_remaining_text", "").trim();
@@ -3721,6 +3701,42 @@ public class MainActivity extends Activity {
         spacer(c, 8);
         installAccountSalesRecordCardActions(c, row, settings, section);
         return c;
+    }
+
+    private LinearLayout buildAccountSalesPriceMetaColumn(JSONObject row) {
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setGravity(Gravity.END | Gravity.TOP);
+
+        String price = row.optString("price_formatted", money(row.optDouble("price", 0)));
+        TextView priceView = text(price, 14, GREEN, true);
+        priceView.setGravity(Gravity.END);
+        column.addView(priceView, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        String type = row.optString("account_type", "").trim();
+        String console = row.optString("console", "").trim();
+        String status = row.optString("stock_status", "").trim();
+
+        StringBuilder meta = new StringBuilder();
+        if (!type.isEmpty()) meta.append(type);
+        if (!console.isEmpty()) {
+            if (meta.length() > 0) meta.append(" • ");
+            meta.append(console);
+        }
+        if (meta.length() > 0) {
+            TextView metaView = text(meta.toString(), 11, TEXT, true);
+            metaView.setGravity(Gravity.END);
+            column.addView(metaView, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+        if (!status.isEmpty()) {
+            TextView statusView = text(status, 11, accountSalesStatusColor(status), true);
+            statusView.setGravity(Gravity.END);
+            column.addView(statusView, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+        return column;
     }
 
     private LinearLayout buildAccountSalesInlineMeta(JSONObject row) {

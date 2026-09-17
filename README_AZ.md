@@ -1,3 +1,19 @@
+# Marakana Mobile v108 — Hesab kartı göstəriciləri
+
+Bu versiya v107 bazasından davam edir.
+
+- `versionCode 108`
+- `versionName 3.4.81-native-v108`
+- Hesablar / Satılanlar / Satılmayanlar / İcarə kartlarında sağ yuxarı hissə eyni formata salındı:
+  - qiymət
+  - hesab növü • konsol
+  - status
+- Müştəri ad-soyadı və telefon sətri qalın şriftlə göstərilir.
+- `secret_code` boş deyilsə tarix sətrinin altında `Məxfi kod: ...` qalın şriftlə göstərilir.
+- v107 build fix və əvvəlki Məxfi kod məntiqi saxlanılıb.
+
+---
+
 # Marakana Mobile v107 — Build fix (Məxfi kod lambda)
 
 - GitHub Actions-da `MainActivity.java:4711 local variables referenced from a lambda expression must be final or effectively final` xətası düzəldildi.

@@ -1,9 +1,9 @@
-Marakana Mobile v107 GitHub upload
+Marakana Mobile v108 GitHub upload
 
 1) Daimi signing üçün əvvəlcədən yaratdığın GitHub Secret-lər olduğu kimi qalır.
 2) Bu TAM layihənin içindəkiləri repo kökünə yüklə və köhnə faylların üstünə yaz.
 3) Commit changes et.
-4) Actions -> Build Marakana Mobile Native v107 RELEASE APK -> Run workflow.
-5) Artifact: MarakanaMobile-v107-permanent-update-apk
+4) Actions -> Build Marakana Mobile Native v108 RELEASE APK -> Run workflow.
+5) Artifact: MarakanaMobile-v108-permanent-update-apk
 
 Qeyd: Hesab Satışı companion WordPress pluginini də v1.0.88-ə normal update et; hər hesab növü üçün ayrıca Məxfi kod server dəstəyi oradadır.
