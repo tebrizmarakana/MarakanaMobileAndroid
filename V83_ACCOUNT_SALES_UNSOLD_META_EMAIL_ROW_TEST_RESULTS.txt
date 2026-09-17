@@ -1,4 +1,0 @@
-Manual UI check passed.
-- Satılmayanlar kartında status göstəriciləri e-mail sətrinə keçirildi.
-- Görünüş: e-mail solda, Universal • PS4/PS5 • Satılmayıb sağda eyni sətirdə.
-- Satılanlar və İcarə kartları əvvəlki kimi qalır.
