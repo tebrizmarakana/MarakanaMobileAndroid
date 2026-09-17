@@ -1,4 +1,0 @@
-Manual code flow check passed.
-- Hesabı sat -> müştəri axtarışında uyğun nəticə yoxdursa Yeni müştəri yarat görünür.
-- İcarə ver -> eyni Yeni müştəri yarat davranışı aktivdir.
-- Yaradılan müştəri ad və telefon sahələrinə avtomatik seçilir.
