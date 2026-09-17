@@ -1,4 +1,0 @@
-Manual flow check passed.
-- Hesablar bölməsində Satılmayıb statuslu hesabda Sat və İcarə ver görünür.
-- Sat və İcarə ver mövcud transaction formunu açır.
-- Satılıb və İcarə statuslu hesablar üçün bu düymələr görünmür.
