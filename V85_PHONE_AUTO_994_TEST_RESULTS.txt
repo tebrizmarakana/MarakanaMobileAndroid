@@ -1,5 +1,0 @@
-Manual flow check passed.
-- 0705603030 daxil ediləndə telefon sahəsi +994705603030 olur.
-- 705603030 daxil ediləndə telefon sahəsi +994705603030 olur.
-- Satış, hesab düzəlişi, yeni müştəri yarat, sürətli müştəri yarat və yeni borclu yarat axınlarında yoxlandı.
-- Yadda saxlanarkən API-yə normallaşdırılmış telefon göndərilir.
