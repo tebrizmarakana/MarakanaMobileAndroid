@@ -49,6 +49,7 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanner;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
 import com.google.mlkit.vision.barcode.common.Barcode;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -541,6 +542,10 @@ public class MainActivity extends Activity {
     }
 
     private ScrollView screenWithBody(String title, boolean back, Runnable backAction) {
+        return screenWithBody(title, back, backAction, null);
+    }
+
+    private ScrollView screenWithBody(String title, boolean back, Runnable backAction, Runnable refreshAction) {
         currentBackAction = back ? backAction : null;
         clear();
         LinearLayout shell = new LinearLayout(this);
@@ -554,11 +559,15 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         if (!back && !sessionToken.isEmpty()) installGlobalDrawerSwipe(scroll);
-        shell.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        addPullToRefreshContent(shell, scroll, refreshAction);
         return scroll;
     }
 
     private ScrollView screenWithOrderCartHeader(String title, String station, Runnable backAction) {
+        return screenWithOrderCartHeader(title, station, backAction, null);
+    }
+
+    private ScrollView screenWithOrderCartHeader(String title, String station, Runnable backAction, Runnable refreshAction) {
         currentBackAction = backAction;
         clear();
 
@@ -578,12 +587,39 @@ public class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        shell.addView(scroll, new LinearLayout.LayoutParams(
+        addPullToRefreshContent(shell, scroll, refreshAction);
+        return scroll;
+    }
+
+    // v104: YouTube tipli pull-to-refresh. Yalnız siyahı yuxarı həddə olanda
+    // ekranın mərkəzindən aşağı dartmaq cari məlumat ekranını yenidən yükləyir.
+    private void addPullToRefreshContent(LinearLayout shell, ScrollView scroll, Runnable refreshAction) {
+        if (refreshAction == null) {
+            shell.addView(scroll, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    0,
+                    1f
+            ));
+            return;
+        }
+
+        SwipeRefreshLayout swipeRefresh = new SwipeRefreshLayout(this);
+        swipeRefresh.setDistanceToTriggerSync(dp(72));
+        swipeRefresh.setProgressViewOffset(false, -dp(28), dp(52));
+        swipeRefresh.setOnChildScrollUpCallback((parent, child) -> scroll.canScrollVertically(-1));
+        swipeRefresh.addView(scroll, new SwipeRefreshLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        swipeRefresh.setOnRefreshListener(() -> {
+            swipeRefresh.setRefreshing(false);
+            swipeRefresh.post(refreshAction);
+        });
+        shell.addView(swipeRefresh, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 0,
                 1f
         ));
-        return scroll;
     }
 
     private FrameLayout buildOrderCartHeaderButton(String station) {
@@ -1822,7 +1858,7 @@ public class MainActivity extends Activity {
     }
 
     private void showTerminals() {
-        ScrollView sv = screenWithBody("Terminallar", false, null);
+        ScrollView sv = screenWithBody("Terminallar", false, null, this::showTerminals);
         LinearLayout body = scrollBody(sv);
         TextView status = text("Yüklənir…", 14, MUTED, false);
         body.addView(status, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
@@ -1877,7 +1913,7 @@ public class MainActivity extends Activity {
     }
 
     private void showStation(String name) {
-        ScrollView sv = screenWithBody(name, true, this::showTerminals);
+        ScrollView sv = screenWithBody(name, true, this::showTerminals, () -> showStation(name));
         LinearLayout body = scrollBody(sv);
         loadJson("/api/mobile/station?name=" + urlEncode(name), result -> {
             JSONObject s = result.optJSONObject("station"); if (s == null) return;
@@ -2009,7 +2045,8 @@ public class MainActivity extends Activity {
         ScrollView sv = screenWithOrderCartHeader(
                 "Sifariş • " + station,
                 station,
-                () -> showStation(station)
+                () -> showStation(station),
+                () -> showProducts(station)
         );
         LinearLayout body = scrollBody(sv);
 
@@ -2116,7 +2153,7 @@ public class MainActivity extends Activity {
     }
 
     private void showOrderCart(String station) {
-        ScrollView sv = screenWithBody("Səbət • " + station, true, () -> showProducts(station));
+        ScrollView sv = screenWithBody("Səbət • " + station, true, () -> showProducts(station), () -> showOrderCart(station));
         LinearLayout body = scrollBody(sv);
         LinkedHashMap<String, OrderCartItem> cart = cartForStation(station);
 
@@ -2264,7 +2301,7 @@ public class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        shell.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        addPullToRefreshContent(shell, scroll, () -> showRental(activeSection));
 
         LinearLayout body = scrollBody(scroll);
         body.setPadding(0, dp(4), 0, dp(92));
@@ -3316,7 +3353,7 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         installGlobalDrawerSwipe(scroll);
-        shell.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        addPullToRefreshContent(shell, scroll, () -> showAccountSales(section));
         LinearLayout body = scrollBody(scroll);
         body.setPadding(0, dp(4), 0, dp(92));
 
@@ -4242,7 +4279,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAccountSalesTrash() {
-        ScrollView sv = screenWithBody("Zibil qutusu", true, () -> showAccountSales("accounts"));
+        ScrollView sv = screenWithBody("Zibil qutusu", true, () -> showAccountSales("accounts"), this::showAccountSalesTrash);
         LinearLayout body = scrollBody(sv);
 
         LinearLayout info = card();
@@ -5919,7 +5956,7 @@ public class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        shell.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        addPullToRefreshContent(shell, scroll, () -> showDebt(category));
 
         LinearLayout body = scrollBody(scroll);
         body.setPadding(0, dp(4), 0, dp(92));
@@ -6319,7 +6356,7 @@ public class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        shell.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        addPullToRefreshContent(shell, scroll, () -> showKitchen(category));
 
         LinearLayout body = scrollBody(scroll);
         body.setPadding(0, dp(4), 0, dp(92));
