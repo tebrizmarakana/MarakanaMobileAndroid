@@ -1,3 +1,19 @@
+# Marakana Mobile v110 — Sol panel təsadüfi açılma düzəlişi
+
+## Versiya
+- `versionCode 110`
+- `versionName 3.4.81-native-v110`
+
+## Dəyişikliklər
+- Aşağı-yuxarı scroll zamanı barmağın kiçik sağa/sola yayınması artıq sol paneli açmır.
+- Drawer swipe yalnız sağa doğru aydın üfüqi jestdə başlayır: minimum başlanğıc məsafəsi artırılıb və üfüqi hərəkət şaquli hərəkətdən təxminən 1.75 dəfə güclü olmalıdır.
+- Şaquli scroll üstünlük qazandıqda həmin toxunuş bitənədək drawer swipe kilidlənir.
+- İcarə, Borc Dəftəri və Mətbəx bölmələrinin kateqoriya swipe jestləri də diaqonal scroll-a qarşı sərtləşdirilib.
+- Menyu düyməsi ilə sol panelin açılması və qəsdən sağa swipe davranışı saxlanılıb.
+- v109-dakı hesab kartı görünüşü və əvvəlki bütün funksiyalar saxlanılıb.
+
+---
+
 # Marakana Mobile v109 — Hesab kartı səliqə düzəlişləri
 
 Bu versiya v108 bazasından davam edir.

@@ -160,6 +160,8 @@ public class MainActivity extends Activity {
     private long globalDrawerSwipeStartTime = 0L;
     private boolean globalDrawerSwipeTracking = false;
     private boolean globalDrawerSwipeDragging = false;
+    // v110: şaquli scroll aşkar ediləndə həmin toxunuş bitənədək drawer swipe bloklanır.
+    private boolean globalDrawerSwipeVerticalLocked = false;
     private static final String[] DEBT_CATEGORIES = {"İşçi", "Müştəri", "Firma"};
     private static final String[] KITCHEN_CATEGORIES = {"Hazırlanır", "Hazırdır"};
     private static final long KITCHEN_LIVE_REFRESH_MS = 750L;
@@ -682,8 +684,8 @@ public class MainActivity extends Activity {
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
-        // v101: yalnız ScrollView/ekranın ortası deyil — giriş edilmiş bütün əsas ekranlarda
-        // barmaq haradan başlayırsa başlasın sağa üfüqi sürüşdürmə sol paneli barmaqla birlikdə açır.
+        // v110: sol panel hər yerdən sağa swipe ilə açıla bilər, amma şaquli scroll ilə qarışmır.
+        // Drawer yalnız aydın üfüqi jestdə başlayır; şaquli hərəkət üstün gələn kimi həmin toxunuş kilidlənir.
         if (event != null && sessionToken != null && !sessionToken.isEmpty()) {
             final int action = event.getActionMasked();
 
@@ -691,25 +693,32 @@ public class MainActivity extends Activity {
                 // Panel artıq açıqdırsa onun öz toxunma davranışına qarışmırıq.
                 globalDrawerSwipeTracking = activeNavigationOverlay == null;
                 globalDrawerSwipeDragging = false;
+                globalDrawerSwipeVerticalLocked = false;
                 globalDrawerSwipeStartX = event.getX();
                 globalDrawerSwipeStartY = event.getY();
                 globalDrawerSwipeStartTime = System.currentTimeMillis();
             } else if (globalDrawerSwipeTracking && action == MotionEvent.ACTION_MOVE) {
                 float dx = event.getX() - globalDrawerSwipeStartX;
                 float dy = event.getY() - globalDrawerSwipeStartY;
-                int startThreshold = dp(10);
+                float absDx = Math.abs(dx);
+                float absDy = Math.abs(dy);
+                int horizontalStartThreshold = dp(18);
+                int verticalLockThreshold = dp(10);
 
-                if (!globalDrawerSwipeDragging
-                        && dx > startThreshold
-                        && dx > Math.abs(dy) * 1.10f) {
-                    globalDrawerSwipeDragging = true;
-                    ensureNavigationMenuOverlay();
+                if (!globalDrawerSwipeDragging && !globalDrawerSwipeVerticalLocked) {
+                    // Aşağı/yuxarı scroll üstünlük qazandıqda bu touch seriyasında paneli açma.
+                    if (absDy > verticalLockThreshold && absDy > absDx * 1.20f) {
+                        globalDrawerSwipeVerticalLocked = true;
+                    } else if (dx > horizontalStartThreshold && absDx > absDy * 1.75f) {
+                        globalDrawerSwipeDragging = true;
+                        ensureNavigationMenuOverlay();
 
-                    // ACTION_DOWN almış alt elementdə klik/scroll əməliyyatını dayandırırıq.
-                    MotionEvent cancelEvent = MotionEvent.obtain(event);
-                    cancelEvent.setAction(MotionEvent.ACTION_CANCEL);
-                    super.dispatchTouchEvent(cancelEvent);
-                    cancelEvent.recycle();
+                        // ACTION_DOWN almış alt elementdə klik/scroll əməliyyatını dayandırırıq.
+                        MotionEvent cancelEvent = MotionEvent.obtain(event);
+                        cancelEvent.setAction(MotionEvent.ACTION_CANCEL);
+                        super.dispatchTouchEvent(cancelEvent);
+                        cancelEvent.recycle();
+                    }
                 }
 
                 if (globalDrawerSwipeDragging) {
@@ -723,14 +732,17 @@ public class MainActivity extends Activity {
                     float dx = event.getX() - globalDrawerSwipeStartX;
                     long elapsed = Math.max(1L, System.currentTimeMillis() - globalDrawerSwipeStartTime);
                     float velocity = dx * 1000f / elapsed;
-                    boolean open = navigationDrawerProgress >= 0.34f || velocity >= dp(420);
+                    boolean open = navigationDrawerProgress >= 0.34f
+                            || (dx >= dp(64) && velocity >= dp(420));
                     animateNavigationDrawer(open);
                     globalDrawerSwipeTracking = false;
                     globalDrawerSwipeDragging = false;
+                    globalDrawerSwipeVerticalLocked = false;
                     return true;
                 }
                 globalDrawerSwipeTracking = false;
                 globalDrawerSwipeDragging = false;
+                globalDrawerSwipeVerticalLocked = false;
             }
         }
 
@@ -742,7 +754,9 @@ public class MainActivity extends Activity {
         final float[] startY = {0f};
         final long[] startTime = {0L};
         final boolean[] dragging = {false};
-        final int startThreshold = dp(10);
+        final boolean[] verticalLocked = {false};
+        final int horizontalStartThreshold = dp(18);
+        final int verticalLockThreshold = dp(10);
 
         target.setOnTouchListener((v, event) -> {
             switch (event.getActionMasked()) {
@@ -751,15 +765,24 @@ public class MainActivity extends Activity {
                     startY[0] = event.getY();
                     startTime[0] = System.currentTimeMillis();
                     dragging[0] = false;
+                    verticalLocked[0] = false;
                     break;
                 case MotionEvent.ACTION_MOVE: {
                     float dx = event.getX() - startX[0];
                     float dy = event.getY() - startY[0];
-                    if (!dragging[0] && dx > startThreshold && dx > Math.abs(dy) * 1.10f) {
-                        dragging[0] = true;
-                        ensureNavigationMenuOverlay();
-                        if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(true);
+                    float absDx = Math.abs(dx);
+                    float absDy = Math.abs(dy);
+
+                    if (!dragging[0] && !verticalLocked[0]) {
+                        if (absDy > verticalLockThreshold && absDy > absDx * 1.20f) {
+                            verticalLocked[0] = true;
+                        } else if (dx > horizontalStartThreshold && absDx > absDy * 1.75f) {
+                            dragging[0] = true;
+                            ensureNavigationMenuOverlay();
+                            if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(true);
+                        }
                     }
+
                     if (dragging[0]) {
                         float width = getNavigationPanelWidth();
                         setNavigationDrawerProgress(width <= 0f ? 0f : dx / width);
@@ -773,12 +796,15 @@ public class MainActivity extends Activity {
                         float dx = event.getX() - startX[0];
                         long elapsed = Math.max(1L, System.currentTimeMillis() - startTime[0]);
                         float velocity = dx * 1000f / elapsed;
-                        boolean open = navigationDrawerProgress >= 0.34f || velocity >= dp(420);
+                        boolean open = navigationDrawerProgress >= 0.34f
+                                || (dx >= dp(64) && velocity >= dp(420));
                         animateNavigationDrawer(open);
                         if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(false);
                         dragging[0] = false;
+                        verticalLocked[0] = false;
                         return true;
                     }
+                    verticalLocked[0] = false;
                     break;
                 default:
                     break;
@@ -3134,14 +3160,14 @@ public class MainActivity extends Activity {
     }
 
     private void installRentalGestures(View target, String section) {
-        final int swipeThreshold = dp(48);
+        final int swipeThreshold = dp(64);
         GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override public boolean onDown(MotionEvent e) { return true; }
             @Override public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
                 if (e1 == null || e2 == null) return false;
                 float dx = e2.getX() - e1.getX();
                 float dy = e2.getY() - e1.getY();
-                if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy)) return false;
+                if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy) * 1.60f) return false;
                 int index = 0;
                 for (int i = 0; i < RENTAL_TABS.length; i++) if (RENTAL_TABS[i].equals(section)) { index = i; break; }
                 if (dx > 0) {
@@ -6127,7 +6153,7 @@ public class MainActivity extends Activity {
     }
 
     private void installDebtGestures(View target, String category) {
-        final int swipeThreshold = dp(48);
+        final int swipeThreshold = dp(64);
         GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onDown(MotionEvent e) {
@@ -6139,7 +6165,7 @@ public class MainActivity extends Activity {
                 if (e1 == null || e2 == null) return false;
                 float dx = e2.getX() - e1.getX();
                 float dy = e2.getY() - e1.getY();
-                if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy)) return false;
+                if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy) * 1.60f) return false;
 
                 if (dx > 0) {
                     // Sağa swipe: əvvəlki kateqoriya. Birinci kateqoriyadayıqsa sol menyunu aç.
@@ -6774,7 +6800,7 @@ public class MainActivity extends Activity {
     }
 
     private void installKitchenGestures(View target, String category) {
-        final int swipeThreshold = dp(48);
+        final int swipeThreshold = dp(64);
         GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
             @Override
             public boolean onDown(MotionEvent e) {
@@ -6786,7 +6812,7 @@ public class MainActivity extends Activity {
                 if (e1 == null || e2 == null) return false;
                 float dx = e2.getX() - e1.getX();
                 float dy = e2.getY() - e1.getY();
-                if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy)) return false;
+                if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy) * 1.60f) return false;
 
                 if (dx > 0) {
                     // Hazırdır -> Hazırlanır -> sol menyu.
