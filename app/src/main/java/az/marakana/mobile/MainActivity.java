@@ -109,6 +109,8 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_SITE = "account_sales_site";
     private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
+    // v116: Hesablar bölməsində istifadəçinin sabitlədiyi hesab ID-ləri lokal saxlanılır.
+    private static final String KEY_ACCOUNT_SALES_PINNED_RECORDS = "account_sales_pinned_records";
     private static final String ACCOUNT_SALES_DEFAULT_SITE = "https://marakana.az";
     private static final String ACCOUNT_SALES_API_PATH = "/wp-json/marakana-account-sales/v1";
     private static final String[] ACCOUNT_SALES_SECTIONS = {"accounts", "sold", "unsold", "rental", "customers", "settings"};
@@ -3484,7 +3486,9 @@ public class MainActivity extends Activity {
             } else {
                 JSONArray records = result.optJSONArray("records");
                 if (records == null) records = new JSONArray();
-                if ("accounts".equals(section) || "sold".equals(section) || "unsold".equals(section) || "rental".equals(section)) {
+                if ("accounts".equals(section)) {
+                    records = sortAccountSalesAccountsPinnedThenCreated(records);
+                } else if ("sold".equals(section) || "unsold".equals(section) || "rental".equals(section)) {
                     records = sortAccountSalesRecordsLatestActivityFirst(records);
                 }
                 final JSONArray finalRecords = records;
@@ -3586,6 +3590,57 @@ public class MainActivity extends Activity {
         return sorted;
     }
 
+    // v116: Sabitləmə yalnız Hesablar bölməsinin görünüş sırasına təsir edir.
+    // Açar sayt + hesab ID-si ilə saxlanılır ki, başqa WordPress bağlantısındakı eyni ID qarışmasın.
+    private String accountSalesPinnedRecordKey(JSONObject row) {
+        if (row == null) return "";
+        String id = row.optString("id", "").trim();
+        if (id.isEmpty() || "0".equals(id)) return "";
+        return getAccountSalesSite().trim().toLowerCase(Locale.ROOT) + "|" + id;
+    }
+
+    private Set<String> getAccountSalesPinnedRecordKeys() {
+        Set<String> stored = prefs.getStringSet(KEY_ACCOUNT_SALES_PINNED_RECORDS, null);
+        return stored == null ? new HashSet<>() : new HashSet<>(stored);
+    }
+
+    private boolean isAccountSalesRecordPinned(JSONObject row) {
+        String key = accountSalesPinnedRecordKey(row);
+        return !key.isEmpty() && getAccountSalesPinnedRecordKeys().contains(key);
+    }
+
+    private void setAccountSalesRecordPinned(JSONObject row, boolean pinned) {
+        String key = accountSalesPinnedRecordKey(row);
+        if (key.isEmpty()) return;
+        Set<String> keys = getAccountSalesPinnedRecordKeys();
+        if (pinned) keys.add(key);
+        else keys.remove(key);
+        prefs.edit().putStringSet(KEY_ACCOUNT_SALES_PINNED_RECORDS, keys).apply();
+    }
+
+    // Sabit hesablar yuxarıda qalır. Sabitləmə ləğv ediləndə hesab yenidən
+    // created_at vaxtına uyğun öz təbii yerinə qayıdır.
+    private JSONArray sortAccountSalesAccountsPinnedThenCreated(JSONArray records) {
+        ArrayList<JSONObject> rows = new ArrayList<>();
+        if (records != null) {
+            for (int i = 0; i < records.length(); i++) {
+                JSONObject row = records.optJSONObject(i);
+                if (row != null) rows.add(row);
+            }
+        }
+        java.util.Collections.sort(rows, (a, b) -> {
+            boolean aPinned = isAccountSalesRecordPinned(a);
+            boolean bPinned = isAccountSalesRecordPinned(b);
+            if (aPinned != bPinned) return aPinned ? -1 : 1;
+            int cmp = compareNewestTimestamp(a.optString("created_at", ""), b.optString("created_at", ""));
+            if (cmp != 0) return cmp;
+            return Integer.compare(b.optInt("id", 0), a.optInt("id", 0));
+        });
+        JSONArray sorted = new JSONArray();
+        for (JSONObject row : rows) sorted.put(row);
+        return sorted;
+    }
+
     private JSONArray sortAccountSalesCustomersNewestCreatedFirst(JSONArray customers) {
         ArrayList<JSONObject> rows = new ArrayList<>();
         if (customers != null) {
@@ -3646,6 +3701,17 @@ public class MainActivity extends Activity {
         TextView firstGameTitle = text(firstGameName, bundleAccount ? 15 : 16, TEXT, true);
         firstGameRow.addView(firstGameTitle, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        // v116: Sabitlənən hesabın kartında pin ikonu həmişə görünsün.
+        if ("accounts".equals(section) && isAccountSalesRecordPinned(row)) {
+            ImageView pinnedIcon = new ImageView(this);
+            pinnedIcon.setImageResource(R.drawable.ic_pin);
+            pinnedIcon.setColorFilter(BLUE);
+            pinnedIcon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            pinnedIcon.setContentDescription("Sabitlənib");
+            LinearLayout.LayoutParams pinLp = new LinearLayout.LayoutParams(dp(21), dp(21));
+            pinLp.setMargins(dp(6), 0, 0, 0);
+            firstGameRow.addView(pinnedIcon, pinLp);
+        }
         gameColumn.addView(firstGameRow, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
@@ -3975,6 +4041,22 @@ public class MainActivity extends Activity {
 
         final AlertDialog[] dialogRef = new AlertDialog[1];
         Runnable dismiss = () -> { if (dialogRef[0] != null) dialogRef[0].dismiss(); };
+
+        // v116: Hesablar bölməsində hesabı yuxarıda sabit saxlamaq / sabitləməni ləğv etmək.
+        if ("accounts".equals(section)) {
+            boolean pinned = isAccountSalesRecordPinned(row);
+            LinearLayout pin = accountSalesActionRow(R.drawable.ic_pin,
+                    pinned ? "Sabitləməni ləğv et" : "Sabitle",
+                    pinned ? "Hesabı yaradılma vaxtına uyğun öz yerinə qaytar" : "Hesabı Hesablar siyahısının yuxarısında saxla",
+                    pinned ? ORANGE : BLUE, () -> {
+                        dismiss.run();
+                        setAccountSalesRecordPinned(row, !pinned);
+                        toast(pinned ? "Sabitləmə ləğv edildi." : "Hesab sabitləndi.");
+                        showAccountSales("accounts");
+                    });
+            box.addView(pin);
+            spacer(box, 8);
+        }
 
         boolean unsoldSection = ("unsold".equals(section) || "accounts".equals(section)) && unsoldStatus;
         if (unsoldSection) {
