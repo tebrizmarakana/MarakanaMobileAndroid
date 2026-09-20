@@ -102,6 +102,7 @@ public class MainActivity extends Activity {
     private static final String KEY_KITCHEN_BG_PASSWORD_IV = "kitchen_bg_password_iv";
     private static final String KEY_KITCHEN_BG_SNAPSHOT_INITIALIZED = "kitchen_bg_snapshot_initialized";
     private static final String KEY_KITCHEN_BG_KNOWN_TICKETS = "kitchen_bg_known_tickets";
+    private static final String KEY_KITCHEN_CLEARED_TICKET_IDS = "kitchen_cleared_ticket_ids";
     private static final String KITCHEN_NOTIFICATION_SILENT = "__silent__";
     private static final String KITCHEN_NOTIFICATION_CHANNEL_PREFIX = "marakana_kitchen_orders_";
     private static final int REQUEST_NOTIFICATION_PERMISSION = 7301;
@@ -110,6 +111,7 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_SITE = "account_sales_site";
     private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
+    // v119: Tam ləğv edilmiş mətbəx sifarişində Hazırdır əvəzinə Təmizlə görünür; təmizləmə yalnız mobil paneldə lokal olur, PC-yə cavab göndərilmir.
     // v118: Mətbəx sifarişində terminaldan çıxarılan və ya azaldılan məhsullar üstündən xətt çəkilmiş göstərilir.
 // v117: Hesablar axtarışında yazılan e-mail Yeni hesab yarat formasına avtomatik ötürülür.
     // v116: Hesablar bölməsində istifadəçinin sabitlədiyi hesab ID-ləri lokal saxlanılır.
@@ -181,6 +183,7 @@ public class MainActivity extends Activity {
     private String kitchenLiveCategory = "Hazırlanır";
     private String kitchenLastTicketsSignature = "";
     private final Set<String> kitchenKnownTicketKeys = new HashSet<>();
+    private final Set<Integer> kitchenClearedTicketIds = new HashSet<>();
     private boolean kitchenNotificationSnapshotInitialized = false;
     private int kitchenNotificationSequence = 41000;
 
@@ -190,6 +193,7 @@ public class MainActivity extends Activity {
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
         serverBase = normalizeServerBase(prefs.getString(KEY_SERVER, ""));
+        loadKitchenClearedTicketIds();
         username = prefs.getString(KEY_USERNAME, "");
         role = prefs.getString(KEY_ROLE, "hall");
         adminDebtOnly = prefs.getBoolean(KEY_ADMIN_DEBT_ONLY, false);
@@ -6630,10 +6634,68 @@ public class MainActivity extends Activity {
     private void showDebtHistory(JSONObject record) {
         ScrollView sv=screenWithBody("Tarixçə",true,()->showDebt(record.optString("category","İşçi"))); LinearLayout body=scrollBody(sv); LinearLayout head=card();head.addView(text(record.optString("full_name",""),19,TEXT,true));head.addView(text("Cari borc: "+money(record.optDouble("total_debt",0)),15,GREEN,true),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(38)));body.addView(head); JSONArray h=record.optJSONArray("history"); if(h==null||h.length()==0){body.addView(empty("Tarixçə yoxdur."));return;} for(int i=0;i<h.length();i++){JSONObject x=h.optJSONObject(i);if(x==null)continue;LinearLayout c=card();c.addView(text(x.optString("action","Əməliyyat")+"  •  "+money(x.optDouble("amount",0)),15,TEXT,true));c.addView(text(x.optString("timestamp","")+"  •  Qalıq: "+money(x.optDouble("balance_after",0)),12,MUTED,true),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(34)));if(!x.optString("note","").isEmpty())c.addView(text(x.optString("note",""),13,MUTED,false));body.addView(c);} }
 
+    private String kitchenClearedTicketPrefsKey() {
+        String serverKey = normalizeServerBase(serverBase);
+        return KEY_KITCHEN_CLEARED_TICKET_IDS + "|" + serverKey;
+    }
+
+    private void loadKitchenClearedTicketIds() {
+        kitchenClearedTicketIds.clear();
+        if (prefs == null) return;
+        try {
+            Set<String> stored = prefs.getStringSet(kitchenClearedTicketPrefsKey(), null);
+            if (stored == null) return;
+            for (String raw : stored) {
+                try {
+                    int id = Integer.parseInt(String.valueOf(raw));
+                    if (id > 0) kitchenClearedTicketIds.add(id);
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void persistKitchenClearedTicketIds() {
+        if (prefs == null) return;
+        try {
+            Set<String> stored = new HashSet<>();
+            for (Integer id : kitchenClearedTicketIds) {
+                if (id != null && id > 0) stored.add(String.valueOf(id));
+            }
+            prefs.edit().putStringSet(kitchenClearedTicketPrefsKey(), stored).apply();
+        } catch (Exception ignored) {}
+    }
+
+    private boolean isKitchenTicketFullyRemoved(JSONObject ticket) {
+        if (ticket == null) return false;
+        JSONArray items = ticket.optJSONArray("items");
+        if (items == null || items.length() == 0) return false;
+        int activeTotal = 0;
+        int removedTotal = 0;
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject item = items.optJSONObject(i);
+            if (item == null) continue;
+            int orderedQty = Math.max(0, item.optInt("ordered_qty", item.optInt("qty", 0)));
+            int removedQty = Math.max(0, item.optInt("removed_qty", 0));
+            int activeQty = item.has("active_qty")
+                    ? Math.max(0, item.optInt("active_qty", 0))
+                    : Math.max(0, orderedQty - removedQty);
+            activeTotal += activeQty;
+            removedTotal += removedQty;
+        }
+        return activeTotal <= 0 && removedTotal > 0;
+    }
+
+    private void markKitchenTicketClearedLocally(int ticketId) {
+        if (ticketId <= 0) return;
+        kitchenClearedTicketIds.add(ticketId);
+        persistKitchenClearedTicketIds();
+    }
+
     private void showKitchen() { showKitchen("Hazırlanır"); }
 
     private void showKitchen(String category) {
         currentBackAction = null;
+        loadKitchenClearedTicketIds();
         requestKitchenNotificationPermissionIfNeeded();
         ensureKitchenNotificationChannel();
         clear();
@@ -7005,18 +7067,32 @@ public class MainActivity extends Activity {
         host.removeAllViews();
         boolean showReady = "Hazırdır".equals(category);
         int visible = 0;
+        boolean clearedSetChanged = false;
         for (int i = 0; i < tickets.length(); i++) {
             JSONObject t = tickets.optJSONObject(i);
             if (t == null) continue;
             boolean isReady = "ready".equalsIgnoreCase(t.optString("status", ""));
             if (showReady != isReady) continue;
+
+            int id = t.optInt("id", 0);
+            boolean fullyRemoved = isKitchenTicketFullyRemoved(t);
+            if (id > 0 && kitchenClearedTicketIds.contains(id)) {
+                if (fullyRemoved) {
+                    continue;
+                }
+                // Eyni ticket sonradan yenidən aktiv məhsul alarsa lokal gizlətmə ləğv edilir.
+                kitchenClearedTicketIds.remove(id);
+                clearedSetChanged = true;
+            }
             visible++;
 
             LinearLayout c = card();
             LinearLayout row = new LinearLayout(this);
             row.setOrientation(LinearLayout.HORIZONTAL);
             row.addView(text(t.optString("station_name", ""), 18, BLUE, true), new LinearLayout.LayoutParams(0, dp(40), 1f));
-            row.addView(text(t.optString("status_label", showReady ? "Hazırdır" : "Hazırlanır"), 14, isReady ? GREEN : BLUE, true), new LinearLayout.LayoutParams(dp(110), dp(40)));
+            String statusLabel = fullyRemoved ? "Ləğv edilib" : t.optString("status_label", showReady ? "Hazırdır" : "Hazırlanır");
+            int statusColor = fullyRemoved ? Color.rgb(180, 52, 52) : (isReady ? GREEN : BLUE);
+            row.addView(text(statusLabel, 14, statusColor, true), new LinearLayout.LayoutParams(dp(110), dp(40)));
             c.addView(row);
             c.addView(text(t.optString("created_at_text", "") + "  •  " + t.optInt("total_qty", 0) + " məhsul", 12, MUTED, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
 
@@ -7047,8 +7123,15 @@ public class MainActivity extends Activity {
 
             LinearLayout a = new LinearLayout(this);
             a.setOrientation(LinearLayout.HORIZONTAL);
-            int id = t.optInt("id", 0);
-            if (showReady) {
+            if (fullyRemoved) {
+                Button clearButton = button("Təmizlə", Color.rgb(246, 239, 239), Color.rgb(150, 55, 55));
+                a.addView(clearButton, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
+                clearButton.setOnClickListener(v -> {
+                    markKitchenTicketClearedLocally(id);
+                    // Yalnız mobil görünüşdən təmizlənir. PC/server API-yə heç bir status cavabı göndərilmir.
+                    renderKitchenTickets(host, tickets, category);
+                });
+            } else if (showReady) {
                 Button undo = button("Geri al", Color.rgb(238, 246, 255), BLUE);
                 a.addView(undo, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
                 undo.setOnClickListener(v -> updateKitchen(id, "preparing", category));
@@ -7060,6 +7143,7 @@ public class MainActivity extends Activity {
             c.addView(a);
             host.addView(c);
         }
+        if (clearedSetChanged) persistKitchenClearedTicketIds();
         if (visible == 0) host.addView(empty(showReady ? "Hazırdır sifarişi yoxdur." : "Hazırlanır sifarişi yoxdur."));
     }
 
