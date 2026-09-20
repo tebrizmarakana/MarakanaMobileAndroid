@@ -15,6 +15,7 @@ import android.graphics.Color;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
+import android.graphics.Paint;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
@@ -109,7 +110,8 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_SITE = "account_sales_site";
     private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
-    // v117: Hesablar axtarışında yazılan e-mail Yeni hesab yarat formasına avtomatik ötürülür.
+    // v118: Mətbəx sifarişində terminaldan çıxarılan və ya azaldılan məhsullar üstündən xətt çəkilmiş göstərilir.
+// v117: Hesablar axtarışında yazılan e-mail Yeni hesab yarat formasına avtomatik ötürülür.
     // v116: Hesablar bölməsində istifadəçinin sabitlədiyi hesab ID-ləri lokal saxlanılır.
     private static final String KEY_ACCOUNT_SALES_PINNED_RECORDS = "account_sales_pinned_records";
     private static final String ACCOUNT_SALES_DEFAULT_SITE = "https://marakana.az";
@@ -7022,7 +7024,24 @@ public class MainActivity extends Activity {
             if (items != null) {
                 for (int j = 0; j < items.length(); j++) {
                     JSONObject it = items.optJSONObject(j);
-                    if (it != null) c.addView(text("• " + it.optString("name", "") + " x" + it.optInt("qty", 1), 15, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
+                    if (it == null) continue;
+                    String itemName = it.optString("name", "");
+                    int orderedQty = Math.max(0, it.optInt("ordered_qty", it.optInt("qty", 1)));
+                    int removedQty = Math.max(0, it.optInt("removed_qty", 0));
+                    int activeQty = it.has("active_qty")
+                            ? Math.max(0, it.optInt("active_qty", 0))
+                            : Math.max(0, orderedQty - removedQty);
+
+                    if (activeQty > 0) {
+                        TextView activeLine = text("• " + itemName + " x" + activeQty, 15, TEXT, true);
+                        c.addView(activeLine, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
+                    }
+                    if (removedQty > 0) {
+                        TextView removedLine = text("• " + itemName + " x" + removedQty, 15, Color.rgb(180, 52, 52), true);
+                        removedLine.setPaintFlags(removedLine.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+                        removedLine.setAlpha(0.82f);
+                        c.addView(removedLine, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
+                    }
                 }
             }
 

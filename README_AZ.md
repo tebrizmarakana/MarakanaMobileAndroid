@@ -1,7 +1,8 @@
-# Marakana Mobile v117 — Axtarışdakı e-maili Yeni hesab formasına ötür
+# Marakana Mobile v118 — Mətbəx çıxart/azalt xətt göstəricisi
 
-- `versionCode 117`
-- `versionName 3.4.82-native-v117`
-- Hesablar bölməsində e-mail ünvanı ilə axtarış aparılıb nəticə tapılmadıqda, axtarış xanasındakı ünvan silinmədən `Yeni hesab yarat` seçilərsə həmin e-mail yeni hesab formasının `E-mail` xanasına avtomatik yazılır.
-- Yalnız axtarış mətni e-mail kimi `@` işarəsi daşıyırsa avtomatik ötürülür; adi oyun adı və başqa axtarış mətnləri E-mail xanasına yazılmır.
-- Mövcud hesab düzəlişi və digər Hesab Satışı axınları dəyişdirilməyib.
+- `versionCode 118`
+- `versionName 3.4.83-native-v118`
+- Mətbəx rejimində terminal sifarişindən məhsul tam çıxarılanda həmin məhsul mobil mətbəx kartında üstündən xətt çəkilmiş göstərilir.
+- Məhsul sayı azaldılanda qalan say normal, azaldılan say isə ayrıca üstündən xətt çəkilmiş sətirdə görünür.
+- Bu görünüş native APK ilə PC-yə IP ünvanı vasitəsilə qoşulanda da eyni API məlumatından işləyir.
+- v117-dəki Hesablar axtarış e-mail prefill funksiyası qorunub.
