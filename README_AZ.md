@@ -1,12 +1,7 @@
-# Marakana Mobile v116 — Hesab sabitləmə
+# Marakana Mobile v117 — Axtarışdakı e-maili Yeni hesab formasına ötür
 
-- `versionCode 116`
-- `versionName 3.4.81-native-v116`
-- Hesablar bölməsində hesab kartına klik etdikdə yeni **Sabitle** əməliyyatı görünür.
-- Sabitlənən hesab Hesablar siyahısının yuxarısına keçir və tətbiq bağlanıb-açılsa da lokal olaraq sabit qalır.
-- Sabitlənmiş hesab kartında mavi pin ikonu göstərilir.
-- Eyni menyuda **Sabitləməni ləğv et** seçimi görünür.
-- Sabitləmə ləğv ediləndə hesab `created_at` (yaradılma vaxtı) əsasında yenidən öz təbii yerinə qayıdır.
-- Sabitləmə yalnız **Hesablar** bölməsinə aiddir; Satılanlar / Satılmayanlar / İcarə sıralamasına toxunulmayıb.
-- v115 status ölçüləri və əvvəlki bütün funksiyalar saxlanılıb.
-- Paket GitHub web upload üçün təmiz saxlanılıb.
+- `versionCode 117`
+- `versionName 3.4.82-native-v117`
+- Hesablar bölməsində e-mail ünvanı ilə axtarış aparılıb nəticə tapılmadıqda, axtarış xanasındakı ünvan silinmədən `Yeni hesab yarat` seçilərsə həmin e-mail yeni hesab formasının `E-mail` xanasına avtomatik yazılır.
+- Yalnız axtarış mətni e-mail kimi `@` işarəsi daşıyırsa avtomatik ötürülür; adi oyun adı və başqa axtarış mətnləri E-mail xanasına yazılmır.
+- Mövcud hesab düzəlişi və digər Hesab Satışı axınları dəyişdirilməyib.

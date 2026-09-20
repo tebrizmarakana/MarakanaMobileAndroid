@@ -1,4 +1,4 @@
-Marakana Mobile v116 — CLEAN GITHUB PAKETI
+Marakana Mobile v117 — CLEAN GITHUB PAKETI
 
 Bu paket GitHub web upload ucun temiz saxlanilib ve 100 fayl limitinden asagidadir.
 Funksional baza v115-den davam edir.

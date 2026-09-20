@@ -109,6 +109,7 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_SITE = "account_sales_site";
     private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
+    // v117: Hesablar axtarışında yazılan e-mail Yeni hesab yarat formasına avtomatik ötürülür.
     // v116: Hesablar bölməsində istifadəçinin sabitlədiyi hesab ID-ləri lokal saxlanılır.
     private static final String KEY_ACCOUNT_SALES_PINNED_RECORDS = "account_sales_pinned_records";
     private static final String ACCOUNT_SALES_DEFAULT_SITE = "https://marakana.az";
@@ -3464,7 +3465,16 @@ public class MainActivity extends Activity {
             accountSalesCustomerChoices = customerChoices == null ? new JSONArray() : customerChoices;
             JSONObject finalSettings = settings;
             add.setEnabled(true);
-            add.setOnClickListener(v -> showAccountSalesForm(null, finalSettings, section));
+            add.setOnClickListener(v -> {
+                String prefillEmail = "";
+                if ("accounts".equals(section)) {
+                    String searchedValue = search.getText().toString().trim();
+                    if (searchedValue.contains("@")) {
+                        prefillEmail = searchedValue;
+                    }
+                }
+                showAccountSalesForm(null, finalSettings, section, prefillEmail);
+            });
             addCustomer.setEnabled(true);
             addCustomer.setOnClickListener(v -> showAccountSalesNewCustomer(section));
 
@@ -4768,10 +4778,16 @@ public class MainActivity extends Activity {
     }
 
     private void showAccountSalesForm(JSONObject record, JSONObject settings) {
-        showAccountSalesForm(record, settings, "accounts");
+        showAccountSalesForm(record, settings, "accounts", "");
     }
 
     private void showAccountSalesForm(JSONObject record, JSONObject settings, String sourceSection) {
+        showAccountSalesForm(record, settings, sourceSection, "");
+    }
+
+    // v117: Hesablar bölməsində e-mail ilə axtarış edib "Yeni hesab yarat" seçiləndə
+    // axtarışdakı e-mail yeni hesab formasının E-mail xanasına avtomatik ötürülür.
+    private void showAccountSalesForm(JSONObject record, JSONObject settings, String sourceSection, String prefillEmail) {
         final boolean editing = record != null && record.optInt("id", 0) > 0;
         final String returnSection = normalizeAccountSalesSection(sourceSection);
         final String returnSource = sourceSection;
@@ -4782,7 +4798,10 @@ public class MainActivity extends Activity {
         game.setFocusable(false);
         game.setClickable(true);
         game.setOnClickListener(v -> showAccountSalesGamePicker(game, true));
-        EditText email = accountField(body, "E-mail *", "example@mail.com", editing ? record.optString("email", "") : "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        String initialEmail = editing
+                ? record.optString("email", "")
+                : (prefillEmail == null ? "" : prefillEmail.trim());
+        EditText email = accountField(body, "E-mail *", "example@mail.com", initialEmail, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
         EditText secretCodeField = null;
         if (editing) {
             // Məxfi kod bu konkret hesab sətrinə/ID-yə aiddir. Eyni e-maildəki başqa
