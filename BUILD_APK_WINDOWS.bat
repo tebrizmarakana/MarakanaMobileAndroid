@@ -1,5 +1,5 @@
 @echo off
-echo Marakana Mobile v108 permanent RELEASE signing GitHub Actions ile qurulur.
+echo Marakana Mobile v121 permanent RELEASE signing GitHub Actions ile qurulur.
 echo Local build ucun MARAKANA_KEYSTORE_PATH ve signing env deyisenleri lazimdir.
-echo En rahat yol: GitHub Actions - Build Marakana Mobile Native v108 RELEASE APK.
+echo En rahat yol: GitHub Actions - Build Marakana Mobile Native v121 RELEASE APK.
 pause

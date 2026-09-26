@@ -1,0 +1,27 @@
+PASS: MainActivity lexical delimiter balance
+PASS: versionCode 121
+PASS: versionName v121
+PASS: workflow title v121
+PASS: workflow artifact v121
+PASS: new account type choices exact
+PASS: old Offline spinner choices removed
+PASS: old Offline create choices removed
+PASS: new-account create payload has no console
+PASS: new-account create dialog has no hidden console variable
+PASS: Yeni hesab formunda Konsol field yoxdur
+PASS: create form explains delayed console selection
+PASS: Sat/İcarə formunda required console selector var
+PASS: Sat/İcarə payload selected console sends
+PASS: Sat/İcarə missing-console validation exists
+PASS: generic edit console visible only sold/rental status
+PASS: return to unsold clears console
+PASS: legacy Offline edit display maps to Universal PS4
+PASS: v120 kitchen active-only rule preserved
+PASS: MainActivity changes scoped to changelog/account-sales area
+PASS: Java file set unchanged
+PASS: unchanged Java: KitchenBackgroundService.java
+PASS: unchanged Java: KitchenBootReceiver.java
+
+RESULT 23/23 PASS
+
+Note: Android/Windows signed APK runtime was not executed in this Linux environment.

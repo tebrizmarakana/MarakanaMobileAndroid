@@ -1,7 +1,6 @@
-Marakana Mobile v119 — CLEAN GITHUB PAKETI
+Marakana Mobile v121 — CLEAN GITHUB PAKETI
 
-Bu paket GitHub web upload ucun temiz saxlanilib ve 100 fayl limitinden asagidadir.
-Funksional baza v115-den davam edir.
-Yeni: Hesablar bolumunde hesab sabitleme, kartda pin iconu ve sabitlemeni legv edende yaradilis vaxtina gore oz yerine qayitma.
-
-Lazimsiz test loglari, backup workflow-lar ve tekrar API nusxeleri pakete daxil edilmeyib.
+Bu paket GitHub web upload üçün təmiz TAM layihədir.
+Baza: v120.
+Yeni: Yeni hesab konsolsuz yaradılır; Konsol yalnız Sat / İcarə ver zamanı seçilir; Offline adı Universal PS4 oldu.
+v120 Mətbəx aktiv-məhsul Hazırdır qaydası saxlanılıb.

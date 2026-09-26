@@ -111,7 +111,8 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_SITE = "account_sales_site";
     private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
-    // v119: Tam ləğv edilmiş mətbəx sifarişində Hazırdır əvəzinə Təmizlə görünür; təmizləmə yalnız mobil paneldə lokal olur, PC-yə cavab göndərilmir.
+    // v120: Hazırdır göndəriləndə üstündən xətt çəkilmiş/silinmiş məhsullar PC-yə hazır cavab kimi göndərilmir; yalnız aktiv məhsullar hazır sayılır.
+    // v121: Yeni hesabda konsol seçimi yoxdur; konsol yalnız Sat / İcarə ver axınında seçilir. Offline adı Universal PS4 oldu.
     // v118: Mətbəx sifarişində terminaldan çıxarılan və ya azaldılan məhsullar üstündən xətt çəkilmiş göstərilir.
 // v117: Hesablar axtarışında yazılan e-mail Yeni hesab yarat formasına avtomatik ötürülür.
     // v116: Hesablar bölməsində istifadəçinin sabitlədiyi hesab ID-ləri lokal saxlanılır.
@@ -4656,7 +4657,15 @@ public class MainActivity extends Activity {
             addAccountSalesDetailField(info, "🔐", "Məxfi kod", record.optString("secret_code", ""));
         }
         addAccountSalesDetailField(info, "🏷️", "Növ", record.optString("account_type", ""));
-        addAccountSalesDetailField(info, "🕹️", "Konsol", record.optString("console", ""));
+        String existingTransactionConsole = record.optString("console", "").trim();
+        String transactionConsoleInitial = ("PS4".equals(existingTransactionConsole) || "PS5".equals(existingTransactionConsole) || "PS4/PS5".equals(existingTransactionConsole))
+                ? existingTransactionConsole : "Konsol seçin";
+        Spinner transactionConsole = accountSpinnerField(
+                info,
+                "Konsol *",
+                new String[]{"Konsol seçin", "PS4", "PS5", "PS4/PS5"},
+                transactionConsoleInitial
+        );
         addAccountSalesDetailField(info, "💰", "Qiymət", record.optString("price_formatted", money(record.optDouble("price", 0))));
         addAccountSalesDetailField(info, "📦", "Status", preferredStatus);
         body.addView(info);
@@ -4713,6 +4722,7 @@ public class MainActivity extends Activity {
         final EditText saleDateField = date;
         final EditText rentalDurationField = rentalDuration;
         final Spinner rentalUnitField = rentalUnit;
+        final Spinner transactionConsoleField = transactionConsole;
         final EditText transactionPriceField = transactionPrice;
         final EditText transactionSecretCodeField = transactionSecretCode;
         save.setOnClickListener(v -> {
@@ -4734,6 +4744,12 @@ public class MainActivity extends Activity {
             }
             if (parsedTransactionPrice < 0) {
                 toast((rental ? "İcarə" : "Satış") + " qiyməti mənfi ola bilməz.");
+                return;
+            }
+
+            String selectedConsole = transactionConsoleField == null ? "" : String.valueOf(transactionConsoleField.getSelectedItem()).trim();
+            if (!("PS4".equals(selectedConsole) || "PS5".equals(selectedConsole) || "PS4/PS5".equals(selectedConsole))) {
+                toast("Konsol seçin.");
                 return;
             }
 
@@ -4763,7 +4779,7 @@ public class MainActivity extends Activity {
                         ? transactionSecretCodeField.getText().toString()
                         : record.optString("secret_code", ""));
                 payload.put("price", transactionPriceValue);
-                payload.put("console", record.optString("console", "PS5"));
+                payload.put("console", selectedConsole);
                 payload.put("customer_name", customerValue);
                 payload.put("phone", phoneValue);
                 payload.put("sale_date", sold && saleDateField != null ? accountSalesDateForApi(saleDateField.getText().toString()) : "");
@@ -4811,14 +4827,13 @@ public class MainActivity extends Activity {
         EditText secretCodeField = null;
         if (editing) {
             // Məxfi kod bu konkret hesab sətrinə/ID-yə aiddir. Eyni e-maildəki başqa
-            // Online / Universal / Offline və kopyalanmış hesabların koduna toxunmur.
+            // Online / Universal / Universal PS4 və kopyalanmış hesabların koduna toxunmur.
             secretCodeField = accountField(body, "Məxfi kod", "Məsələn: şifrə və ya giriş kodu", record.optString("secret_code", ""), InputType.TYPE_CLASS_TEXT);
         }
         // Lambda daxilində istifadə olunduğu üçün final istinad saxlayırıq.
         // Bu yalnız Java compile xətasını aradan qaldırır, məntiqi dəyişmir.
         final EditText secretCode = secretCodeField;
         EditText price = accountField(body, "Qiymət *", editing ? "35.50" : "", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        Spinner console = accountSpinnerField(body, "Konsol *", new String[]{"PS4", "PS5", "PS4/PS5"}, editing ? record.optString("console", "PS5") : "PS5");
 
         // Server həmişə əsas mənbədir: form açılarkən köhnə in-memory oyun/müştəri siyahısını yenilə.
         loadAccountSalesJson("/overview?section=settings", result -> {
@@ -4829,7 +4844,7 @@ public class MainActivity extends Activity {
         });
 
         if (!editing) {
-            TextView note = text("Hesab növlərini seçəndə hər Online / Universal / Offline üçün Məxfi kod ayrıca yazılır. Kodlar bir-birindən müstəqildir və boş qala bilər.", 12, MUTED, false);
+            TextView note = text("Hesab növlərini seçəndə hər Online / Universal / Universal PS4 üçün Məxfi kod ayrıca yazılır. Kodlar bir-birindən müstəqildir və boş qala bilər. Konsol Sat və ya İcarə ver zamanı seçilir.", 12, MUTED, false);
             note.setPadding(dp(4), dp(4), dp(4), dp(10));
             body.addView(note);
 
@@ -4839,13 +4854,14 @@ public class MainActivity extends Activity {
                     game.getText().toString(),
                     email.getText().toString(),
                     price.getText().toString(),
-                    String.valueOf(console.getSelectedItem()),
                     returnSection
             ));
             return;
         }
 
-        Spinner type = accountSpinnerField(body, "Növ *", new String[]{"Online", "Universal", "Offline"}, record.optString("account_type", "Online"));
+        String editingAccountType = record.optString("account_type", "Online");
+        if ("Offline".equalsIgnoreCase(editingAccountType)) editingAccountType = "Universal PS4";
+        Spinner type = accountSpinnerField(body, "Növ *", new String[]{"Online", "Universal", "Universal PS4"}, editingAccountType);
         EditText customer = accountField(body, "Ad soyad", "Kliklə müştəri seç və ya axtar", record.optString("customer_name", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         EditText phone = accountField(body, "Telefon", "0705603030", record.optString("phone", ""), InputType.TYPE_CLASS_PHONE);
         customer.setFocusable(false);
@@ -4857,6 +4873,19 @@ public class MainActivity extends Activity {
 
         String defaultStock = settings == null ? "Satılıb" : settings.optString("default_stock_status", "Satılıb");
         Spinner stock = accountSpinnerField(body, "Status *", new String[]{"Satılıb", "Satılmayıb", "İcarə"}, record.optString("stock_status", defaultStock));
+
+        LinearLayout consoleBox = new LinearLayout(this);
+        consoleBox.setOrientation(LinearLayout.VERTICAL);
+        String existingEditConsole = record.optString("console", "").trim();
+        String editConsoleInitial = ("PS4".equals(existingEditConsole) || "PS5".equals(existingEditConsole) || "PS4/PS5".equals(existingEditConsole))
+                ? existingEditConsole : "Konsol seçin";
+        Spinner console = accountSpinnerField(
+                consoleBox,
+                "Konsol *",
+                new String[]{"Konsol seçin", "PS4", "PS5", "PS4/PS5"},
+                editConsoleInitial
+        );
+        body.addView(consoleBox);
 
         LinearLayout rentalBox = new LinearLayout(this);
         rentalBox.setOrientation(LinearLayout.VERTICAL);
@@ -4878,6 +4907,8 @@ public class MainActivity extends Activity {
         Runnable syncRentalFields = () -> {
             String status = String.valueOf(stock.getSelectedItem());
             boolean rental = "İcarə".equals(status);
+            boolean needsConsole = "Satılıb".equals(status) || rental;
+            consoleBox.setVisibility(needsConsole ? View.VISIBLE : View.GONE);
             rentalBox.setVisibility(rental ? View.VISIBLE : View.GONE);
             if ("Satılıb".equals(status)) {
                 note.setText("Satılıb seçilib: ad soyad, telefon və satış tarixi məcburidir.");
@@ -4897,6 +4928,12 @@ public class MainActivity extends Activity {
         body.addView(save);
         save.setOnClickListener(v -> {
             String selectedStatus = String.valueOf(stock.getSelectedItem());
+            String selectedEditConsole = String.valueOf(console.getSelectedItem()).trim();
+            if (("Satılıb".equals(selectedStatus) || "İcarə".equals(selectedStatus)) &&
+                    !("PS4".equals(selectedEditConsole) || "PS5".equals(selectedEditConsole) || "PS4/PS5".equals(selectedEditConsole))) {
+                toast("Konsol seçin.");
+                return;
+            }
             if ("İcarə".equals(selectedStatus)) {
                 String durationText = rentalDuration.getText().toString().trim();
                 int durationValue = 0;
@@ -4919,7 +4956,7 @@ public class MainActivity extends Activity {
                 payload.put("email", email.getText().toString());
                 payload.put("secret_code", secretCode == null ? "" : secretCode.getText().toString());
                 payload.put("price", price.getText().toString());
-                payload.put("console", String.valueOf(console.getSelectedItem()));
+                payload.put("console", "Satılmayıb".equals(selectedStatus) ? "" : selectedEditConsole);
                 // Satılmış hesab Satılmayıb statusuna qaytarılanda əvvəlki satış/müştəri izi saxlanmır.
                 // Beləliklə hesab Satılmayanlar bölməsinə tam təmiz stok kimi qayıdır.
                 if ("Satılmayıb".equals(selectedStatus)) {
@@ -4955,11 +4992,10 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void showAccountSalesCreateTypeDialog(String gameName, String email, String price, String console, String sourceSection) {
+    private void showAccountSalesCreateTypeDialog(String gameName, String email, String price, String sourceSection) {
         String game = gameName == null ? "" : gameName.trim();
         String mail = email == null ? "" : email.trim();
         String amount = price == null ? "" : price.trim();
-        String consoleName = console == null ? "" : console.trim();
         if (game.isEmpty()) {
             toast("Oyunun adını daxil et.");
             return;
@@ -4973,7 +5009,7 @@ public class MainActivity extends Activity {
             return;
         }
 
-        final String[] types = {"Online", "Universal", "Offline"};
+        final String[] types = {"Online", "Universal", "Universal PS4"};
         final CheckBox[] checks = new CheckBox[types.length];
         final EditText[] secretFields = new EditText[types.length];
 
@@ -5055,7 +5091,6 @@ public class MainActivity extends Activity {
                 payload.put("secret_codes", secretCodes);
                 payload.put("secret_code", selectedTypes.length() == 1 ? firstSelectedSecret : "");
                 payload.put("price", amount);
-                payload.put("console", consoleName);
                 payload.put("account_types", selectedTypes);
             } catch (Exception ignored) {}
             dialog.dismiss();
@@ -7147,7 +7182,7 @@ public class MainActivity extends Activity {
         if (visible == 0) host.addView(empty(showReady ? "Hazırdır sifarişi yoxdur." : "Hazırlanır sifarişi yoxdur."));
     }
 
-    private void updateKitchen(int ticketId,String status,String refreshCategory){JSONObject p=new JSONObject();try{p.put("ticket_id",ticketId);p.put("status",status);}catch(Exception ignored){}postJson("/api/mobile/kitchen/ticket/update",p,r->showKitchen(refreshCategory));}
+    private void updateKitchen(int ticketId,String status,String refreshCategory){JSONObject p=new JSONObject();try{p.put("ticket_id",ticketId);p.put("status",status);if("ready".equals(status))p.put("active_only",true);}catch(Exception ignored){}postJson("/api/mobile/kitchen/ticket/update",p,r->showKitchen(refreshCategory));}
 
     private void logout() {
         stopKitchenAutoRefresh();
