@@ -112,6 +112,8 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
     // v120: Hazırdır göndəriləndə üstündən xətt çəkilmiş/silinmiş məhsullar PC-yə hazır cavab kimi göndərilmir; yalnız aktiv məhsullar hazır sayılır.
+    // v123: Hesab Satışı axtarış mətni bölmələr arasında saxlanılır; Düzənlə / Sat / İcarə ver sonrası istifadəçi gəldiyi bölmədə qalır.
+    // v124: Sat əməliyyatında Universal PS4 -> PS4, Universal PS5 -> PS5 avtomatik/fiks; Online manual qalır. Konsol seçimindən PS4/PS5 kombinə seçimi çıxarıldı.
     // v122: Hesab növləri Online / Universal PS4 / Universal PS5 oldu; eyni e-mail üzrə Online artıq varsa yeni hesabda Online seçimi gizlənir.
     // v122: Yeni hesabda konsol seçimi yoxdur; konsol yalnız Sat / İcarə ver axınında seçilir. Offline adı Universal PS4 oldu.
     // v118: Mətbəx sifarişində terminaldan çıxarılan və ya azaldılan məhsullar üstündən xətt çəkilmiş göstərilir.
@@ -124,6 +126,10 @@ public class MainActivity extends Activity {
     private JSONArray accountSalesGameChoices = new JSONArray();
     private JSONArray accountSalesCustomerChoices = new JSONArray();
     private JSONArray accountSalesOnlineEmails = new JSONArray();
+    // v123: Hesab Satışı bölmələri arasında istifadəçi özü silməyənədək axtarış mətni qorunur.
+    private String accountSalesSearchQuery = "";
+    // v123: Düzənlə / Sat / İcarə ver əməliyyatlarından sonra dəqiq gəlinən bölməyə qayıtmaq üçün son aktiv bölmə.
+    private String accountSalesActiveSection = "accounts";
     // v111: Müştəri detalında hesab düzəlişindən sonra eyni səhifəyə qayıtmaq üçün kontekst.
     private JSONObject accountSalesCustomerDetailContext = null;
 
@@ -3305,6 +3311,17 @@ public class MainActivity extends Activity {
         return "accounts";
     }
 
+    // v123: Form/əməliyyat callback-lərində sourceSection itərsə belə istifadəçini
+    // Hesablar səhifəsinə məcburi atma; son aktiv Hesab Satışı bölməsini saxla.
+    private String accountSalesReturnSection(String sourceSection) {
+        String source = sourceSection == null ? "" : sourceSection.trim().toLowerCase(Locale.ROOT);
+        for (String candidate : ACCOUNT_SALES_SECTIONS) {
+            if (candidate.equals(source) && !"settings".equals(candidate)) return candidate;
+        }
+        String active = normalizeAccountSalesSection(accountSalesActiveSection);
+        return "settings".equals(active) ? "accounts" : active;
+    }
+
     // v111: Müştəri detalından açılan hesab əməliyyatı bitəndə əsas Hesablar səhifəsinə deyil,
     // istifadəçinin olduğu həmin müştəri detalına qayıt.
     private void returnToAccountSalesSource(String sourceSection) {
@@ -3313,7 +3330,7 @@ public class MainActivity extends Activity {
             showAccountSalesCustomerDetail(accountSalesCustomerDetailContext);
             return;
         }
-        showAccountSales(normalizeAccountSalesSection(sourceSection));
+        showAccountSales(accountSalesReturnSection(sourceSection));
     }
 
     private void showAccountSalesConnection() {
@@ -3392,6 +3409,7 @@ public class MainActivity extends Activity {
             return;
         }
         final String section = normalizeAccountSalesSection(requestedSection);
+        if (!"settings".equals(section)) accountSalesActiveSection = section;
         currentBackAction = null;
         clear();
 
@@ -3450,6 +3468,12 @@ public class MainActivity extends Activity {
                 ? "Ad soyad və ya telefonla axtar"
                 : "Oyun, e-mail, müştəri, telefon və ya məxfi kodla axtar");
         if (!"settings".equals(section)) {
+            // v123: Axtarış istifadəçi özü silməyənədək Hesablar / Satılanlar /
+            // Satılmayanlar / İcarə / Müştəri bölmələri arasında eyni qalır.
+            search.setText(accountSalesSearchQuery == null ? "" : accountSalesSearchQuery);
+            try { search.setSelection(search.getText().length()); } catch (Exception ignored) {}
+            search.addTextChangedListener(new SimpleTextWatcher(() ->
+                    accountSalesSearchQuery = search.getText().toString()));
             body.addView(search);
             spacer(body, 10);
         }
@@ -4423,7 +4447,7 @@ public class MainActivity extends Activity {
 
         postAccountSalesJson("/save", payload, result -> {
             toast("Hesab təhvil alındı və Satılmayanlara qaytarıldı.");
-            showAccountSales(normalizeAccountSalesSection(sourceSection));
+            showAccountSales(accountSalesReturnSection(sourceSection));
         });
     }
 
@@ -4461,7 +4485,7 @@ public class MainActivity extends Activity {
                 int created = result.optInt("created_count", 1);
                 if (created > 0) {
                     toast("Hesabın Satılmayan nüsxəsi yaradıldı.");
-                    showAccountSales(normalizeAccountSalesSection(sourceSection));
+                    showAccountSales(accountSalesReturnSection(sourceSection));
                 } else {
                     toast("Hesab kopyalana bilmədi.");
                 }
@@ -4625,7 +4649,7 @@ public class MainActivity extends Activity {
         final boolean rental = "İcarə".equals(preferredStatus);
         final boolean sold = "Satılıb".equals(preferredStatus);
         String screenTitle = rental ? "Hesabı icarəyə ver" : "Hesabı sat";
-        final String returnSection = normalizeAccountSalesSection(sourceSection);
+        final String returnSection = accountSalesReturnSection(sourceSection);
         ScrollView sv = screenWithBody(screenTitle, true, () -> showAccountSales(returnSection));
         LinearLayout body = scrollBody(sv);
 
@@ -4661,15 +4685,30 @@ public class MainActivity extends Activity {
             addAccountSalesDetailField(info, "🔐", "Məxfi kod", record.optString("secret_code", ""));
         }
         addAccountSalesDetailField(info, "🏷️", "Növ", record.optString("account_type", ""));
+        String transactionAccountType = record.optString("account_type", "Online").trim();
+        if ("Offline".equalsIgnoreCase(transactionAccountType)) transactionAccountType = "Universal PS4";
+        if ("Universal".equalsIgnoreCase(transactionAccountType)) transactionAccountType = "Universal PS5";
         String existingTransactionConsole = record.optString("console", "").trim();
-        String transactionConsoleInitial = ("PS4".equals(existingTransactionConsole) || "PS5".equals(existingTransactionConsole) || "PS4/PS5".equals(existingTransactionConsole))
-                ? existingTransactionConsole : "Konsol seçin";
+        String transactionConsoleInitial;
+        boolean fixedSaleConsole = false;
+        if (sold && "Universal PS4".equalsIgnoreCase(transactionAccountType)) {
+            transactionConsoleInitial = "PS4";
+            fixedSaleConsole = true;
+        } else if (sold && "Universal PS5".equalsIgnoreCase(transactionAccountType)) {
+            transactionConsoleInitial = "PS5";
+            fixedSaleConsole = true;
+        } else {
+            transactionConsoleInitial = ("PS4".equals(existingTransactionConsole) || "PS5".equals(existingTransactionConsole))
+                    ? existingTransactionConsole : "Konsol seçin";
+        }
         Spinner transactionConsole = accountSpinnerField(
                 info,
                 "Konsol *",
-                new String[]{"Konsol seçin", "PS4", "PS5", "PS4/PS5"},
+                new String[]{"Konsol seçin", "PS4", "PS5"},
                 transactionConsoleInitial
         );
+        // v124: Universal satışında konsol hesab növündən gəlir və səhv platforma seçilməsin deyə dəyişdirilmir.
+        transactionConsole.setEnabled(!fixedSaleConsole);
         addAccountSalesDetailField(info, "💰", "Qiymət", record.optString("price_formatted", money(record.optDouble("price", 0))));
         addAccountSalesDetailField(info, "📦", "Status", preferredStatus);
         body.addView(info);
@@ -4752,7 +4791,7 @@ public class MainActivity extends Activity {
             }
 
             String selectedConsole = transactionConsoleField == null ? "" : String.valueOf(transactionConsoleField.getSelectedItem()).trim();
-            if (!("PS4".equals(selectedConsole) || "PS5".equals(selectedConsole) || "PS4/PS5".equals(selectedConsole))) {
+            if (!("PS4".equals(selectedConsole) || "PS5".equals(selectedConsole))) {
                 toast("Konsol seçin.");
                 return;
             }
@@ -4815,8 +4854,8 @@ public class MainActivity extends Activity {
     // axtarışdakı e-mail yeni hesab formasının E-mail xanasına avtomatik ötürülür.
     private void showAccountSalesForm(JSONObject record, JSONObject settings, String sourceSection, String prefillEmail) {
         final boolean editing = record != null && record.optInt("id", 0) > 0;
-        final String returnSection = normalizeAccountSalesSection(sourceSection);
-        final String returnSource = sourceSection;
+        final String returnSection = accountSalesReturnSection(sourceSection);
+        final String returnSource = (sourceSection == null || sourceSection.trim().isEmpty()) ? returnSection : sourceSection;
         ScrollView sv = screenWithBody(editing ? "Hesabı düzəlt" : "Yeni hesab yarat", true, () -> returnToAccountSalesSource(returnSource));
         LinearLayout body = scrollBody(sv);
 
@@ -4884,12 +4923,20 @@ public class MainActivity extends Activity {
         LinearLayout consoleBox = new LinearLayout(this);
         consoleBox.setOrientation(LinearLayout.VERTICAL);
         String existingEditConsole = record.optString("console", "").trim();
-        String editConsoleInitial = ("PS4".equals(existingEditConsole) || "PS5".equals(existingEditConsole) || "PS4/PS5".equals(existingEditConsole))
-                ? existingEditConsole : "Konsol seçin";
+        String editConsoleInitial;
+        if ("PS4".equals(existingEditConsole) || "PS5".equals(existingEditConsole)) {
+            editConsoleInitial = existingEditConsole;
+        } else if ("Universal PS4".equalsIgnoreCase(editingAccountType)) {
+            editConsoleInitial = "PS4";
+        } else if ("Universal PS5".equalsIgnoreCase(editingAccountType)) {
+            editConsoleInitial = "PS5";
+        } else {
+            editConsoleInitial = "Konsol seçin";
+        }
         Spinner console = accountSpinnerField(
                 consoleBox,
                 "Konsol *",
-                new String[]{"Konsol seçin", "PS4", "PS5", "PS4/PS5"},
+                new String[]{"Konsol seçin", "PS4", "PS5"},
                 editConsoleInitial
         );
         body.addView(consoleBox);
@@ -4937,7 +4984,7 @@ public class MainActivity extends Activity {
             String selectedStatus = String.valueOf(stock.getSelectedItem());
             String selectedEditConsole = String.valueOf(console.getSelectedItem()).trim();
             if (("Satılıb".equals(selectedStatus) || "İcarə".equals(selectedStatus)) &&
-                    !("PS4".equals(selectedEditConsole) || "PS5".equals(selectedEditConsole) || "PS4/PS5".equals(selectedEditConsole))) {
+                    !("PS4".equals(selectedEditConsole) || "PS5".equals(selectedEditConsole))) {
                 toast("Konsol seçin.");
                 return;
             }
@@ -5122,7 +5169,7 @@ public class MainActivity extends Activity {
             postAccountSalesJson("/create-accounts", payload, result -> {
                 int created = result.optInt("created_count", selectedTypes.length());
                 toast(created + " hesab yaradıldı. Məxfi kodlar ayrı-ayrı saxlanıldı.");
-                showAccountSales(normalizeAccountSalesSection(sourceSection));
+                showAccountSales(accountSalesReturnSection(sourceSection));
             });
         }));
         dialog.show();
@@ -5926,7 +5973,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAccountSalesNewCustomer(String sourceSection) {
-        final String returnSection = normalizeAccountSalesSection(sourceSection);
+        final String returnSection = accountSalesReturnSection(sourceSection);
         ScrollView sv = screenWithBody("Yeni müştəri yarat", true, () -> showAccountSales(returnSection));
         LinearLayout body = scrollBody(sv);
 

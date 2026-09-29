@@ -12,3 +12,7 @@
 
 ## Server uyğunluğu
 - Hesab Satışı companion WordPress pluginini `v1.0.89` versiyasına yenilə. Bu versiya Satılmayıb hesabın konsolsuz yaradılmasını və `Universal PS4` hesab növünü dəstəkləyir.
+## v124
+- Hesab Satışı > Sat: Universal PS4 -> PS4 avtomatik və fiks; Universal PS5 -> PS5 avtomatik və fiks. Online hesabda konsol seçimi manual qalır.
+- Konsol seçimlərindən PS4/PS5 kombinə variantı çıxarıldı; yalnız PS4 və PS5 qaldı.
+

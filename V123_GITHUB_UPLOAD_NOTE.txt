@@ -1,0 +1,5 @@
+GitHub upload qeydi:
+- Repo kökündəki build.gradle faylını app/build.gradle ilə əvəz etməyin.
+- Repo kökü: build.gradle, settings.gradle, gradle.properties
+- App modulu: app/build.gradle və app/src/main/...
+- GitHub Actions build üçün bu qovluq strukturu qorunmalıdır.

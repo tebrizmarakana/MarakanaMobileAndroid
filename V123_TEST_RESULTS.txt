@@ -1,0 +1,11 @@
+Marakana Mobile v123 - Focused verification
+
+PASS - Hesab Satışı axtarış mətni Hesablar / Satılanlar / Satılmayanlar / İcarə / Müştəri keçidlərində istifadəçi özü silməyənədək saxlanılır.
+PASS - Axtarış sahəsi yeni bölmədə əvvəlki mətnlə açılır və filter həmin mətnlə dərhal render olunur.
+PASS - Düzənlə + Yadda saxla sonrası source section qorunur.
+PASS - Sat + yadda saxla sonrası source section qorunur.
+PASS - İcarə ver + yadda saxla sonrası source section qorunur.
+PASS - Source section boş/itirilibsə son aktiv Hesab Satışı bölməsi fallback kimi istifadə olunur.
+PASS - Root build.gradle Android plugin version 8.7.3 ilə saxlanılıb; app/build.gradle versionCode=123.
+
+Qeyd: Android SDK/Gradle tam build bu mühitdə icra edilməyib.

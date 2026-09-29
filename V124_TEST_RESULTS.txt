@@ -1,0 +1,10 @@
+Marakana Mobile v124 focused checks
+
+PASS - Sat əməliyyatında Universal PS4 hesabı açıldıqda konsol avtomatik PS4 seçilir və dəyişdirilə bilmir.
+PASS - Sat əməliyyatında Universal PS5 hesabı açıldıqda konsol avtomatik PS5 seçilir və dəyişdirilə bilmir.
+PASS - Online hesab satışında konsol seçimi əvvəlki kimi manual qalır.
+PASS - Konsol seçimlərindən PS4/PS5 kombinə variantı çıxarıldı; yalnız PS4 və PS5 qaldı.
+PASS - Edit formasındakı konsol seçimindən də PS4/PS5 kombinə variantı çıxarıldı.
+PASS - versionCode 124 / versionName 3.4.88-native-v124.
+
+Qeyd: Bu mühitdə Android SDK/Gradle tam APK build aparılmayıb.
