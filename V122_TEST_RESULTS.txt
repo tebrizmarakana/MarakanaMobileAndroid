@@ -1,0 +1,7 @@
+Marakana Mobile v122 focused checks
+PASS: versionCode 122
+PASS: versionName v122
+PASS: account types Online / Universal PS4 / Universal PS5
+PASS: legacy Universal maps to Universal PS5
+PASS: existing Online e-mail hides Online choice during new account creation
+PASS: Bundle/game picker remains enabled

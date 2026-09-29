@@ -1,0 +1,7355 @@
+package az.marakana.mobile;
+
+import android.app.Activity;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.AlertDialog;
+import android.Manifest;
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Typeface;
+import android.graphics.Paint;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.ColorDrawable;
+import android.net.Uri;
+import android.media.AudioAttributes;
+import android.media.RingtoneManager;
+import android.os.Bundle;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.InputType;
+import android.util.Base64;
+import android.view.GestureDetector;
+import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ProgressBar;
+import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanner;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
+import com.google.mlkit.vision.barcode.common.Barcode;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.time.LocalDate;
+
+/**
+ * Marakana Mobile Native v2.
+ *
+ * This app does NOT open /mobile in WebView. The Android UI is native and only
+ * communicates with the existing Marakana PC mobile REST API.
+ */
+public class MainActivity extends Activity {
+    private static final String PREFS = "marakana_native_mobile";
+    private static final String KEY_SERVER = "server_base";
+    private static final String KEY_USERNAME = "username";
+    private static final String KEY_ROLE = "role";
+    private static final String KEY_ADMIN_DEBT_ONLY = "admin_debt_only";
+    private static final String KEY_AUTO_LOGIN = "auto_login";
+    private static final String KEY_PASSWORD_ENC = "password_enc";
+    private static final String KEY_PASSWORD_IV = "password_iv";
+    private static final String KEY_WHATSAPP_PACKAGE = "whatsapp_default_package";
+    private static final String KEY_KITCHEN_NOTIFICATION_SOUND = "kitchen_notification_sound";
+    private static final String KEY_KITCHEN_BG_PASSWORD_ENC = "kitchen_bg_password_enc";
+    private static final String KEY_KITCHEN_BG_PASSWORD_IV = "kitchen_bg_password_iv";
+    private static final String KEY_KITCHEN_BG_SNAPSHOT_INITIALIZED = "kitchen_bg_snapshot_initialized";
+    private static final String KEY_KITCHEN_BG_KNOWN_TICKETS = "kitchen_bg_known_tickets";
+    private static final String KEY_KITCHEN_CLEARED_TICKET_IDS = "kitchen_cleared_ticket_ids";
+    private static final String KITCHEN_NOTIFICATION_SILENT = "__silent__";
+    private static final String KITCHEN_NOTIFICATION_CHANNEL_PREFIX = "marakana_kitchen_orders_";
+    private static final int REQUEST_NOTIFICATION_PERMISSION = 7301;
+    private static final int REQUEST_KITCHEN_SOUND = 7302;
+    private static final String KEYSTORE_ALIAS = "marakana_mobile_login_key";
+    private static final String KEY_ACCOUNT_SALES_SITE = "account_sales_site";
+    private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
+    private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
+    // v120: Hazırdır göndəriləndə üstündən xətt çəkilmiş/silinmiş məhsullar PC-yə hazır cavab kimi göndərilmir; yalnız aktiv məhsullar hazır sayılır.
+    // v122: Hesab növləri Online / Universal PS4 / Universal PS5 oldu; eyni e-mail üzrə Online artıq varsa yeni hesabda Online seçimi gizlənir.
+    // v122: Yeni hesabda konsol seçimi yoxdur; konsol yalnız Sat / İcarə ver axınında seçilir. Offline adı Universal PS4 oldu.
+    // v118: Mətbəx sifarişində terminaldan çıxarılan və ya azaldılan məhsullar üstündən xətt çəkilmiş göstərilir.
+// v117: Hesablar axtarışında yazılan e-mail Yeni hesab yarat formasına avtomatik ötürülür.
+    // v116: Hesablar bölməsində istifadəçinin sabitlədiyi hesab ID-ləri lokal saxlanılır.
+    private static final String KEY_ACCOUNT_SALES_PINNED_RECORDS = "account_sales_pinned_records";
+    private static final String ACCOUNT_SALES_DEFAULT_SITE = "https://marakana.az";
+    private static final String ACCOUNT_SALES_API_PATH = "/wp-json/marakana-account-sales/v1";
+    private static final String[] ACCOUNT_SALES_SECTIONS = {"accounts", "sold", "unsold", "rental", "customers", "settings"};
+    private JSONArray accountSalesGameChoices = new JSONArray();
+    private JSONArray accountSalesCustomerChoices = new JSONArray();
+    private JSONArray accountSalesOnlineEmails = new JSONArray();
+    // v111: Müştəri detalında hesab düzəlişindən sonra eyni səhifəyə qayıtmaq üçün kontekst.
+    private JSONObject accountSalesCustomerDetailContext = null;
+
+    private static final int BG = Color.rgb(240, 245, 250);
+    private static final int CARD = Color.WHITE;
+    private static final int TEXT = Color.rgb(31, 50, 69);
+    private static final int MUTED = Color.rgb(105, 127, 149);
+    private static final int BLUE = Color.rgb(48, 132, 239);
+    private static final int GREEN = Color.rgb(28, 133, 90);
+    private static final int ORANGE = Color.rgb(181, 90, 37);
+    private static final int BORDER = Color.rgb(216, 227, 238);
+    private static final int MENU_SCRIM = Color.argb(105, 18, 32, 46);
+
+    private final ExecutorService io = Executors.newCachedThreadPool();
+    private SharedPreferences prefs;
+    private LinearLayout root;
+    private LinearLayout content;
+    private ProgressBar busy;
+    private EditText serverAddressInput = null;
+
+    private String serverBase = "";
+    private String sessionToken = "";
+    private String username = "";
+    private String role = "hall";
+    private String roleLabel = "Zal";
+    private boolean adminDebtOnly = false;
+    private String sessionPassword = "";
+    private boolean canHall = false;
+    private boolean canKitchen = false;
+    private boolean canAdmin = false;
+    // v50: Kamera/deep-link/HTTP Admin QR keçidini login tamamlanana qədər saxla.
+    private String pendingAdminApprovalDeepLink = "";
+    private final Map<String, LinkedHashMap<String, OrderCartItem>> orderCarts = new HashMap<>();
+    private FrameLayout activeOrderCartButton = null;
+    private String activeOrderCartStation = "";
+    private Runnable currentBackAction = null;
+    private long lastExitBackPressedAt = 0L;
+    private static final long EXIT_BACK_INTERVAL_MS = 2000L;
+    private FrameLayout activeNavigationOverlay = null;
+    private LinearLayout activeNavigationPanel = null;
+    private View activeNavigationScrim = null;
+    private float navigationDrawerProgress = 0f;
+    // v101: sol panel artıq ekranın istənilən nöqtəsindən sağa swipe ilə interaktiv açılır.
+    private float globalDrawerSwipeStartX = 0f;
+    private float globalDrawerSwipeStartY = 0f;
+    private long globalDrawerSwipeStartTime = 0L;
+    private boolean globalDrawerSwipeTracking = false;
+    private boolean globalDrawerSwipeDragging = false;
+    // v110: şaquli scroll aşkar ediləndə həmin toxunuş bitənədək drawer swipe bloklanır.
+    private boolean globalDrawerSwipeVerticalLocked = false;
+    private static final String[] DEBT_CATEGORIES = {"İşçi", "Müştəri", "Firma"};
+    private static final String[] KITCHEN_CATEGORIES = {"Hazırlanır", "Hazırdır"};
+    private static final long KITCHEN_LIVE_REFRESH_MS = 750L;
+    private final Handler kitchenRefreshHandler = new Handler(Looper.getMainLooper());
+    private Runnable kitchenRefreshRunnable = null;
+    private boolean kitchenAutoRefreshActive = false;
+    private boolean activityVisible = false;
+    private int kitchenRefreshGeneration = 0;
+    private LinearLayout kitchenLiveRecordsHost = null;
+    private String kitchenLiveCategory = "Hazırlanır";
+    private String kitchenLastTicketsSignature = "";
+    private final Set<String> kitchenKnownTicketKeys = new HashSet<>();
+    private final Set<Integer> kitchenClearedTicketIds = new HashSet<>();
+    private boolean kitchenNotificationSnapshotInitialized = false;
+    private int kitchenNotificationSequence = 41000;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
+        serverBase = normalizeServerBase(prefs.getString(KEY_SERVER, ""));
+        loadKitchenClearedTicketIds();
+        username = prefs.getString(KEY_USERNAME, "");
+        role = prefs.getString(KEY_ROLE, "hall");
+        adminDebtOnly = prefs.getBoolean(KEY_ADMIN_DEBT_ONLY, false);
+        captureAdminApprovalDeepLink(getIntent());
+        // v50: Tətbiq QR/deep-link ilə soyuq start olarsa əvvəlcədən yadda qalan
+        // filialı yox, QR-ın aid olduğu PC serverini giriş hədəfi et.
+        preparePendingAdminApprovalServerForLogin();
+        boolean openKitchenFromNotification = getIntent() != null && getIntent().getBooleanExtra("open_kitchen", false);
+        if ("kitchen".equals(role) && hasKitchenBackgroundPassword()) {
+            startKitchenBackgroundService();
+        }
+        buildRoot();
+        if (serverBase.isEmpty()) {
+            showServerSetup();
+        } else if (openKitchenFromNotification && "kitchen".equals(role) && !username.isEmpty()) {
+            String kitchenPassword = loadKitchenBackgroundPassword();
+            if (!kitchenPassword.isEmpty()) autoLogin(username, kitchenPassword, "kitchen", false);
+            else showLogin();
+        } else if (prefs.getBoolean(KEY_AUTO_LOGIN, false) && !username.isEmpty()) {
+            String savedPassword = loadSavedPassword();
+            if (!savedPassword.isEmpty()) {
+                autoLogin(username, savedPassword, role, adminDebtOnly);
+            } else {
+                showLogin();
+            }
+        } else {
+            showLogin();
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        if (captureAdminApprovalDeepLink(intent)) {
+            String previousServer = normalizeServerBase(serverBase);
+            preparePendingAdminApprovalServerForLogin();
+            if ((sessionToken == null || sessionToken.trim().isEmpty())
+                    && !normalizeServerBase(serverBase).equalsIgnoreCase(previousServer)) {
+                showLogin();
+                toast("Filial serveri QR-a uyğun seçildi.");
+            }
+            handlePendingAdminApprovalDeepLink();
+        }
+    }
+
+    private boolean captureAdminApprovalDeepLink(Intent intent) {
+        if (intent == null) return false;
+        Uri data = intent.getData();
+        if (data == null) return false;
+        String scheme = data.getScheme() == null ? "" : data.getScheme().trim();
+        String host = data.getHost() == null ? "" : data.getHost().trim();
+        String path = data.getPath() == null ? "" : data.getPath().trim();
+        boolean customApproval = ("marakana".equalsIgnoreCase(scheme) || "marakanaadmin".equalsIgnoreCase(scheme) || "intent".equalsIgnoreCase(scheme))
+                && "admin-approval".equalsIgnoreCase(host);
+        boolean httpApproval = ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                && ("/api/mobile/admin/qr/open".equals(path) || "/api/mobile/admin/qr/fallback".equals(path));
+        if (!customApproval && !httpApproval) return false;
+        String challenge = data.getQueryParameter("challenge");
+        if (challenge == null || challenge.trim().isEmpty()) {
+            toast("Admin QR təsdiq kodu boşdur.");
+            return true;
+        }
+        pendingAdminApprovalDeepLink = data.toString();
+        return true;
+    }
+
+    private void handlePendingAdminApprovalDeepLink() {
+        if (pendingAdminApprovalDeepLink == null || pendingAdminApprovalDeepLink.trim().isEmpty()) return;
+        if (sessionToken == null || sessionToken.trim().isEmpty()) return;
+        final String approvalLink = pendingAdminApprovalDeepLink;
+        pendingAdminApprovalDeepLink = "";
+        // v50: Cari filialdakı lokal canAdmin göstəricisi başqa filial üçün qərar vermir.
+        // QR hansı PC-yə aiddirsə, həmin serverdə istifadəçinin real Admin icazəsi
+        // /api/mobile/admin/qr/approve tərəfindən yoxlanılır.
+        approveAdminQrChallenge(approvalLink);
+    }
+
+    private String extractAdminApprovalServerQuietly(String rawValue) {
+        String raw = rawValue == null ? "" : rawValue.trim();
+        if (raw.isEmpty()) return "";
+        try {
+            Uri link = Uri.parse(raw);
+            String scheme = link.getScheme() == null ? "" : link.getScheme().trim();
+            String path = link.getPath() == null ? "" : link.getPath().trim();
+            boolean httpApproval = ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    && ("/api/mobile/admin/qr/open".equals(path) || "/api/mobile/admin/qr/fallback".equals(path));
+            String serverValue = link.getQueryParameter("server");
+            String target = serverValue == null ? "" : normalizeServerBase(serverValue.trim());
+            if (target.isEmpty() && httpApproval && link.getAuthority() != null && !link.getAuthority().trim().isEmpty()) {
+                target = normalizeServerBase(scheme + "://" + link.getAuthority().trim());
+            }
+            if (!target.isEmpty()) return target;
+        } catch (Exception ignored) {}
+        try {
+            JSONObject obj = new JSONObject(raw);
+            return normalizeServerBase(obj.optString("server", "").trim());
+        } catch (Exception ignored) {}
+        return "";
+    }
+
+    private void preparePendingAdminApprovalServerForLogin() {
+        if (sessionToken != null && !sessionToken.trim().isEmpty()) return;
+        if (pendingAdminApprovalDeepLink == null || pendingAdminApprovalDeepLink.trim().isEmpty()) return;
+        String target = extractAdminApprovalServerQuietly(pendingAdminApprovalDeepLink);
+        if (target.isEmpty()) return;
+        String current = normalizeServerBase(serverBase);
+        if (target.equalsIgnoreCase(current)) return;
+        serverBase = target;
+        prefs.edit().putString(KEY_SERVER, target).apply();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // v50: Chrome-dan tətbiqə keçid zamanı intent artıq tutulubsa, sessiya hazır olan
+        // kimi pending Admin QR təsdiqini yenidən işlət.
+        handlePendingAdminApprovalDeepLink();
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        activityVisible = true;
+        if (kitchenAutoRefreshActive && kitchenRefreshRunnable != null) {
+            kitchenRefreshHandler.removeCallbacks(kitchenRefreshRunnable);
+            kitchenRefreshHandler.post(kitchenRefreshRunnable);
+        }
+    }
+
+    @Override
+    protected void onStop() {
+        activityVisible = false;
+        if (kitchenRefreshRunnable != null) {
+            kitchenRefreshHandler.removeCallbacks(kitchenRefreshRunnable);
+        }
+        super.onStop();
+    }
+
+    @Override
+    protected void onDestroy() {
+        stopKitchenAutoRefresh();
+        super.onDestroy();
+        io.shutdownNow();
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (activeNavigationOverlay != null) {
+            animateNavigationDrawer(false);
+            lastExitBackPressedAt = 0L;
+            return;
+        }
+
+        if (currentBackAction != null) {
+            Runnable action = currentBackAction;
+            currentBackAction = null;
+            lastExitBackPressedAt = 0L;
+            action.run();
+            return;
+        }
+
+        long now = System.currentTimeMillis();
+        if (now - lastExitBackPressedAt <= EXIT_BACK_INTERVAL_MS) {
+            lastExitBackPressedAt = 0L;
+            super.onBackPressed();
+            return;
+        }
+
+        lastExitBackPressedAt = now;
+        toast("Proqramdan çıxmaq üçün geri düyməsinə bir daha basın.");
+    }
+
+    private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
+
+    private int getStatusBarInset() {
+        int result = 0;
+        int resId = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        if (resId > 0) result = getResources().getDimensionPixelSize(resId);
+        return result;
+    }
+
+    private GradientDrawable bg(int color, int radius, int strokeColor) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(color);
+        d.setCornerRadius(dp(radius));
+        if (strokeColor != Color.TRANSPARENT) d.setStroke(dp(1), strokeColor);
+        return d;
+    }
+
+    private TextView text(String value, float sp, int color, boolean bold) {
+        TextView t = new TextView(this);
+        t.setText(value);
+        t.setTextSize(sp);
+        t.setTextColor(color);
+        t.setGravity(Gravity.CENTER_VERTICAL);
+        if (bold) t.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        return t;
+    }
+
+    private Button button(String label, int background, int foreground) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setAllCaps(false);
+        b.setTextSize(15);
+        b.setTextColor(foreground);
+        b.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+        b.setMinHeight(0);
+        b.setMinimumHeight(0);
+        b.setPadding(dp(14), 0, dp(14), 0);
+        b.setBackground(bg(background, 14, background == CARD ? BORDER : background));
+        b.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+        return b;
+    }
+
+    private EditText input(String hint) {
+        EditText e = new EditText(this);
+        e.setHint(hint);
+        e.setSingleLine(true);
+        e.setTextColor(TEXT);
+        e.setHintTextColor(Color.rgb(145, 159, 174));
+        e.setTextSize(15);
+        e.setPadding(dp(14), 0, dp(14), 0);
+        e.setBackground(bg(CARD, 14, BORDER));
+        e.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        installSearchClearBehavior(e, hint);
+        return e;
+    }
+
+    private boolean isSearchLikeHint(String hint) {
+        if (hint == null) return false;
+        return hint.toLowerCase(Locale.ROOT).contains("axtar");
+    }
+
+    private void updateSearchClearIcon(EditText field) {
+        if (field == null) return;
+        CharSequence hintSeq = field.getHint();
+        if (!isSearchLikeHint(hintSeq == null ? "" : hintSeq.toString())) return;
+        boolean hasText = field.getText() != null && field.getText().length() > 0;
+        field.setCompoundDrawablePadding(dp(8));
+        field.setCompoundDrawablesWithIntrinsicBounds(
+                null,
+                null,
+                hasText ? getDrawable(android.R.drawable.ic_menu_close_clear_cancel) : null,
+                null
+        );
+    }
+
+    private void installSearchClearBehavior(EditText field, String hint) {
+        if (field == null || !isSearchLikeHint(hint)) return;
+        updateSearchClearIcon(field);
+        field.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(android.text.Editable s) {
+                updateSearchClearIcon(field);
+            }
+        });
+        field.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_UP) {
+                android.graphics.drawable.Drawable end = field.getCompoundDrawables()[2];
+                if (end != null && event.getX() >= (field.getWidth() - field.getPaddingRight() - end.getBounds().width() - dp(6))) {
+                    field.setText("");
+                    field.requestFocus();
+                    return true;
+                }
+            }
+            return false;
+        });
+    }
+
+
+    private String normalizeAzerbaijanPhone(String value) {
+        String raw = value == null ? "" : value.trim();
+        if (raw.isEmpty()) return "";
+        String digits = raw.replaceAll("[^0-9]", "");
+        if (digits.startsWith("994") && digits.length() == 12) {
+            return "+994" + digits.substring(3);
+        }
+        if (digits.startsWith("0") && digits.length() == 10) {
+            return "+994" + digits.substring(1);
+        }
+        if (!digits.startsWith("0") && digits.length() == 9) {
+            return "+994" + digits;
+        }
+        return raw;
+    }
+
+    private void applyPhoneNormalization(EditText field) {
+        if (field == null) return;
+        String current = field.getText() == null ? "" : field.getText().toString();
+        String normalized = normalizeAzerbaijanPhone(current);
+        if (!normalized.equals(current)) {
+            field.setText(normalized);
+            field.setSelection(field.getText().length());
+        }
+    }
+
+    private void installPhoneAutoFormat(EditText field) {
+        if (field == null) return;
+        applyPhoneNormalization(field);
+        final boolean[] selfChange = new boolean[]{false};
+        field.addTextChangedListener(new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(android.text.Editable s) {
+                if (selfChange[0]) return;
+                String current = s == null ? "" : s.toString();
+                String normalized = normalizeAzerbaijanPhone(current);
+                if (!normalized.equals(current) && normalized.startsWith("+994")) {
+                    selfChange[0] = true;
+                    field.setText(normalized);
+                    field.setSelection(field.getText().length());
+                    selfChange[0] = false;
+                }
+            }
+        });
+        field.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) applyPhoneNormalization(field);
+        });
+    }
+
+    private LinearLayout card() {
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setPadding(dp(16), dp(14), dp(16), dp(14));
+        c.setBackground(bg(CARD, 18, BORDER));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, dp(12));
+        c.setLayoutParams(lp);
+        return c;
+    }
+
+    private void buildRoot() {
+        root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setBackgroundColor(BG);
+        setContentView(root);
+
+        busy = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        busy.setIndeterminate(true);
+        busy.setVisibility(View.GONE);
+        root.addView(busy, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(3)));
+
+        content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        root.addView(content, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+    }
+
+    private void clear() {
+        stopKitchenAutoRefresh();
+        activeOrderCartButton = null;
+        activeOrderCartStation = "";
+        content.removeAllViews();
+    }
+
+    private void setBusy(boolean value) {
+        runOnUiThread(() -> busy.setVisibility(value ? View.VISIBLE : View.GONE));
+    }
+
+    private ScrollView screenWithBody(String title, boolean back, Runnable backAction) {
+        return screenWithBody(title, back, backAction, null);
+    }
+
+    private ScrollView screenWithBody(String title, boolean back, Runnable backAction, Runnable refreshAction) {
+        currentBackAction = back ? backAction : null;
+        clear();
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(14), dp(12), dp(14), dp(14));
+        content.addView(shell, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        LinearLayout header = buildMainHeader(title, back, backAction);
+        shell.addView(header);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        if (!back && !sessionToken.isEmpty()) installGlobalDrawerSwipe(scroll);
+        addPullToRefreshContent(shell, scroll, refreshAction);
+        return scroll;
+    }
+
+    private ScrollView screenWithOrderCartHeader(String title, String station, Runnable backAction) {
+        return screenWithOrderCartHeader(title, station, backAction, null);
+    }
+
+    private ScrollView screenWithOrderCartHeader(String title, String station, Runnable backAction, Runnable refreshAction) {
+        currentBackAction = backAction;
+        clear();
+
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(14), dp(12), dp(14), dp(14));
+        content.addView(shell, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+
+        LinearLayout header = buildMainHeader(title, true, backAction);
+        activeOrderCartStation = station;
+        activeOrderCartButton = buildOrderCartHeaderButton(station);
+        header.addView(activeOrderCartButton, new LinearLayout.LayoutParams(dp(52), dp(48)));
+        shell.addView(header);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        addPullToRefreshContent(shell, scroll, refreshAction);
+        return scroll;
+    }
+
+    // v104: YouTube tipli pull-to-refresh. Yalnız siyahı yuxarı həddə olanda
+    // ekranın mərkəzindən aşağı dartmaq cari məlumat ekranını yenidən yükləyir.
+    private void addPullToRefreshContent(LinearLayout shell, ScrollView scroll, Runnable refreshAction) {
+        if (refreshAction == null) {
+            shell.addView(scroll, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    0,
+                    1f
+            ));
+            return;
+        }
+
+        SwipeRefreshLayout swipeRefresh = new SwipeRefreshLayout(this);
+        swipeRefresh.setDistanceToTriggerSync(dp(72));
+        swipeRefresh.setProgressViewOffset(false, -dp(28), dp(52));
+        swipeRefresh.setOnChildScrollUpCallback((parent, child) -> scroll.canScrollVertically(-1));
+        swipeRefresh.addView(scroll, new SwipeRefreshLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT
+        ));
+        swipeRefresh.setOnRefreshListener(() -> {
+            swipeRefresh.setRefreshing(false);
+            swipeRefresh.post(refreshAction);
+        });
+        shell.addView(swipeRefresh, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                0,
+                1f
+        ));
+    }
+
+    private FrameLayout buildOrderCartHeaderButton(String station) {
+        FrameLayout holder = new FrameLayout(this);
+        holder.setClickable(true);
+        holder.setFocusable(true);
+        holder.setContentDescription("Səbət");
+        holder.setBackgroundColor(Color.TRANSPARENT);
+
+        TextView icon = text("🛒", 25, TEXT, false);
+        icon.setGravity(Gravity.CENTER);
+        FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(
+                dp(46),
+                dp(46),
+                Gravity.CENTER
+        );
+        holder.addView(icon, iconLp);
+
+        TextView badge = text("", 10, Color.WHITE, true);
+        badge.setTag("order_cart_badge");
+        badge.setGravity(Gravity.CENTER);
+        badge.setMinWidth(dp(20));
+        badge.setMinHeight(dp(20));
+        badge.setPadding(dp(4), 0, dp(4), 0);
+        GradientDrawable badgeBg = new GradientDrawable();
+        badgeBg.setColor(Color.rgb(220, 45, 55));
+        badgeBg.setCornerRadius(dp(20));
+        badge.setBackground(badgeBg);
+
+        FrameLayout.LayoutParams badgeLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(20),
+                Gravity.TOP | Gravity.END
+        );
+        badgeLp.setMargins(0, 0, 0, 0);
+        holder.addView(badge, badgeLp);
+
+        holder.setOnClickListener(v -> showOrderCart(station));
+        updateOrderCartHeaderBadge(station);
+        return holder;
+    }
+
+    private void updateOrderCartHeaderBadge(String station) {
+        if (activeOrderCartButton == null) return;
+        if (!station.equals(activeOrderCartStation)) return;
+
+        View badgeView = activeOrderCartButton.findViewWithTag("order_cart_badge");
+        if (!(badgeView instanceof TextView)) return;
+
+        TextView badge = (TextView) badgeView;
+        int count = cartTotalQty(station);
+        if (count <= 0) {
+            badge.setVisibility(View.GONE);
+            badge.setText("");
+        } else {
+            badge.setVisibility(View.VISIBLE);
+            badge.setText(count > 99 ? "99+" : String.valueOf(count));
+        }
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        // v110: sol panel hər yerdən sağa swipe ilə açıla bilər, amma şaquli scroll ilə qarışmır.
+        // Drawer yalnız aydın üfüqi jestdə başlayır; şaquli hərəkət üstün gələn kimi həmin toxunuş kilidlənir.
+        if (event != null && sessionToken != null && !sessionToken.isEmpty()) {
+            final int action = event.getActionMasked();
+
+            if (action == MotionEvent.ACTION_DOWN) {
+                // Panel artıq açıqdırsa onun öz toxunma davranışına qarışmırıq.
+                globalDrawerSwipeTracking = activeNavigationOverlay == null;
+                globalDrawerSwipeDragging = false;
+                globalDrawerSwipeVerticalLocked = false;
+                globalDrawerSwipeStartX = event.getX();
+                globalDrawerSwipeStartY = event.getY();
+                globalDrawerSwipeStartTime = System.currentTimeMillis();
+            } else if (globalDrawerSwipeTracking && action == MotionEvent.ACTION_MOVE) {
+                float dx = event.getX() - globalDrawerSwipeStartX;
+                float dy = event.getY() - globalDrawerSwipeStartY;
+                float absDx = Math.abs(dx);
+                float absDy = Math.abs(dy);
+                int horizontalStartThreshold = dp(18);
+                int verticalLockThreshold = dp(10);
+
+                if (!globalDrawerSwipeDragging && !globalDrawerSwipeVerticalLocked) {
+                    // Aşağı/yuxarı scroll üstünlük qazandıqda bu touch seriyasında paneli açma.
+                    if (absDy > verticalLockThreshold && absDy > absDx * 1.20f) {
+                        globalDrawerSwipeVerticalLocked = true;
+                    } else if (dx > horizontalStartThreshold && absDx > absDy * 1.75f) {
+                        globalDrawerSwipeDragging = true;
+                        ensureNavigationMenuOverlay();
+
+                        // ACTION_DOWN almış alt elementdə klik/scroll əməliyyatını dayandırırıq.
+                        MotionEvent cancelEvent = MotionEvent.obtain(event);
+                        cancelEvent.setAction(MotionEvent.ACTION_CANCEL);
+                        super.dispatchTouchEvent(cancelEvent);
+                        cancelEvent.recycle();
+                    }
+                }
+
+                if (globalDrawerSwipeDragging) {
+                    float width = getNavigationPanelWidth();
+                    setNavigationDrawerProgress(width <= 0f ? 0f : dx / width);
+                    return true;
+                }
+            } else if (globalDrawerSwipeTracking
+                    && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)) {
+                if (globalDrawerSwipeDragging) {
+                    float dx = event.getX() - globalDrawerSwipeStartX;
+                    long elapsed = Math.max(1L, System.currentTimeMillis() - globalDrawerSwipeStartTime);
+                    float velocity = dx * 1000f / elapsed;
+                    boolean open = navigationDrawerProgress >= 0.34f
+                            || (dx >= dp(64) && velocity >= dp(420));
+                    animateNavigationDrawer(open);
+                    globalDrawerSwipeTracking = false;
+                    globalDrawerSwipeDragging = false;
+                    globalDrawerSwipeVerticalLocked = false;
+                    return true;
+                }
+                globalDrawerSwipeTracking = false;
+                globalDrawerSwipeDragging = false;
+                globalDrawerSwipeVerticalLocked = false;
+            }
+        }
+
+        return super.dispatchTouchEvent(event);
+    }
+
+    private void installGlobalDrawerSwipe(View target) {
+        final float[] startX = {0f};
+        final float[] startY = {0f};
+        final long[] startTime = {0L};
+        final boolean[] dragging = {false};
+        final boolean[] verticalLocked = {false};
+        final int horizontalStartThreshold = dp(18);
+        final int verticalLockThreshold = dp(10);
+
+        target.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    startX[0] = event.getX();
+                    startY[0] = event.getY();
+                    startTime[0] = System.currentTimeMillis();
+                    dragging[0] = false;
+                    verticalLocked[0] = false;
+                    break;
+                case MotionEvent.ACTION_MOVE: {
+                    float dx = event.getX() - startX[0];
+                    float dy = event.getY() - startY[0];
+                    float absDx = Math.abs(dx);
+                    float absDy = Math.abs(dy);
+
+                    if (!dragging[0] && !verticalLocked[0]) {
+                        if (absDy > verticalLockThreshold && absDy > absDx * 1.20f) {
+                            verticalLocked[0] = true;
+                        } else if (dx > horizontalStartThreshold && absDx > absDy * 1.75f) {
+                            dragging[0] = true;
+                            ensureNavigationMenuOverlay();
+                            if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(true);
+                        }
+                    }
+
+                    if (dragging[0]) {
+                        float width = getNavigationPanelWidth();
+                        setNavigationDrawerProgress(width <= 0f ? 0f : dx / width);
+                        return true;
+                    }
+                    break;
+                }
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (dragging[0]) {
+                        float dx = event.getX() - startX[0];
+                        long elapsed = Math.max(1L, System.currentTimeMillis() - startTime[0]);
+                        float velocity = dx * 1000f / elapsed;
+                        boolean open = navigationDrawerProgress >= 0.34f
+                                || (dx >= dp(64) && velocity >= dp(420));
+                        animateNavigationDrawer(open);
+                        if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(false);
+                        dragging[0] = false;
+                        verticalLocked[0] = false;
+                        return true;
+                    }
+                    verticalLocked[0] = false;
+                    break;
+                default:
+                    break;
+            }
+            return false;
+        });
+    }
+
+    private View buildChatGptMenuButton() {
+        FrameLayout outer = new FrameLayout(this);
+        outer.setBackground(bg(CARD, 18, BORDER));
+        outer.setElevation(dp(3));
+        outer.setClickable(true);
+        outer.setFocusable(true);
+        outer.setContentDescription("Menyu");
+        outer.setLayoutParams(new LinearLayout.LayoutParams(dp(52), dp(46)));
+
+        LinearLayout bars = new LinearLayout(this);
+        bars.setOrientation(LinearLayout.VERTICAL);
+        bars.setGravity(Gravity.CENTER_VERTICAL);
+        int padH = dp(15);
+        int padV = dp(10);
+        bars.setPadding(padH, padV, padH, padV);
+
+        int[] widths = {dp(18), dp(18), dp(12)};
+        for (int i = 0; i < widths.length; i++) {
+            View line = new View(this);
+            GradientDrawable d = new GradientDrawable();
+            d.setColor(TEXT);
+            d.setCornerRadius(dp(2));
+            line.setBackground(d);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(widths[i], dp(3));
+            if (i > 0) lp.topMargin = dp(5);
+            bars.addView(line, lp);
+        }
+
+        outer.addView(bars, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER));
+        outer.setOnClickListener(v -> showNavigationMenu());
+        return outer;
+    }
+
+    private LinearLayout buildMainHeader(String title, boolean back, Runnable backAction) {
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+        header.setPadding(dp(4), getStatusBarInset() + dp(6), dp(4), dp(10));
+
+        if (back) {
+            Button b = button("‹", CARD, TEXT);
+            b.setTextSize(26);
+            b.setLayoutParams(new LinearLayout.LayoutParams(dp(52), dp(46)));
+            b.setOnClickListener(v -> { if (backAction != null) backAction.run(); });
+            header.addView(b);
+        } else if (!sessionToken.isEmpty()) {
+            header.addView(buildChatGptMenuButton());
+        }
+
+        TextView h = text(title, 21, TEXT, true);
+        LinearLayout.LayoutParams hp = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        hp.setMargins((back || !sessionToken.isEmpty()) ? dp(10) : 0, 0, 0, 0);
+        header.addView(h, hp);
+        return header;
+    }
+
+    private float getNavigationPanelWidth() {
+        return Math.max(dp(280), getResources().getDisplayMetrics().widthPixels * 0.82f);
+    }
+
+    private void ensureNavigationMenuOverlay() {
+        if (activeNavigationOverlay != null) return;
+        ViewGroup host = findViewById(android.R.id.content);
+        if (host == null) return;
+
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(Color.TRANSPARENT);
+
+        View scrim = new View(this);
+        scrim.setBackgroundColor(MENU_SCRIM);
+        scrim.setAlpha(0f);
+        overlay.addView(scrim, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setPadding(dp(18), dp(22), dp(18), dp(18));
+        panel.setBackgroundColor(Color.WHITE);
+        panel.setElevation(dp(12));
+        int panelWidth = (int) getNavigationPanelWidth();
+        FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams(panelWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START);
+        overlay.addView(panel, panelLp);
+        panel.setTranslationX(-panelWidth);
+
+        TextView appTitle = text("Marakana Mobile", 22, TEXT, true);
+        panel.addView(appTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
+        TextView account = text((username.isEmpty() ? "İstifadəçi" : username) + "  •  " + roleLabel, 13, MUTED, true);
+        panel.addView(account, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
+        spacer(panel, 8);
+
+        if (canHall) addDrawerItem(panel, "Terminallar / Zal", () -> { dismissNavigationMenuImmediate(); switchMobileRole("hall", false, this::showTerminals); });
+        if (canKitchen) addDrawerItem(panel, "Mətbəx", () -> { dismissNavigationMenuImmediate(); switchMobileRole("kitchen", false, this::showKitchen); });
+        if (canAdmin) {
+            addDrawerItem(panel, "Borc Dəftəri", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", true, () -> showDebt("İşçi")); });
+            addDrawerItem(panel, "İcarə Paneli", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, () -> showRental("active")); });
+            addDrawerItem(panel, "Hesab Satışı", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, () -> showAccountSales("accounts")); });
+            addDrawerItem(panel, "Admin QR təsdiqi", () -> {
+                dismissNavigationMenuImmediate();
+                if ("admin".equals(role)) startAdminApprovalQrScanner();
+                else switchMobileRole("admin", false, this::startAdminApprovalQrScanner);
+            });
+        }
+
+        View flex = new View(this);
+        panel.addView(flex, new LinearLayout.LayoutParams(1, 0, 1f));
+
+        if ("kitchen".equals(role)) {
+            LinearLayout soundItem = new LinearLayout(this);
+            soundItem.setOrientation(LinearLayout.VERTICAL);
+            soundItem.setGravity(Gravity.CENTER_VERTICAL);
+            soundItem.setPadding(dp(14), dp(7), dp(14), dp(7));
+            soundItem.setBackground(bg(CARD, 14, BORDER));
+            soundItem.setClickable(true);
+            soundItem.setFocusable(true);
+            TextView soundTitle = text("Bildiriş səsi", 14, TEXT, true);
+            TextView soundValue = text(getKitchenNotificationSoundTitle(), 12, MUTED, false);
+            soundValue.setSingleLine(true);
+            soundItem.addView(soundTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(23)));
+            soundItem.addView(soundValue, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(21)));
+            LinearLayout.LayoutParams soundLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(60));
+            soundLp.setMargins(0, 0, 0, dp(8));
+            panel.addView(soundItem, soundLp);
+            soundItem.setOnClickListener(v -> { dismissNavigationMenuImmediate(); chooseKitchenNotificationSound(); });
+        }
+
+        Button exit = button("Çıxış", Color.rgb(255, 246, 246), Color.rgb(176, 54, 54));
+        exit.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+        panel.addView(exit);
+
+        activeNavigationOverlay = overlay;
+        activeNavigationPanel = panel;
+        activeNavigationScrim = scrim;
+        navigationDrawerProgress = 0f;
+        host.addView(overlay, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        scrim.setOnClickListener(v -> animateNavigationDrawer(false));
+        exit.setOnClickListener(v -> { dismissNavigationMenuImmediate(); logout(); });
+    }
+
+    private void setNavigationDrawerProgress(float progress) {
+        if (activeNavigationPanel == null || activeNavigationScrim == null) return;
+        float p = Math.max(0f, Math.min(1f, progress));
+        navigationDrawerProgress = p;
+        float width = getNavigationPanelWidth();
+        activeNavigationPanel.animate().cancel();
+        activeNavigationScrim.animate().cancel();
+        activeNavigationPanel.setTranslationX(-width * (1f - p));
+        activeNavigationScrim.setAlpha(p);
+    }
+
+    private void animateNavigationDrawer(boolean open) {
+        if (activeNavigationOverlay == null) {
+            if (!open) return;
+            ensureNavigationMenuOverlay();
+        }
+        if (activeNavigationPanel == null || activeNavigationScrim == null) return;
+        float target = open ? 1f : 0f;
+        float distance = Math.abs(target - navigationDrawerProgress);
+        long duration = Math.max(110L, (long) (230L * distance));
+        float width = getNavigationPanelWidth();
+        navigationDrawerProgress = target;
+        activeNavigationPanel.animate().translationX(open ? 0f : -width).setDuration(duration).withEndAction(() -> { if (!open) dismissNavigationMenuImmediate(); }).start();
+        activeNavigationScrim.animate().alpha(open ? 1f : 0f).setDuration(duration).start();
+    }
+
+    private void dismissNavigationMenuImmediate() {
+        if (activeNavigationOverlay == null) return;
+        if (activeNavigationOverlay.getParent() instanceof ViewGroup) {
+            ((ViewGroup) activeNavigationOverlay.getParent()).removeView(activeNavigationOverlay);
+        }
+        activeNavigationOverlay = null;
+        activeNavigationPanel = null;
+        activeNavigationScrim = null;
+        navigationDrawerProgress = 0f;
+    }
+
+    private void showNavigationMenu() {
+        ensureNavigationMenuOverlay();
+        setNavigationDrawerProgress(0f);
+        animateNavigationDrawer(true);
+    }
+
+    private void addDrawerItem(LinearLayout panel, String label, Runnable action) {
+        Button item = button(label, CARD, TEXT);
+        item.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        item.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) item.getLayoutParams();
+        lp.setMargins(0, 0, 0, dp(8));
+        item.setLayoutParams(lp);
+        item.setOnClickListener(v -> action.run());
+        panel.addView(item);
+    }
+
+    private LinearLayout scrollBody(ScrollView scroll) {
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(0, dp(4), 0, dp(22));
+        scroll.addView(body, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return body;
+    }
+
+    private String normalizeServerBase(String raw) {
+        String v = raw == null ? "" : raw.trim();
+        if (v.isEmpty()) return "";
+        if (!v.toLowerCase(Locale.ROOT).startsWith("http://") && !v.toLowerCase(Locale.ROOT).startsWith("https://")) v = "http://" + v;
+        while (v.endsWith("/")) v = v.substring(0, v.length() - 1);
+        String lower = v.toLowerCase(Locale.ROOT);
+        if (lower.endsWith("/mobile")) v = v.substring(0, v.length() - 7);
+        else if (lower.endsWith("/api")) v = v.substring(0, v.length() - 4);
+        return v;
+    }
+
+    private String extractServerBaseFromQr(String raw) {
+        String value = raw == null ? "" : raw.trim();
+        if (value.isEmpty()) return "";
+
+        // QR JSON formatında olarsa tanınan sahələrdən ünvanı götür.
+        try {
+            JSONObject obj = new JSONObject(value);
+            String[] keys = {"server", "server_url", "base", "base_url", "url", "mobile_url"};
+            for (String key : keys) {
+                String candidate = obj.optString(key, "").trim();
+                if (!candidate.isEmpty()) {
+                    value = candidate;
+                    break;
+                }
+            }
+        } catch (Exception ignored) {}
+
+        // QR mətnində əlavə yazı varsa ilk http/https ünvanını çıxar.
+        try {
+            java.util.regex.Matcher matcher = java.util.regex.Pattern
+                    .compile("(https?://[^\\s]+)", java.util.regex.Pattern.CASE_INSENSITIVE)
+                    .matcher(value);
+            if (matcher.find()) value = matcher.group(1);
+        } catch (Exception ignored) {}
+
+        // Sonda QR mətnindən qala bilən sadə durğu işarələrini təmizlə.
+        value = value.replaceAll("[\\)\\]\\}>,;]+$", "");
+        return normalizeServerBase(value);
+    }
+
+
+    private SecretKey getOrCreateLoginKey() throws Exception {
+        KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+        keyStore.load(null);
+        if (keyStore.containsAlias(KEYSTORE_ALIAS)) {
+            return ((KeyStore.SecretKeyEntry) keyStore.getEntry(KEYSTORE_ALIAS, null)).getSecretKey();
+        }
+        KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+        KeyGenParameterSpec spec = new KeyGenParameterSpec.Builder(
+                KEYSTORE_ALIAS,
+                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .build();
+        generator.init(spec);
+        return generator.generateKey();
+    }
+
+    private void savePasswordSecurely(String password) {
+        try {
+            if (password == null || password.isEmpty()) {
+                clearSavedPassword();
+                return;
+            }
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateLoginKey());
+            byte[] encrypted = cipher.doFinal(password.getBytes(StandardCharsets.UTF_8));
+            String enc = Base64.encodeToString(encrypted, Base64.NO_WRAP);
+            String iv = Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP);
+            prefs.edit().putString(KEY_PASSWORD_ENC, enc).putString(KEY_PASSWORD_IV, iv).apply();
+        } catch (Exception ex) {
+            clearSavedPassword();
+        }
+    }
+
+    private String loadSavedPassword() {
+        String enc = prefs.getString(KEY_PASSWORD_ENC, "");
+        String iv = prefs.getString(KEY_PASSWORD_IV, "");
+        if (enc.isEmpty() || iv.isEmpty()) return "";
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec spec = new GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP));
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateLoginKey(), spec);
+            byte[] raw = cipher.doFinal(Base64.decode(enc, Base64.NO_WRAP));
+            return new String(raw, StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            clearSavedPassword();
+            return "";
+        }
+    }
+
+    private void clearSavedPassword() {
+        prefs.edit().remove(KEY_PASSWORD_ENC).remove(KEY_PASSWORD_IV).putBoolean(KEY_AUTO_LOGIN, false).apply();
+    }
+
+    private void saveKitchenBackgroundPassword(String password) {
+        try {
+            if (password == null || password.isEmpty()) {
+                clearKitchenBackgroundPassword();
+                return;
+            }
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateLoginKey());
+            byte[] encrypted = cipher.doFinal(password.getBytes(StandardCharsets.UTF_8));
+            prefs.edit()
+                    .putString(KEY_KITCHEN_BG_PASSWORD_ENC, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                    .putString(KEY_KITCHEN_BG_PASSWORD_IV, Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP))
+                    .apply();
+        } catch (Exception ex) {
+            clearKitchenBackgroundPassword();
+        }
+    }
+
+    private String loadKitchenBackgroundPassword() {
+        String enc = prefs.getString(KEY_KITCHEN_BG_PASSWORD_ENC, "");
+        String iv = prefs.getString(KEY_KITCHEN_BG_PASSWORD_IV, "");
+        if (enc.isEmpty() || iv.isEmpty()) return "";
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec spec = new GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP));
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateLoginKey(), spec);
+            byte[] raw = cipher.doFinal(Base64.decode(enc, Base64.NO_WRAP));
+            return new String(raw, StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            clearKitchenBackgroundPassword();
+            return "";
+        }
+    }
+
+    private boolean hasKitchenBackgroundPassword() {
+        return !prefs.getString(KEY_KITCHEN_BG_PASSWORD_ENC, "").isEmpty()
+                && !prefs.getString(KEY_KITCHEN_BG_PASSWORD_IV, "").isEmpty();
+    }
+
+    private void clearKitchenBackgroundPassword() {
+        prefs.edit()
+                .remove(KEY_KITCHEN_BG_PASSWORD_ENC)
+                .remove(KEY_KITCHEN_BG_PASSWORD_IV)
+                .remove(KEY_KITCHEN_BG_SNAPSHOT_INITIALIZED)
+                .remove(KEY_KITCHEN_BG_KNOWN_TICKETS)
+                .apply();
+    }
+
+    private void startKitchenBackgroundService() {
+        Intent serviceIntent = new Intent(this, KitchenBackgroundService.class);
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(serviceIntent);
+            else startService(serviceIntent);
+        } catch (Exception ignored) {}
+    }
+
+    private void stopKitchenBackgroundService(boolean clearCredentials) {
+        try { stopService(new Intent(this, KitchenBackgroundService.class)); } catch (Exception ignored) {}
+        if (clearCredentials) clearKitchenBackgroundPassword();
+    }
+
+    private void updateKitchenBackgroundServiceForRole(String passwordForKitchen) {
+        if ("kitchen".equals(role)) {
+            saveKitchenBackgroundPassword(passwordForKitchen);
+            startKitchenBackgroundService();
+        } else {
+            stopKitchenBackgroundService(true);
+        }
+    }
+
+    private void autoLogin(String savedUser, String savedPassword, String savedRole, boolean savedDebtOnly) {
+        ScrollView sv = screenWithBody("Marakana Mobile", false, null);
+        LinearLayout body = scrollBody(sv);
+        body.setGravity(Gravity.CENTER);
+        TextView t = text("Giriş edilir…", 20, TEXT, true);
+        t.setGravity(Gravity.CENTER);
+        body.addView(t, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(90)));
+        performLogin(savedUser, savedPassword, savedRole, savedDebtOnly, true, false);
+    }
+
+    private void performLogin(String u, String p, String selectedRole, boolean debtOnly, boolean rememberPassword, boolean showLoginOnFailure) {
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                String preferredRole = selectedRole == null ? "hall" : selectedRole.trim().toLowerCase(Locale.ROOT);
+                if (!preferredRole.equals("hall") && !preferredRole.equals("kitchen") && !preferredRole.equals("admin")) {
+                    preferredRole = "hall";
+                }
+
+                List<String> candidates = new ArrayList<>();
+                candidates.add(preferredRole);
+                for (String candidate : new String[]{"hall", "kitchen", "admin"}) {
+                    if (!candidates.contains(candidate)) candidates.add(candidate);
+                }
+
+                JSONObject result = null;
+                String loggedRole = "";
+                Exception lastError = null;
+                for (String candidate : candidates) {
+                    try {
+                        JSONObject payload = new JSONObject();
+                        payload.put("username", u);
+                        payload.put("password", p);
+                        payload.put("role", candidate);
+                        JSONObject candidateResult = request(serverBase, "/api/mobile/login", "POST", payload, "");
+                        String candidateToken = candidateResult.optString("token", "");
+                        if (candidateToken.isEmpty()) throw new RuntimeException("Mobil sessiya yaradılmadı.");
+                        result = candidateResult;
+                        loggedRole = candidate;
+                        break;
+                    } catch (Exception roleError) {
+                        lastError = roleError;
+                    }
+                }
+
+                if (result == null) {
+                    if (lastError != null) throw lastError;
+                    throw new RuntimeException("Bu istifadəçi üçün mobil giriş icazəsi tapılmadı.");
+                }
+
+                sessionToken = result.optString("token", "");
+                username = result.optString("username", u);
+                role = result.optString("role", loggedRole);
+                roleLabel = result.optString("role_label", role);
+                adminDebtOnly = role.equals("admin") && debtOnly && preferredRole.equals("admin");
+                sessionPassword = p;
+                refreshAllowedMobileRoles(username, p, role);
+                SharedPreferences.Editor editor = prefs.edit()
+                        .putString(KEY_USERNAME, username)
+                        .putString(KEY_ROLE, role)
+                        .putBoolean(KEY_ADMIN_DEBT_ONLY, adminDebtOnly)
+                        .putBoolean(KEY_AUTO_LOGIN, rememberPassword);
+                editor.apply();
+                if (rememberPassword) savePasswordSecurely(p); else clearSavedPassword();
+                runOnUiThread(() -> {
+                    updateKitchenBackgroundServiceForRole(p);
+                    if (role.equals("kitchen")) showKitchen();
+                    else if (role.equals("admin") && adminDebtOnly) showDebt("İşçi");
+                    else showTerminals();
+                    handlePendingAdminApprovalDeepLink();
+                });
+            } catch (Exception ex) {
+                if (!showLoginOnFailure) {
+                    clearSavedPassword();
+                    runOnUiThread(() -> {
+                        showLogin();
+                        toast("Avtomatik giriş alınmadı. Şifrəni yenidən daxil edin.");
+                    });
+                } else {
+                    showError(ex);
+                }
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    private void refreshAllowedMobileRoles(String loginUser, String password, String activeRole) {
+        canHall = "hall".equals(activeRole);
+        canKitchen = "kitchen".equals(activeRole);
+        canAdmin = "admin".equals(activeRole);
+        String[] candidates = {"hall", "kitchen", "admin"};
+        for (String candidate : candidates) {
+            if (candidate.equals(activeRole)) continue;
+            String probeToken = "";
+            try {
+                JSONObject probePayload = new JSONObject();
+                probePayload.put("username", loginUser);
+                probePayload.put("password", password);
+                probePayload.put("role", candidate);
+                JSONObject probeResult = request(serverBase, "/api/mobile/login", "POST", probePayload, "");
+                probeToken = probeResult.optString("token", "");
+                if ("hall".equals(candidate)) canHall = true;
+                else if ("kitchen".equals(candidate)) canKitchen = true;
+                else if ("admin".equals(candidate)) canAdmin = true;
+            } catch (Exception ignored) {
+                if ("hall".equals(candidate)) canHall = false;
+                else if ("kitchen".equals(candidate)) canKitchen = false;
+                else if ("admin".equals(candidate)) canAdmin = false;
+            } finally {
+                if (!probeToken.isEmpty()) {
+                    try { request(serverBase, "/api/mobile/logout", "POST", new JSONObject(), probeToken); }
+                    catch (Exception ignored) {}
+                }
+            }
+        }
+    }
+
+    private void switchMobileRole(String targetRole, boolean debtOnly, Runnable openTarget) {
+        String normalizedTarget = targetRole == null ? "hall" : targetRole.trim().toLowerCase(Locale.ROOT);
+        if (normalizedTarget.isEmpty()) normalizedTarget = "hall";
+        if (normalizedTarget.equals(role)) {
+            adminDebtOnly = "admin".equals(normalizedTarget) && debtOnly;
+            if ("kitchen".equals(normalizedTarget)) {
+                String sameRolePassword = sessionPassword;
+                if (sameRolePassword.isEmpty()) sameRolePassword = loadKitchenBackgroundPassword();
+                if (!sameRolePassword.isEmpty()) updateKitchenBackgroundServiceForRole(sameRolePassword);
+            }
+            if (openTarget != null) openTarget.run();
+            return;
+        }
+
+        String password = sessionPassword;
+        if (password.isEmpty()) password = loadSavedPassword();
+        if (password.isEmpty()) {
+            toast("Bu bölməyə keçid üçün sessiya şifrəsi tapılmadı. Yenidən daxil olun.");
+            return;
+        }
+
+        final String roleToUse = normalizedTarget;
+        final String passwordToUse = password;
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("username", username);
+                payload.put("password", passwordToUse);
+                payload.put("role", roleToUse);
+                JSONObject result = request(serverBase, "/api/mobile/login", "POST", payload, "");
+                String newToken = result.optString("token", "");
+                if (newToken.isEmpty()) throw new RuntimeException("Yeni mobil sessiya yaradılmadı.");
+                String oldToken = sessionToken;
+                sessionToken = newToken;
+                role = result.optString("role", roleToUse);
+                roleLabel = result.optString("role_label", role);
+                adminDebtOnly = "admin".equals(role) && debtOnly;
+                prefs.edit().putString(KEY_ROLE, role).putBoolean(KEY_ADMIN_DEBT_ONLY, adminDebtOnly).apply();
+                if (!oldToken.isEmpty() && !oldToken.equals(newToken)) {
+                    try { request(serverBase, "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
+                    catch (Exception ignored) {}
+                }
+                runOnUiThread(() -> {
+                    updateKitchenBackgroundServiceForRole(passwordToUse);
+                    if (openTarget != null) openTarget.run();
+                });
+            } catch (Exception ex) {
+                showError(ex);
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    private void startQrServerScanner() {
+        try {
+            GmsBarcodeScannerOptions options = new GmsBarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                    .enableAutoZoom()
+                    .build();
+
+            GmsBarcodeScanner scanner = GmsBarcodeScanning.getClient(this, options);
+            toast("QR oxuyucu açılır…");
+
+            scanner.startScan()
+                    .addOnSuccessListener(barcode -> {
+                        String scanned = barcode == null ? "" : barcode.getRawValue();
+                        if (scanned == null || scanned.trim().isEmpty()) {
+                            toast("QR kodda məlumat tapılmadı.");
+                            return;
+                        }
+                        connectToScannedServer(scanned);
+                    })
+                    .addOnCanceledListener(() -> toast("QR kod oxunması ləğv edildi."))
+                    .addOnFailureListener(error -> {
+                        String detail = error == null || error.getMessage() == null
+                                ? ""
+                                : error.getMessage().trim();
+                        if (detail.isEmpty()) {
+                            toast("QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın.");
+                        } else {
+                            toast("QR oxuyucu açıla bilmədi: " + detail);
+                        }
+                    });
+        } catch (Throwable error) {
+            toast("QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın.");
+        }
+    }
+
+    private void startAdminApprovalQrScanner() {
+        // v50: QR başqa filiala aid ola bilər. Buna görə skan etməzdən əvvəl cari
+        // filialın canAdmin nəticəsi ilə bloklamırıq; real icazə QR serverində yoxlanılır.
+        try {
+            GmsBarcodeScannerOptions options = new GmsBarcodeScannerOptions.Builder()
+                    .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                    .enableAutoZoom()
+                    .build();
+            GmsBarcodeScanner scanner = GmsBarcodeScanning.getClient(this, options);
+            toast("Admin QR kodunu oxudun…");
+            scanner.startScan()
+                    .addOnSuccessListener(barcode -> {
+                        String scanned = barcode == null ? "" : barcode.getRawValue();
+                        if (scanned == null || scanned.trim().isEmpty()) {
+                            toast("QR kodda məlumat tapılmadı.");
+                            return;
+                        }
+                        approveAdminQrChallenge(scanned);
+                    })
+                    .addOnCanceledListener(() -> toast("Admin QR oxunması ləğv edildi."))
+                    .addOnFailureListener(error -> {
+                        String detail = error == null || error.getMessage() == null ? "" : error.getMessage().trim();
+                        toast(detail.isEmpty()
+                                ? "QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın."
+                                : "QR oxuyucu açıla bilmədi: " + detail);
+                    });
+        } catch (Throwable error) {
+            toast("QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın.");
+        }
+    }
+
+    private void approveAdminQrChallenge(String scannedValue) {
+        String challenge = "";
+        String qrServer = "";
+        String raw = scannedValue == null ? "" : scannedValue.trim();
+        try {
+            Uri link = Uri.parse(raw);
+            String scheme = link.getScheme() == null ? "" : link.getScheme().trim();
+            String host = link.getHost() == null ? "" : link.getHost().trim();
+            String path = link.getPath() == null ? "" : link.getPath().trim();
+            boolean customApproval = ("marakana".equalsIgnoreCase(scheme) || "marakanaadmin".equalsIgnoreCase(scheme) || "intent".equalsIgnoreCase(scheme))
+                    && "admin-approval".equalsIgnoreCase(host);
+            boolean httpApproval = ("http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme))
+                    && ("/api/mobile/admin/qr/open".equals(path) || "/api/mobile/admin/qr/fallback".equals(path));
+            if (customApproval || httpApproval) {
+                String value = link.getQueryParameter("challenge");
+                challenge = value == null ? "" : value.trim();
+                String serverValue = link.getQueryParameter("server");
+                qrServer = serverValue == null ? "" : normalizeServerBase(serverValue.trim());
+                if (qrServer.isEmpty() && httpApproval && link.getAuthority() != null && !link.getAuthority().trim().isEmpty()) {
+                    qrServer = normalizeServerBase(scheme + "://" + link.getAuthority().trim());
+                }
+            } else {
+                // v45 ilə yaradılmış köhnə JSON QR-lar da işləməyə davam etsin.
+                JSONObject obj = new JSONObject(raw);
+                String type = obj.optString("type", "").trim();
+                if (!"marakana_admin_approval".equals(type)) {
+                    toast("Bu QR Admin təsdiq kodu deyil.");
+                    return;
+                }
+                challenge = obj.optString("challenge", "").trim();
+                qrServer = normalizeServerBase(obj.optString("server", "").trim());
+            }
+        } catch (Exception ex) {
+            toast("QR Admin təsdiq formatına uyğun deyil.");
+            return;
+        }
+        if (challenge.isEmpty()) {
+            toast("QR təsdiq kodu boşdur.");
+            return;
+        }
+        if (serverBase == null || serverBase.trim().isEmpty() || sessionToken == null || sessionToken.trim().isEmpty()) {
+            toast("Əvvəlcə PC serverinə daxil olun.");
+            return;
+        }
+        String currentServer = normalizeServerBase(serverBase);
+        final String challengeToApprove = challenge;
+        final String approvalServer = qrServer.isEmpty() ? currentServer : normalizeServerBase(qrServer);
+
+        if (!approvalServer.isEmpty() && !approvalServer.equalsIgnoreCase(currentServer)) {
+            approveAdminQrOnDifferentServer(raw, challengeToApprove, approvalServer);
+            return;
+        }
+
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("challenge", challengeToApprove);
+                JSONObject result = request(approvalServer, "/api/mobile/admin/qr/approve", "POST", payload, sessionToken);
+                if (!result.optBoolean("approved", false)) {
+                    throw new RuntimeException("QR təsdiqi qəbul edilmədi.");
+                }
+                String approvedBy = result.optString("approved_by", "").trim();
+                runOnUiThread(() -> toast(approvedBy.isEmpty()
+                        ? "Admin QR təsdiqi göndərildi."
+                        : "Admin QR təsdiqi göndərildi: " + approvedBy));
+            } catch (Exception ex) {
+                showError(ex);
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    private void approveAdminQrOnDifferentServer(String rawApproval, String challenge, String targetServer) {
+        final String target = normalizeServerBase(targetServer);
+        final String oldServer = normalizeServerBase(serverBase);
+        final String oldToken = sessionToken == null ? "" : sessionToken.trim();
+        final String loginUser = username == null ? "" : username.trim();
+        String password = sessionPassword == null ? "" : sessionPassword;
+        if (password.isEmpty()) password = loadSavedPassword();
+        final String loginPassword = password;
+
+        if (target.isEmpty()) {
+            toast("QR kodda filial serverinin ünvanı tapılmadı.");
+            return;
+        }
+
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                // Əvvəlcə QR-dakı PC-nin həqiqətən Marakana Mobile serveri kimi
+                // cavab verdiyini yoxla. Əlçatmaz IP-yə sessiyanı kor-koranə keçirmirik.
+                request(target, "/api/mobile/ping", "GET", null, "");
+            } catch (Exception pingError) {
+                runOnUiThread(() -> toast("Bu filialın PC serverinə qoşulmaq mümkün olmadı: " + target));
+                setBusy(false);
+                return;
+            }
+
+            if (loginUser.isEmpty() || loginPassword.isEmpty()) {
+                runOnUiThread(() -> moveToApprovalServerForManualLogin(target, rawApproval, oldServer, oldToken));
+                setBusy(false);
+                return;
+            }
+
+            JSONObject loginResult = null;
+            String loggedRole = "";
+            List<String> candidates = new ArrayList<>();
+            String preferredRole = role == null ? "hall" : role.trim().toLowerCase(Locale.ROOT);
+            if (!preferredRole.equals("hall") && !preferredRole.equals("kitchen") && !preferredRole.equals("admin")) {
+                preferredRole = "hall";
+            }
+            candidates.add(preferredRole);
+            for (String candidate : new String[]{"hall", "kitchen", "admin"}) {
+                if (!candidates.contains(candidate)) candidates.add(candidate);
+            }
+
+            for (String candidate : candidates) {
+                try {
+                    JSONObject loginPayload = new JSONObject();
+                    loginPayload.put("username", loginUser);
+                    loginPayload.put("password", loginPassword);
+                    loginPayload.put("role", candidate);
+                    JSONObject candidateResult = request(target, "/api/mobile/login", "POST", loginPayload, "");
+                    String candidateToken = candidateResult.optString("token", "").trim();
+                    if (candidateToken.isEmpty()) throw new RuntimeException("Mobil sessiya yaradılmadı.");
+                    loginResult = candidateResult;
+                    loggedRole = candidate;
+                    break;
+                } catch (Exception ignored) {}
+            }
+
+            if (loginResult == null) {
+                runOnUiThread(() -> moveToApprovalServerForManualLogin(target, rawApproval, oldServer, oldToken));
+                setBusy(false);
+                return;
+            }
+
+            String newToken = loginResult.optString("token", "").trim();
+            String newUsername = loginResult.optString("username", loginUser).trim();
+            String newRole = loginResult.optString("role", loggedRole).trim().toLowerCase(Locale.ROOT);
+            if (newRole.isEmpty()) newRole = loggedRole;
+            String newRoleLabel = loginResult.optString("role_label", newRole);
+
+            // Yeni filial sessiyası uğurla yaranandan sonra cari bağlantını atomik dəyiş.
+            serverBase = target;
+            sessionToken = newToken;
+            username = newUsername;
+            role = newRole;
+            roleLabel = newRoleLabel;
+            sessionPassword = loginPassword;
+            adminDebtOnly = "admin".equals(role) && adminDebtOnly;
+            prefs.edit()
+                    .putString(KEY_SERVER, target)
+                    .putString(KEY_USERNAME, username)
+                    .putString(KEY_ROLE, role)
+                    .putBoolean(KEY_ADMIN_DEBT_ONLY, adminDebtOnly)
+                    .apply();
+
+            try {
+                // Challenge qısaömürlüdür; əlavə rol probe-larından əvvəl təsdiqi dərhal göndər.
+                JSONObject payload = new JSONObject();
+                payload.put("challenge", challenge);
+                JSONObject result = request(target, "/api/mobile/admin/qr/approve", "POST", payload, sessionToken);
+                if (!result.optBoolean("approved", false)) {
+                    throw new RuntimeException("QR təsdiqi qəbul edilmədi.");
+                }
+                String approvedBy = result.optString("approved_by", "").trim();
+
+                // Təsdiqdən sonra yeni filialın menyu icazələrini yenilə.
+                refreshAllowedMobileRoles(username, loginPassword, role);
+
+                if (!oldToken.isEmpty() && !oldServer.isEmpty() && !oldServer.equalsIgnoreCase(target)) {
+                    try { request(oldServer, "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
+                    catch (Exception ignored) {}
+                }
+
+                runOnUiThread(() -> {
+                    updateKitchenBackgroundServiceForRole(loginPassword);
+                    reopenCurrentRoleHome();
+                    toast(approvedBy.isEmpty()
+                            ? "Filial avtomatik dəyişdirildi və Admin QR təsdiqləndi."
+                            : "Filial avtomatik dəyişdirildi. Admin QR təsdiqləndi: " + approvedBy);
+                });
+            } catch (Exception approvalError) {
+                // Server keçidi uğurludur; təsdiq rədd olunsa belə yeni filialın real
+                // icazələrini yenilə ki menyu köhnə filialdan qalmasın.
+                refreshAllowedMobileRoles(username, loginPassword, role);
+                if (!oldToken.isEmpty() && !oldServer.isEmpty() && !oldServer.equalsIgnoreCase(target)) {
+                    try { request(oldServer, "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
+                    catch (Exception ignored) {}
+                }
+                runOnUiThread(() -> {
+                    updateKitchenBackgroundServiceForRole(loginPassword);
+                    reopenCurrentRoleHome();
+                });
+                showError(approvalError);
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    private void moveToApprovalServerForManualLogin(String target, String rawApproval, String oldServer, String oldToken) {
+        serverBase = normalizeServerBase(target);
+        prefs.edit().putString(KEY_SERVER, serverBase).apply();
+        pendingAdminApprovalDeepLink = rawApproval == null ? "" : rawApproval.trim();
+        sessionToken = "";
+        sessionPassword = "";
+        canHall = false;
+        canKitchen = false;
+        canAdmin = false;
+        stopKitchenBackgroundService(false);
+
+        if (oldToken != null && !oldToken.trim().isEmpty()
+                && oldServer != null && !oldServer.trim().isEmpty()
+                && !normalizeServerBase(oldServer).equalsIgnoreCase(serverBase)) {
+            io.execute(() -> {
+                try { request(normalizeServerBase(oldServer), "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
+                catch (Exception ignored) {}
+            });
+        }
+
+        showLogin();
+        toast("Filial serveri QR-a uyğun dəyişdirildi. Bu filial üçün daxil olun; QR təsdiqi girişdən sonra davam edəcək.");
+    }
+
+    private void reopenCurrentRoleHome() {
+        if ("kitchen".equals(role)) {
+            showKitchen();
+        } else if ("admin".equals(role) && adminDebtOnly) {
+            showDebt("İşçi");
+        } else {
+            showTerminals();
+        }
+    }
+
+    private void connectToScannedServer(String scannedValue) {
+        String value = extractServerBaseFromQr(scannedValue);
+        if (value.isEmpty()) {
+            toast("QR kodda server ünvanı tapılmadı.");
+            return;
+        }
+
+        // QR oxunan kimi ünvanı server xanasında göstər.
+        runOnUiThread(() -> {
+            if (serverAddressInput != null) {
+                serverAddressInput.setText(value);
+                serverAddressInput.setSelection(value.length());
+            }
+            toast("QR koddan server ünvanı əlavə olundu.");
+        });
+
+        // Ünvan göründükdən sonra avtomatik qoşulmanı da yoxla.
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                request(value, "/api/mobile/ping", "GET", null, "");
+                serverBase = value;
+                prefs.edit().putString(KEY_SERVER, value).apply();
+                runOnUiThread(() -> {
+                    toast("QR kodla serverə qoşuldu.");
+                    showLogin();
+                });
+            } catch (Exception ex) {
+                // Qoşulma alınmasa server ekranında qalır və oxunan ünvan xanada qalır.
+                runOnUiThread(() -> toast("Ünvan əlavə olundu, amma serverə avtomatik qoşulmaq alınmadı."));
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    private void showServerSetup() {
+        ScrollView sv = screenWithBody("Marakana Mobile", false, null);
+        LinearLayout body = scrollBody(sv);
+        body.setGravity(Gravity.CENTER_HORIZONTAL);
+
+        TextView nativeBadge = text("NATIVE ANDROID", 12, BLUE, true);
+        nativeBadge.setGravity(Gravity.CENTER);
+        nativeBadge.setBackground(bg(Color.rgb(232, 243, 255), 12, Color.rgb(183, 215, 250)));
+        body.addView(nativeBadge, new LinearLayout.LayoutParams(dp(170), dp(38)));
+
+        TextView title = text("Server bağlantısı", 27, TEXT, true);
+        title.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64));
+        tlp.setMargins(0, dp(20), 0, 0);
+        body.addView(title, tlp);
+
+        TextView hint = text("Bu ünvan yalnız API bağlantısı üçündür. Tətbiqin ekranı sayt deyil və WebView istifadə etmir.", 14, MUTED, false);
+        hint.setGravity(Gravity.CENTER);
+        hint.setPadding(dp(8), 0, dp(8), dp(20));
+        body.addView(hint);
+
+        serverAddressInput = input("192.168.1.20:8765 və ya server domeni");
+        serverAddressInput.setText(serverBase);
+        body.addView(serverAddressInput);
+        Button connect = button("Serverə qoşul", BLUE, Color.WHITE);
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
+        cp.setMargins(0, dp(12), 0, 0);
+        connect.setLayoutParams(cp);
+        body.addView(connect);
+
+        Button qrConnect = button("▦  QR kodla qoşul", CARD, TEXT);
+        LinearLayout.LayoutParams qrp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
+        qrp.setMargins(0, dp(10), 0, 0);
+        qrConnect.setLayoutParams(qrp);
+        body.addView(qrConnect);
+        qrConnect.setOnClickListener(v -> startQrServerScanner());
+
+        connect.setOnClickListener(v -> {
+            String value = normalizeServerBase(serverAddressInput.getText().toString());
+            if (value.isEmpty()) { toast("Server ünvanını yazın."); return; }
+            setBusy(true);
+            io.execute(() -> {
+                try {
+                    request(value, "/api/mobile/ping", "GET", null, "");
+                    serverBase = value;
+                    prefs.edit().putString(KEY_SERVER, value).apply();
+                    runOnUiThread(this::showLogin);
+                } catch (Exception ex) { showError(ex); }
+                finally { setBusy(false); }
+            });
+        });
+    }
+
+    private void showLogin() {
+        sessionToken = "";
+        sessionPassword = "";
+        canHall = false;
+        canKitchen = false;
+        canAdmin = false;
+        ScrollView sv = screenWithBody("Marakana Mobile", false, null);
+        LinearLayout body = scrollBody(sv);
+        body.setGravity(Gravity.CENTER_HORIZONTAL);
+
+        TextView badge = text("NATIVE", 12, GREEN, true);
+        badge.setGravity(Gravity.CENTER);
+        badge.setBackground(bg(Color.rgb(232, 248, 240), 12, Color.rgb(185, 226, 207)));
+        body.addView(badge, new LinearLayout.LayoutParams(dp(110), dp(36)));
+
+        TextView t = text("Giriş", 28, TEXT, true);
+        t.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(66));
+        tp.setMargins(0, dp(12), 0, 0);
+        body.addView(t, tp);
+
+        Spinner userSpin = new Spinner(this);
+        userSpin.setBackground(bg(CARD, 14, BORDER));
+        List<String> loginUsernames = new ArrayList<>();
+        List<String> loginUserLabels = new ArrayList<>();
+        loginUserLabels.add("İstifadəçilər yüklənir…");
+        ArrayAdapter<String> userAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, loginUserLabels);
+        userSpin.setAdapter(userAdapter);
+        LinearLayout.LayoutParams usp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
+        body.addView(userSpin, usp);
+
+        TextView userHint = text("PC proqramındakı mobil icazəli istifadəçilər avtomatik yüklənir.", 12, MUTED, false);
+        LinearLayout.LayoutParams uhp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34));
+        uhp.setMargins(dp(4), dp(2), 0, 0);
+        body.addView(userHint, uhp);
+
+        io.execute(() -> {
+            try {
+                JSONObject usersResult = request(serverBase, "/api/mobile/users", "GET", null, "");
+                JSONArray usersArray = usersResult.optJSONArray("users");
+                List<String> loadedUsernames = new ArrayList<>();
+                List<String> loadedLabels = new ArrayList<>();
+                if (usersArray != null) {
+                    for (int i = 0; i < usersArray.length(); i++) {
+                        JSONObject item = usersArray.optJSONObject(i);
+                        if (item == null) continue;
+                        String itemUsername = item.optString("username", "").trim();
+                        if (itemUsername.isEmpty()) continue;
+                        loadedUsernames.add(itemUsername);
+                        loadedLabels.add(itemUsername);
+                    }
+                }
+                runOnUiThread(() -> {
+                    loginUsernames.clear();
+                    loginUsernames.addAll(loadedUsernames);
+                    loginUserLabels.clear();
+                    if (loadedLabels.isEmpty()) {
+                        loginUserLabels.add("Mobil giriş icazəli istifadəçi tapılmadı");
+                        userHint.setText("PC proqramında istifadəçiyə Mobil Panel icazəsi verilməlidir.");
+                    } else {
+                        loginUserLabels.addAll(loadedLabels);
+                        userHint.setText("İstifadəçini siyahıdan seçin.");
+                    }
+                    userAdapter.notifyDataSetChanged();
+
+                    if (!username.isEmpty() && !loginUsernames.isEmpty()) {
+                        for (int i = 0; i < loginUsernames.size(); i++) {
+                            if (username.equalsIgnoreCase(loginUsernames.get(i))) {
+                                userSpin.setSelection(i);
+                                break;
+                            }
+                        }
+                    }
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> {
+                    loginUsernames.clear();
+                    loginUserLabels.clear();
+                    loginUserLabels.add("İstifadəçilər yüklənmədi");
+                    userAdapter.notifyDataSetChanged();
+                    userHint.setText("Desktop proqramı v1250+ olmalıdır və serverə əlçatan olmalıdır.");
+                    toast("PC istifadəçi siyahısı alınmadı.");
+                });
+            }
+        });
+
+        EditText pass = input("Şifrə");
+        pass.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        String rememberedPassword = prefs.getBoolean(KEY_AUTO_LOGIN, false) ? loadSavedPassword() : "";
+        if (!rememberedPassword.isEmpty()) pass.setText(rememberedPassword);
+        LinearLayout.LayoutParams pp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
+        pp.setMargins(0, dp(10), 0, 0);
+        pass.setLayoutParams(pp);
+        body.addView(pass);
+
+        CheckBox remember = new CheckBox(this);
+        remember.setText("Şifrəni yadda saxla və avtomatik daxil ol");
+        remember.setTextColor(TEXT);
+        remember.setTextSize(14);
+        remember.setChecked(prefs.getBoolean(KEY_AUTO_LOGIN, false));
+        LinearLayout.LayoutParams remp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+        remp.setMargins(dp(4), dp(6), 0, 0);
+        body.addView(remember, remp);
+
+        Button login = button("Daxil ol", BLUE, Color.WHITE);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
+        lp.setMargins(0, dp(14), 0, 0);
+        login.setLayoutParams(lp);
+        body.addView(login);
+
+        Button server = button("Server ayarı", CARD, TEXT);
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+        sp.setMargins(0, dp(10), 0, 0);
+        server.setLayoutParams(sp);
+        body.addView(server);
+        server.setOnClickListener(v -> showServerSetup());
+
+        login.setOnClickListener(v -> {
+            int userPosition = userSpin.getSelectedItemPosition();
+            if (userPosition < 0 || userPosition >= loginUsernames.size()) {
+                toast("İstifadəçini siyahıdan seçin.");
+                return;
+            }
+            String u = loginUsernames.get(userPosition);
+            String p = pass.getText().toString();
+            if (p.isEmpty()) { toast("Şifrəni yazın."); return; }
+            performLogin(u, p, role, false, remember.isChecked(), true);
+        });
+    }
+
+
+    private Button smallButton(String label, boolean active) {
+        Button b = button(label, active ? BLUE : CARD, active ? Color.WHITE : TEXT);
+        b.setLayoutParams(new LinearLayout.LayoutParams(dp(Math.max(105, label.length() * 10 + 40)), dp(46)));
+        LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams)b.getLayoutParams(); lp.setMargins(0, 0, dp(8), 0); b.setLayoutParams(lp);
+        return b;
+    }
+
+    private void showTerminals() {
+        ScrollView sv = screenWithBody("Terminallar", false, null, this::showTerminals);
+        LinearLayout body = scrollBody(sv);
+        TextView status = text("Yüklənir…", 14, MUTED, false);
+        body.addView(status, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+        loadJson("/api/mobile/terminals", result -> {
+            status.setVisibility(View.GONE);
+            JSONArray arr = result.optJSONArray("terminals");
+            if (arr == null || arr.length() == 0) { body.addView(empty("Terminal tapılmadı.")); return; }
+            for (int i=0; i<arr.length(); i++) {
+                JSONObject station = arr.optJSONObject(i); if (station != null) body.addView(stationCard(station));
+            }
+        });
+    }
+
+    private View stationCard(JSONObject s) {
+        LinearLayout c = card();
+
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+
+        String name = s.optString("name", "Terminal");
+        boolean active = s.optBoolean("active", false);
+        String stateText = active
+                ? s.optString("elapsed_label", "Aktiv")
+                : (s.optString("kind", "terminal").equals("table") ? "Masa bağlıdır" : "Açılmayıb");
+
+        TextView n = text(name, 18, active ? BLUE : TEXT, true);
+        top.addView(n, new LinearLayout.LayoutParams(0, dp(48), 1f));
+
+        TextView elapsed = text(stateText, 13, MUTED, true);
+        elapsed.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams elapsedLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(48)
+        );
+        elapsedLp.setMargins(dp(10), 0, dp(12), 0);
+        top.addView(elapsed, elapsedLp);
+
+        TextView amount = text(
+                String.format(Locale.US, "%.2f AZN", s.optDouble("current_total", 0)),
+                17,
+                active ? GREEN : MUTED,
+                true
+        );
+        amount.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+        top.addView(amount, new LinearLayout.LayoutParams(dp(135), dp(48)));
+
+        c.addView(top);
+        c.setClickable(true);
+        c.setOnClickListener(v -> showStation(name));
+        return c;
+    }
+
+    private void showStation(String name) {
+        ScrollView sv = screenWithBody(name, true, this::showTerminals, () -> showStation(name));
+        LinearLayout body = scrollBody(sv);
+        loadJson("/api/mobile/station?name=" + urlEncode(name), result -> {
+            JSONObject s = result.optJSONObject("station"); if (s == null) return;
+            LinearLayout summary = card();
+            summary.addView(text(s.optString("elapsed_label", ""), 18, TEXT, true));
+            summary.addView(text("Yekun: " + money(s.optDouble("current_total", 0)) + "  •  Sifariş: " + money(s.optDouble("order_total", 0)), 14, MUTED, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+            body.addView(summary);
+
+            if (!s.optBoolean("active", false) && s.optString("kind", "terminal").equals("terminal")) {
+                Button open = button("Vaxt aç", GREEN, Color.WHITE); body.addView(open); open.setOnClickListener(v -> showOpenTimeDialog(name));
+                spacer(body, 10);
+            }
+            Button products = button("Sifariş əlavə et", BLUE, Color.WHITE); body.addView(products); products.setOnClickListener(v -> showProducts(name));
+            spacer(body, 12);
+
+            JSONArray orders = s.optJSONArray("orders");
+            TextView oh = text("Cari sifarişlər", 17, TEXT, true); body.addView(oh, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+            if (orders == null || orders.length() == 0) { body.addView(empty("Sifariş yoxdur.")); return; }
+            for (int i=0; i<orders.length(); i++) {
+                JSONObject o = orders.optJSONObject(i); if (o == null) continue;
+                LinearLayout oc = card();
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+
+                final String itemName = o.optString("name", "");
+                final double unit = o.optDouble("unit_price", 0);
+
+                row.addView(
+                        text(itemName, 15, TEXT, true),
+                        new LinearLayout.LayoutParams(0, dp(44), 1f)
+                );
+
+                TextView orderAmount = text(
+                        "x" + o.optInt("qty", 0) + "  " + money(o.optDouble("total", 0)),
+                        14,
+                        GREEN,
+                        true
+                );
+                orderAmount.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+                LinearLayout.LayoutParams amountLp = new LinearLayout.LayoutParams(dp(128), dp(44));
+                row.addView(orderAmount, amountLp);
+
+                if (canAdmin) {
+                    Button remove = button("Azalt", Color.rgb(255, 245, 239), ORANGE);
+                    LinearLayout.LayoutParams removeLp = new LinearLayout.LayoutParams(dp(78), dp(40));
+                    removeLp.setMargins(dp(6), dp(2), 0, dp(2));
+                    row.addView(remove, removeLp);
+                    remove.setOnClickListener(v -> confirmRemoveOrder(name, itemName, unit));
+                }
+
+                oc.addView(row);
+                body.addView(oc);
+            }
+        });
+    }
+
+    private void showOpenTimeDialog(String station) {
+        LinearLayout box = new LinearLayout(this); box.setOrientation(LinearLayout.VERTICAL); box.setPadding(dp(18), dp(8), dp(18), 0);
+        Spinner mode = new Spinner(this); String[] modes = {"60 dəqiqə", "120 dəqiqə", "180 dəqiqə", "Vaxtsız"}; mode.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, modes)); box.addView(mode);
+        Spinner pads = new Spinner(this); String[] p = {"1 pult", "2 pult", "3 pult", "4 pult"}; pads.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, p)); box.addView(pads);
+        new AlertDialog.Builder(this).setTitle("Vaxt aç • " + station).setView(box).setNegativeButton("Ləğv", null).setPositiveButton("Aç", (d,w) -> {
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("station_name", station); payload.put("pad_count", pads.getSelectedItemPosition()+1);
+                if (mode.getSelectedItemPosition() == 3) payload.put("mode", "untimed");
+                else { payload.put("mode", "timed"); payload.put("pick_mode", "time"); payload.put("value", (mode.getSelectedItemPosition()+1)*60); }
+            } catch(Exception ignored) {}
+            postJson("/api/mobile/station/open_time", payload, r -> showStation(station));
+        }).show();
+    }
+
+    private void confirmRemoveOrder(String station, String item, double unitPrice) {
+        if (!canAdmin) {
+            toast("Sifarişi azaltmaq üçün Admin icazəsi tələb olunur.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Sifarişi azalt")
+                .setMessage(item + " məhsulundan 1 ədəd azaltmaq istəyirsiniz?")
+                .setNegativeButton("Ləğv", null)
+                .setPositiveButton("Təsdiqlə", (dialog, which) -> removeOrder(station, item, unitPrice))
+                .show();
+    }
+
+    private void removeOrder(String station, String item, double unitPrice) {
+        if (!canAdmin) {
+            toast("Sifarişi azaltmaq üçün Admin icazəsi tələb olunur.");
+            return;
+        }
+        JSONObject p = new JSONObject();
+        try {
+            p.put("station_name", station);
+            p.put("name", item);
+            p.put("unit_price", unitPrice);
+            p.put("qty", 1);
+        } catch(Exception ignored) {}
+        postJson("/api/mobile/order/remove", p, r -> showStation(station));
+    }
+
+    private LinkedHashMap<String, OrderCartItem> cartForStation(String station) {
+        LinkedHashMap<String, OrderCartItem> cart = orderCarts.get(station);
+        if (cart == null) {
+            cart = new LinkedHashMap<>();
+            orderCarts.put(station, cart);
+        }
+        return cart;
+    }
+
+    private int cartTotalQty(String station) {
+        int total = 0;
+        for (OrderCartItem item : cartForStation(station).values()) total += item.qty;
+        return total;
+    }
+
+    private double cartTotalAmount(String station) {
+        double total = 0;
+        for (OrderCartItem item : cartForStation(station).values()) total += item.price * item.qty;
+        return total;
+    }
+
+    private String cartButtonLabel(String station) {
+        int qty = cartTotalQty(station);
+        if (qty <= 0) return "🛒 Səbət";
+        return "🛒 Səbət • " + qty + " ədəd • " + money(cartTotalAmount(station));
+    }
+
+    private void showProducts(String station) {
+        ScrollView sv = screenWithOrderCartHeader(
+                "Sifariş • " + station,
+                station,
+                () -> showStation(station),
+                () -> showProducts(station)
+        );
+        LinearLayout body = scrollBody(sv);
+
+        EditText search = input("Məhsul axtar");
+        body.addView(search);
+        spacer(body, 10);
+
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        body.addView(list);
+        final JSONArray[] allProducts = {new JSONArray()};
+
+        loadJson("/api/mobile/products", result -> {
+            JSONArray products = result.optJSONArray("products");
+            allProducts[0] = products == null ? new JSONArray() : products;
+
+            final Runnable[] productRender = new Runnable[1];
+            productRender[0] = () -> {
+                list.removeAllViews();
+                updateOrderCartHeaderBadge(station);
+                String q = search.getText().toString().trim().toLowerCase(Locale.ROOT);
+                for (int i = 0; i < allProducts[0].length(); i++) {
+                    JSONObject product = allProducts[0].optJSONObject(i);
+                    if (product == null) continue;
+                    final String productName = product.optString("name", "");
+                    if (!q.isEmpty() && !productName.toLowerCase(Locale.ROOT).contains(q)) continue;
+                    final String barcode = product.optString("barcode", "");
+                    final double price = product.optDouble("price", 0);
+
+                    LinearLayout c = card();
+                    LinearLayout top = new LinearLayout(this);
+                    top.setOrientation(LinearLayout.HORIZONTAL);
+                    top.setGravity(Gravity.CENTER_VERTICAL);
+                    top.addView(text(productName, 15, TEXT, true), new LinearLayout.LayoutParams(0, dp(48), 1f));
+                    top.addView(text(money(price), 14, GREEN, true), new LinearLayout.LayoutParams(dp(110), dp(48)));
+                    c.addView(top);
+
+                    OrderCartItem current = cartForStation(station).get(barcode);
+                    String hintText = current == null
+                            ? "Miqdar seçib səbətə əlavə etmək üçün toxun"
+                            : "Səbətdə: " + current.qty + " ədəd • Miqdarı dəyişmək üçün toxun";
+                    TextView hint = text(hintText, 12, current == null ? MUTED : GREEN, true);
+                    c.addView(hint, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30)));
+                    c.setClickable(true);
+                    c.setFocusable(true);
+                    c.setOnClickListener(v -> showProductQuantityPicker(
+                            station, barcode, productName, price,
+                            () -> {
+                                updateOrderCartHeaderBadge(station);
+                                if (productRender[0] != null) productRender[0].run();
+                            }
+                    ));
+                    list.addView(c);
+                }
+            };
+            search.addTextChangedListener(new SimpleTextWatcher(() -> {
+                if (productRender[0] != null) productRender[0].run();
+            }));
+            productRender[0].run();
+        });
+    }
+
+    private void showProductQuantityPicker(
+            String station,
+            String barcode,
+            String productName,
+            double price,
+            Runnable onChanged
+    ) {
+        String[] choices = new String[10];
+        for (int i = 0; i < choices.length; i++) choices[i] = (i + 1) + " ədəd";
+
+        OrderCartItem existing = cartForStation(station).get(barcode);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle(productName + " • Miqdar")
+                .setItems(choices, (dialog, which) -> {
+                    putProductInCart(station, barcode, productName, price, which + 1);
+                    toast((which + 1) + " ədəd səbətə əlavə edildi.");
+                    if (onChanged != null) onChanged.run();
+                })
+                .setNegativeButton("Ləğv", null);
+
+        if (existing != null) {
+            builder.setNeutralButton("Səbətdən sil", (dialog, which) -> {
+                cartForStation(station).remove(barcode);
+                toast(productName + " səbətdən silindi.");
+                if (onChanged != null) onChanged.run();
+            });
+        }
+        builder.show();
+    }
+
+    private void putProductInCart(String station, String barcode, String name, double price, int qty) {
+        if (qty < 1 || qty > 10) return;
+        LinkedHashMap<String, OrderCartItem> cart = cartForStation(station);
+        OrderCartItem existing = cart.get(barcode);
+        if (existing == null) {
+            cart.put(barcode, new OrderCartItem(barcode, name, price, qty));
+        } else {
+            existing.name = name;
+            existing.price = price;
+            existing.qty = qty;
+        }
+    }
+
+    private void showOrderCart(String station) {
+        ScrollView sv = screenWithBody("Səbət • " + station, true, () -> showProducts(station), () -> showOrderCart(station));
+        LinearLayout body = scrollBody(sv);
+        LinkedHashMap<String, OrderCartItem> cart = cartForStation(station);
+
+        if (cart.isEmpty()) {
+            body.addView(empty("Səbət boşdur."));
+            spacer(body, 12);
+            Button products = button("Məhsullara bax", BLUE, Color.WHITE);
+            body.addView(products);
+            products.setOnClickListener(v -> showProducts(station));
+            return;
+        }
+
+        LinearLayout summary = card();
+        summary.addView(text("Sifariş xülasəsi", 18, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+        summary.addView(
+                text(cartTotalQty(station) + " ədəd • Yekun: " + money(cartTotalAmount(station)), 15, GREEN, true),
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36))
+        );
+        body.addView(summary);
+
+        for (OrderCartItem item : new ArrayList<>(cart.values())) {
+            LinearLayout c = card();
+
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.addView(text(item.name, 15, TEXT, true), new LinearLayout.LayoutParams(0, dp(42), 1f));
+            TextView qtyTotal = text("x" + item.qty + "  " + money(item.price * item.qty), 14, GREEN, true);
+            qtyTotal.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+            row.addView(qtyTotal, new LinearLayout.LayoutParams(dp(150), dp(42)));
+            c.addView(row);
+
+            TextView unit = text("1 ədəd: " + money(item.price), 12, MUTED, false);
+            c.addView(unit, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)));
+
+            LinearLayout actions = new LinearLayout(this);
+            actions.setOrientation(LinearLayout.HORIZONTAL);
+
+            Button edit = button("Miqdarı dəyiş", Color.rgb(238, 246, 255), BLUE);
+            Button remove = button("Sil", Color.rgb(255, 245, 239), ORANGE);
+            actions.addView(edit, new LinearLayout.LayoutParams(0, dp(44), 1f));
+            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(dp(92), dp(44));
+            rlp.setMargins(dp(8), 0, 0, 0);
+            actions.addView(remove, rlp);
+            c.addView(actions);
+
+            edit.setOnClickListener(v -> showProductQuantityPicker(
+                    station, item.barcode, item.name, item.price,
+                    () -> showOrderCart(station)
+            ));
+            remove.setOnClickListener(v -> {
+                cartForStation(station).remove(item.barcode);
+                showOrderCart(station);
+            });
+
+            body.addView(c);
+        }
+
+        spacer(body, 6);
+        Button send = button(
+                "Sifarişi göndər • " + money(cartTotalAmount(station)),
+                GREEN,
+                Color.WHITE
+        );
+        body.addView(send);
+        send.setOnClickListener(v -> confirmSendOrderCart(station));
+
+        spacer(body, 10);
+        Button continueShopping = button("Məhsul əlavə etməyə davam et", CARD, TEXT);
+        body.addView(continueShopping);
+        continueShopping.setOnClickListener(v -> showProducts(station));
+
+        spacer(body, 10);
+        Button clearCart = button("Səbəti təmizlə", Color.rgb(255, 245, 239), ORANGE);
+        body.addView(clearCart);
+        clearCart.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Səbəti təmizlə")
+                .setMessage("Səbətdəki bütün məhsulları silmək istəyirsiniz?")
+                .setNegativeButton("Ləğv", null)
+                .setPositiveButton("Təmizlə", (d, w) -> {
+                    cartForStation(station).clear();
+                    showOrderCart(station);
+                })
+                .show());
+    }
+
+    private void confirmSendOrderCart(String station) {
+        if (cartForStation(station).isEmpty()) {
+            toast("Səbət boşdur.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Sifarişi göndər")
+                .setMessage(
+                        station + "\n\n" +
+                        "Miqdar: " + cartTotalQty(station) + " ədəd\n" +
+                        "Yekun: " + money(cartTotalAmount(station)) +
+                        "\n\nSifarişi terminala göndərmək istəyirsiniz?"
+                )
+                .setNegativeButton("Ləğv", null)
+                .setPositiveButton("Göndər", (dialog, which) -> sendOrderCart(station))
+                .show();
+    }
+
+    private void sendOrderCart(String station) {
+        LinkedHashMap<String, OrderCartItem> cart = cartForStation(station);
+        if (cart.isEmpty()) {
+            toast("Səbət boşdur.");
+            return;
+        }
+
+        JSONArray items = new JSONArray();
+        JSONObject payload = new JSONObject();
+        try {
+            for (OrderCartItem cartItem : cart.values()) {
+                JSONObject item = new JSONObject();
+                item.put("barcode", cartItem.barcode);
+                item.put("qty", cartItem.qty);
+                items.put(item);
+            }
+            payload.put("station_name", station);
+            payload.put("items", items);
+        } catch (Exception ignored) {}
+
+        postJson("/api/mobile/order/batch_add", payload, result -> {
+            cart.clear();
+            toast("Sifariş göndərildi.");
+            showStation(station);
+        });
+    }
+
+    private static final String[] RENTAL_TABS = {"active", "customers", "history"};
+
+    private void showRental(String section) {
+        String activeSection = normalizeRentalSection(section);
+        currentBackAction = null;
+        clear();
+
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(8), dp(10), dp(8), 0);
+        content.addView(shell, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        shell.addView(buildMainHeader("İcarə Paneli", false, null));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        addPullToRefreshContent(shell, scroll, () -> showRental(activeSection));
+
+        LinearLayout body = scrollBody(scroll);
+        body.setPadding(0, dp(4), 0, dp(92));
+
+        LinearLayout summaryHost = new LinearLayout(this);
+        summaryHost.setOrientation(LinearLayout.VERTICAL);
+        body.addView(summaryHost);
+
+        if ("active".equals(activeSection)) {
+            Button newRental = button("＋ Yeni icarə yarat", GREEN, Color.WHITE);
+            LinearLayout.LayoutParams newRentalLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+            newRentalLp.setMargins(0, 0, 0, dp(10));
+            body.addView(newRental, newRentalLp);
+            newRental.setOnClickListener(v -> openRentalCreateForm());
+        }
+
+        EditText search = input(rentalSearchHint(activeSection));
+        body.addView(search);
+        spacer(body, 10);
+
+        LinearLayout recordsHost = new LinearLayout(this);
+        recordsHost.setOrientation(LinearLayout.VERTICAL);
+        body.addView(recordsHost);
+        final AlertDialog rentalLoadingDialog;
+        if ("customers".equals(activeSection)) {
+            rentalLoadingDialog = showRentalCenteredLoading("Müştəri məlumatları yüklənir...");
+        } else {
+            rentalLoadingDialog = null;
+            recordsHost.addView(empty("İcarə məlumatları yüklənir..."));
+        }
+
+        installRentalGestures(scroll, activeSection);
+        installRentalGestures(body, activeSection);
+
+        LinearLayout footer = buildRentalFooter(activeSection);
+        shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(88)));
+
+        loadRentalJson("/api/mobile/rental/list?section=" + urlEncode(activeSection), 2, result -> {
+            if (rentalLoadingDialog != null && rentalLoadingDialog.isShowing()) rentalLoadingDialog.dismiss();
+            JSONArray items = result.optJSONArray("items");
+            if (items == null) items = new JSONArray();
+            JSONObject counts = result.optJSONObject("counts");
+            String warning = result.optString("warning", "").trim();
+            String branch = result.optString("branch_id", "").trim();
+            renderRentalSummary(summaryHost, activeSection, counts, branch, warning);
+            final JSONArray finalItems = items;
+            Runnable render = () -> renderRentalRecords(recordsHost, activeSection, finalItems, search.getText().toString());
+            search.addTextChangedListener(new SimpleTextWatcher(render));
+            render.run();
+        }, message -> {
+            if (rentalLoadingDialog != null && rentalLoadingDialog.isShowing()) rentalLoadingDialog.dismiss();
+            summaryHost.removeAllViews();
+            recordsHost.removeAllViews();
+            LinearLayout errorCard = card();
+            errorCard.addView(text("İcarə məlumatları yüklənmədi", 15, Color.rgb(180, 55, 55), true));
+            TextView detail = text(message, 12, MUTED, false);
+            detail.setPadding(0, dp(6), 0, dp(10));
+            errorCard.addView(detail);
+            Button retry = button("Yenidən yoxla", BLUE, Color.WHITE);
+            retry.setOnClickListener(v -> showRental(activeSection));
+            errorCard.addView(retry, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
+            recordsHost.addView(errorCard);
+        });
+    }
+
+    private AlertDialog showRentalCenteredLoading(String message) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setGravity(Gravity.CENTER);
+        box.setPadding(dp(28), dp(22), dp(28), dp(22));
+
+        ProgressBar spinner = new ProgressBar(this);
+        LinearLayout.LayoutParams spinnerLp = new LinearLayout.LayoutParams(dp(42), dp(42));
+        spinnerLp.gravity = Gravity.CENTER_HORIZONTAL;
+        box.addView(spinner, spinnerLp);
+
+        TextView label = text(message == null || message.trim().isEmpty() ? "Yüklənir..." : message, 15, TEXT, true);
+        label.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams labelLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        labelLp.gravity = Gravity.CENTER_HORIZONTAL;
+        labelLp.topMargin = dp(12);
+        box.addView(label, labelLp);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setView(box)
+                .setCancelable(false)
+                .create();
+        dialog.setCanceledOnTouchOutside(false);
+        dialog.show();
+        Window window = dialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(bg(Color.WHITE, 18, Color.TRANSPARENT));
+            window.setLayout(dp(270), ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+        return dialog;
+    }
+
+    private String normalizeRentalSection(String section) {
+        String value = section == null ? "active" : section.trim().toLowerCase(Locale.ROOT);
+        for (String candidate : RENTAL_TABS) if (candidate.equals(value)) return value;
+        return "active";
+    }
+
+    private String rentalSearchHint(String section) {
+        if ("customers".equals(section)) return "Müştəri adı, telefon və ya status ilə axtar";
+        if ("history".equals(section)) return "Müştəri, konsol və ya status ilə axtar";
+        return "Müştəri, telefon və ya konsol ilə axtar";
+    }
+
+    private void renderRentalSummary(LinearLayout host, String section, JSONObject counts, String branch, String warning) {
+        host.removeAllViews();
+        LinearLayout card = card();
+        String title;
+        String value;
+        if ("customers".equals(section)) {
+            int total = counts == null ? 0 : counts.optInt("total", 0);
+            int approved = counts == null ? 0 : counts.optInt("approved", 0);
+            int pending = counts == null ? 0 : counts.optInt("pending", 0);
+            title = "Müştərilər";
+            value = "Cəmi: " + total + "  •  Təsdiqli: " + approved + "  •  Gözləyən: " + pending;
+        } else if ("history".equals(section)) {
+            int total = counts == null ? 0 : counts.optInt("total", 0);
+            int returned = counts == null ? 0 : counts.optInt("returned", 0);
+            int cancelled = counts == null ? 0 : counts.optInt("cancelled", 0);
+            title = "İcarə tarixçəsi";
+            value = "Cəmi: " + total + "  •  Qaytarılıb: " + returned + "  •  Ləğv: " + cancelled;
+        } else {
+            int total = counts == null ? 0 : counts.optInt("total", 0);
+            int overdue = counts == null ? 0 : counts.optInt("overdue", 0);
+            title = "Aktiv icarələr";
+            value = "Cəmi: " + total + (overdue > 0 ? "  •  Gecikib: " + overdue : "");
+        }
+        card.addView(text(title, 14, MUTED, true));
+        card.addView(text(value, 18, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
+        if (!branch.isEmpty()) card.addView(text("Filial: " + branch, 12, MUTED, false));
+        host.addView(card);
+        if (!warning.isEmpty()) {
+            TextView warn = text(warning, 12, ORANGE, true);
+            warn.setPadding(dp(10), dp(9), dp(10), dp(9));
+            warn.setBackground(bg(Color.rgb(255, 248, 232), 12, Color.rgb(232, 202, 135)));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.setMargins(0, 0, 0, dp(10));
+            host.addView(warn, lp);
+        }
+    }
+
+    private void renderRentalRecords(LinearLayout host, String section, JSONArray items, String query) {
+        host.removeAllViews();
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        int visible = 0;
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject row = items.optJSONObject(i);
+            if (row == null) continue;
+            String haystack;
+            if ("customers".equals(section)) {
+                haystack = row.optString("full_name", "") + " " + row.optString("phone", "") + " " +
+                        row.optString("relative_phone", "") + " " + rentalCustomerStatus(row);
+            } else {
+                haystack = row.optString("customer_name", "") + " " + row.optString("customer_phone", "") + " " +
+                        row.optString("console_name", "") + " " + rentalStatusLabel(row.optString("status", ""));
+            }
+            if (!q.isEmpty() && !haystack.toLowerCase(Locale.ROOT).contains(q)) continue;
+            visible++;
+            if ("customers".equals(section)) host.addView(buildRentalCustomerCard(row));
+            else if ("history".equals(section)) host.addView(buildRentalHistoryCard(row));
+            else host.addView(buildRentalActiveCard(row));
+        }
+        if (visible == 0) host.addView(empty(q.isEmpty() ? "Məlumat yoxdur." : "Axtarışa uyğun nəticə tapılmadı."));
+    }
+
+    private LinearLayout buildRentalActiveCard(JSONObject row) {
+        LinearLayout c = card();
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        String name = row.optString("customer_name", "Müştəri").trim();
+        TextView n = text(name.isEmpty() ? "Müştəri" : name, 17, TEXT, true);
+        top.addView(n, new LinearLayout.LayoutParams(0, dp(34), 1f));
+        String status = row.optString("status", "active");
+        int statusColor = "overdue".equals(status) ? Color.rgb(192, 54, 54) : GREEN;
+        TextView chip = text(rentalStatusLabel(status), 12, statusColor, true);
+        chip.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        top.addView(chip, new LinearLayout.LayoutParams(dp(92), dp(34)));
+        c.addView(top);
+
+        String phone = row.optString("customer_phone", "").trim();
+        if (!phone.isEmpty()) c.addView(text("📱 " + phone, 13, MUTED, true));
+        String console = row.optString("console_name", "").trim();
+        int pads = Math.max(1, row.optInt("controller_count", 1));
+        c.addView(text("🎮 " + (console.isEmpty() ? "Konsol qeyd edilməyib" : console) + "  •  " + pads + " pult", 14, TEXT, true));
+        c.addView(text("Başlama: " + rentalDateTime(row.optString("start_at", "")), 12, MUTED, false));
+        c.addView(text("Təhvil: " + rentalDateTime(row.optString("due_at", "")) + "  •  " + rentalRemaining(row.optString("due_at", "")), 12, "overdue".equals(status) ? Color.rgb(192,54,54) : MUTED, true));
+        c.addView(text("İcarə: " + money(row.optDouble("rental_price", 0)) + "  •  Ödənib: " + money(row.optDouble("paid_amount", 0)), 13, TEXT, true));
+        double outstanding = row.optDouble("outstanding_amount", 0);
+        double deposit = row.optDouble("deposit_amount", 0);
+        c.addView(text("Qalıq borc: " + money(outstanding) + "  •  Depozit: " + money(deposit), 13, outstanding > 0.001 ? ORANGE : MUTED, true));
+        c.setClickable(true);
+        c.setOnClickListener(v -> showRentalActiveDetails(row));
+        return c;
+    }
+
+    private LinearLayout buildRentalCustomerCard(JSONObject row) {
+        LinearLayout c = card();
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        String name = row.optString("full_name", "Müştəri").trim();
+        boolean verified = row.optInt("is_verified", 0) == 1 || row.optInt("completed_rentals", 0) >= 10;
+        TextView n = text((verified ? "✓ " : "") + (name.isEmpty() ? "Müştəri" : name), 17, TEXT, true);
+        top.addView(n, new LinearLayout.LayoutParams(0, dp(34), 1f));
+        String status = rentalCustomerStatus(row);
+        int statusColor = status.equals("Təsdiqləndi") ? GREEN : (status.equals("Gözləyir") ? ORANGE : MUTED);
+        TextView chip = text(status, 12, statusColor, true);
+        chip.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        top.addView(chip, new LinearLayout.LayoutParams(dp(105), dp(34)));
+        c.addView(top);
+        String phone = row.optString("phone", "").trim();
+        c.addView(text("📱 " + (phone.isEmpty() ? "Telefon yoxdur" : phone), 14, TEXT, true));
+        String registered = rentalDateTime(row.optString("registered_at", ""));
+        if (!registered.isEmpty()) c.addView(text("Qeydiyyat: " + registered, 12, MUTED, false));
+        int completed = row.optInt("completed_rentals", 0);
+        c.addView(text("Tamamlanan icarə: " + completed, 12, MUTED, true));
+        c.setClickable(true);
+        c.setOnClickListener(v -> showRentalCustomerDetails(row));
+        return c;
+    }
+
+    private LinearLayout buildRentalHistoryCard(JSONObject row) {
+        LinearLayout c = card();
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        String name = row.optString("customer_name", "Müştəri").trim();
+        top.addView(text(name.isEmpty() ? "Müştəri" : name, 17, TEXT, true), new LinearLayout.LayoutParams(0, dp(34), 1f));
+        String status = rentalStatusLabel(row.optString("status", ""));
+        TextView chip = text(status, 12, status.startsWith("Qaytar") ? GREEN : ORANGE, true);
+        chip.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        top.addView(chip, new LinearLayout.LayoutParams(dp(105), dp(34)));
+        c.addView(top);
+        String console = row.optString("console_name", "").trim();
+        if (!console.isEmpty()) c.addView(text("🎮 " + console, 13, TEXT, true));
+        c.addView(text("Başlama: " + rentalDateTime(row.optString("start_at", "")), 12, MUTED, false));
+        c.addView(text("Qaytarılma: " + rentalDateTime(row.optString("returned_at", "")), 12, MUTED, false));
+        c.addView(text("İcarə: " + money(row.optDouble("rental_price", 0)) + "  •  Ödənib: " + money(row.optDouble("paid_amount", 0)), 13, TEXT, true));
+        c.setClickable(true);
+        c.setOnClickListener(v -> showRentalHistoryDetails(row));
+        return c;
+    }
+
+    private void openRentalCreateForm() {
+        // v42: Yeni icarə düyməsinə toxunan kimi ortada loading popupı göstərilir.
+        // Forma məlumat tam yükləndikdən sonra açılır və açıldıqdan sonra avtomatik refresh edilmir.
+        final AlertDialog createLoadingDialog = showRentalCenteredLoading("Yeni icarə məlumatları yüklənir...");
+        loadRentalJsonOnce("/api/mobile/rental/options",
+                result -> {
+                    if (createLoadingDialog.isShowing()) createLoadingDialog.dismiss();
+                    renderRentalCreateForm(result);
+                },
+                message -> {
+                    if (createLoadingDialog.isShowing()) createLoadingDialog.dismiss();
+                    toast("Yeni icarə açıla bilmədi: " + message);
+                });
+    }
+
+    private void renderRentalCreateForm(JSONObject options) {
+        JSONArray customersJson = options.optJSONArray("customers");
+        JSONArray consolesJson = options.optJSONArray("consoles");
+        if (customersJson == null) customersJson = new JSONArray();
+        if (consolesJson == null) consolesJson = new JSONArray();
+
+        final List<JSONObject> allCustomerRows = new ArrayList<>();
+        for (int i = 0; i < customersJson.length(); i++) {
+            JSONObject row = customersJson.optJSONObject(i);
+            if (row == null) continue;
+            allCustomerRows.add(row);
+        }
+
+        final List<JSONObject> consoleRows = new ArrayList<>();
+        final List<String> consoleLabels = new ArrayList<>();
+        consoleLabels.add("Konsol seçin");
+        for (int i = 0; i < consolesJson.length(); i++) {
+            JSONObject row = consolesJson.optJSONObject(i);
+            if (row == null) continue;
+            consoleRows.add(row);
+            consoleLabels.add(row.optString("display_name", row.optString("code", "Konsol")));
+        }
+        consoleLabels.add("KONSOLSUZ");
+
+        ScrollView sv = screenWithBody("Yeni icarə yarat", true, () -> showRental("active"));
+        LinearLayout body = scrollBody(sv);
+        body.setPadding(0, dp(4), 0, dp(28));
+
+        TextView branch = text("Filial: " + options.optString("branch_id", "-"), 12, MUTED, true);
+        body.addView(branch);
+        String optionsWarning = options.optString("warning", "").trim();
+        if (!optionsWarning.isEmpty()) {
+            TextView warning = text("⚠ " + optionsWarning + "\nSon uğurlu məlumatla forma açıldı.", 12, Color.rgb(155, 92, 20), true);
+            warning.setPadding(dp(10), dp(8), dp(10), dp(8));
+            warning.setBackground(bg(Color.rgb(255, 248, 224), 10, Color.rgb(235, 202, 120)));
+            body.addView(warning);
+        }
+        spacer(body, 8);
+
+        body.addView(rentalFormLabel("Müştəri"));
+        EditText customerSearch = input("Müştərini ad və ya telefonla axtar");
+        customerSearch.setSingleLine(true);
+        body.addView(customerSearch);
+        spacer(body, 6);
+
+        // v42: yazdıqca uyğun müştərilər dərhal aşağıda görünür və istənilən nəticə seçilir.
+        // Axtarış lokal yüklənmiş siyahıda ad, telefon və qohum telefonu üzrə contains məntiqi ilə işləyir.
+        final JSONObject[] selectedCustomer = new JSONObject[]{null};
+        final boolean[] suppressCustomerSearchWatcher = new boolean[]{false};
+
+        LinearLayout customerMatches = new LinearLayout(this);
+        customerMatches.setOrientation(LinearLayout.VERTICAL);
+        customerMatches.setPadding(dp(6), dp(6), dp(6), dp(6));
+        customerMatches.setBackground(bg(CARD, 12, BORDER));
+        customerMatches.setVisibility(View.GONE);
+        body.addView(customerMatches, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView selectedCustomerView = text("Müştəri seçilməyib", 12, MUTED, true);
+        selectedCustomerView.setPadding(dp(4), dp(6), dp(4), 0);
+        body.addView(selectedCustomerView);
+
+        Runnable refreshCustomerMatches = () -> {
+            if (suppressCustomerSearchWatcher[0]) return;
+            selectedCustomer[0] = null;
+            selectedCustomerView.setText("Müştəri seçilməyib");
+            selectedCustomerView.setTextColor(MUTED);
+            customerMatches.removeAllViews();
+
+            String q = customerSearch.getText().toString().trim().toLowerCase(Locale.ROOT);
+            if (q.isEmpty()) {
+                customerMatches.setVisibility(View.GONE);
+                return;
+            }
+
+            int shown = 0;
+            int totalMatches = 0;
+            for (JSONObject row : allCustomerRows) {
+                String name = row.optString("full_name", "Müştəri").trim();
+                String phone = row.optString("phone", "").trim();
+                String relativePhone = row.optString("relative_phone", "").trim();
+                String haystack = (name + " " + phone + " " + relativePhone).toLowerCase(Locale.ROOT);
+                if (!haystack.contains(q)) continue;
+                totalMatches++;
+                if (shown >= 12) continue;
+
+                String label = name + (phone.isEmpty() ? "" : " • " + phone);
+                TextView option = text(label, 14, TEXT, true);
+                option.setPadding(dp(12), dp(11), dp(12), dp(11));
+                option.setBackground(bg(Color.rgb(248, 251, 255), 9, BORDER));
+                LinearLayout.LayoutParams optionLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                optionLp.setMargins(0, 0, 0, dp(5));
+                customerMatches.addView(option, optionLp);
+                option.setClickable(true);
+                option.setOnClickListener(v -> {
+                    selectedCustomer[0] = row;
+                    suppressCustomerSearchWatcher[0] = true;
+                    customerSearch.setText(label);
+                    customerSearch.setSelection(customerSearch.getText().length());
+                    suppressCustomerSearchWatcher[0] = false;
+                    selectedCustomerView.setText("Seçildi: " + label);
+                    selectedCustomerView.setTextColor(GREEN);
+                    customerMatches.removeAllViews();
+                    customerMatches.setVisibility(View.GONE);
+                });
+                shown++;
+            }
+
+            if (totalMatches == 0) {
+                TextView empty = text("Uyğun müştəri tapılmadı", 13, MUTED, true);
+                empty.setPadding(dp(12), dp(12), dp(12), dp(12));
+                customerMatches.addView(empty);
+            } else if (totalMatches > shown) {
+                TextView more = text("Daha " + (totalMatches - shown) + " uyğun nəticə var — axtarışı dəqiqləşdirin", 11, MUTED, false);
+                more.setPadding(dp(8), dp(5), dp(8), dp(5));
+                customerMatches.addView(more);
+            }
+            customerMatches.setVisibility(View.VISIBLE);
+        };
+
+        customerSearch.addTextChangedListener(new SimpleTextWatcher(refreshCustomerMatches));
+        customerSearch.setOnFocusChangeListener((v, hasFocus) -> {
+            if (hasFocus && !customerSearch.getText().toString().trim().isEmpty() && selectedCustomer[0] == null) {
+                refreshCustomerMatches.run();
+            }
+        });
+        spacer(body, 9);
+
+        body.addView(rentalFormLabel("Konsol"));
+        Spinner consoleSpin = new Spinner(this);
+        consoleSpin.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, consoleLabels));
+        consoleSpin.setBackground(bg(CARD, 12, BORDER));
+        body.addView(consoleSpin, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        spacer(body, 9);
+
+        body.addView(rentalFormLabel("Pult tipi • yalnız KONSOLSUZ üçün"));
+        List<String> pultLabels = new ArrayList<>();
+        pultLabels.add("Pult tipini seçin");
+        for (JSONObject row : consoleRows) pultLabels.add(row.optString("display_name", row.optString("code", "Pult tipi")));
+        Spinner pultSpin = new Spinner(this);
+        pultSpin.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, pultLabels));
+        pultSpin.setBackground(bg(CARD, 12, BORDER));
+        pultSpin.setEnabled(false);
+        pultSpin.setAlpha(0.45f);
+        body.addView(pultSpin, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        spacer(body, 9);
+
+        body.addView(rentalFormLabel("Pult sayı"));
+        Spinner controllerSpin = new Spinner(this);
+        String[] controllers = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"};
+        controllerSpin.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, controllers));
+        controllerSpin.setSelection(1);
+        controllerSpin.setBackground(bg(CARD, 12, BORDER));
+        body.addView(controllerSpin, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        spacer(body, 9);
+
+        body.addView(rentalFormLabel("Gün sayı"));
+        EditText days = input("1–365");
+        days.setInputType(InputType.TYPE_CLASS_NUMBER);
+        body.addView(days);
+        spacer(body, 9);
+
+        body.addView(rentalFormLabel("Kupon kodu"));
+        EditText coupon = input("İstəyə görə");
+        body.addView(coupon);
+        spacer(body, 9);
+
+        body.addView(rentalFormLabel("Ödəniş növü"));
+        Spinner paymentSpin = new Spinner(this);
+        String[] paymentLabels = {"Nağd", "Kart", "Nisyə"};
+        paymentSpin.setAdapter(new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, paymentLabels));
+        paymentSpin.setBackground(bg(CARD, 12, BORDER));
+        body.addView(paymentSpin, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        spacer(body, 9);
+
+        body.addView(rentalFormLabel("Depozit"));
+        EditText deposit = input("0.00");
+        deposit.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        body.addView(deposit);
+        spacer(body, 12);
+
+        TextView quoteView = text("Qiymət: hesablanmayıb", 16, TEXT, true);
+        quoteView.setPadding(dp(12), dp(10), dp(12), dp(10));
+        quoteView.setBackground(bg(Color.rgb(247, 250, 253), 12, BORDER));
+        body.addView(quoteView);
+        spacer(body, 10);
+
+        consoleSpin.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                boolean consoleless = position == consoleLabels.size() - 1;
+                pultSpin.setEnabled(consoleless);
+                pultSpin.setAlpha(consoleless ? 1.0f : 0.45f);
+                controllerSpin.setSelection(consoleless ? 0 : 1);
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        });
+
+        java.util.concurrent.Callable<JSONObject> payloadBuilder = () -> {
+            if (selectedCustomer[0] == null) throw new Exception("Axtarış nəticəsindən müştəri seçin.");
+            int consoleIndex = consoleSpin.getSelectedItemPosition();
+            if (consoleIndex <= 0) throw new Exception("Konsol seçin.");
+            boolean consoleless = consoleIndex == consoleLabels.size() - 1;
+            JSONObject selectedConsole;
+            if (consoleless) {
+                int pultIndex = pultSpin.getSelectedItemPosition();
+                if (pultIndex <= 0 || pultIndex - 1 >= consoleRows.size()) throw new Exception("KONSOLSUZ üçün pult tipini seçin.");
+                selectedConsole = consoleRows.get(pultIndex - 1);
+            } else {
+                if (consoleIndex - 1 >= consoleRows.size()) throw new Exception("Konsol seçimi düzgün deyil.");
+                selectedConsole = consoleRows.get(consoleIndex - 1);
+            }
+            int rentalDays;
+            try { rentalDays = Integer.parseInt(days.getText().toString().trim()); }
+            catch (Exception e) { throw new Exception("Gün sayı yazın."); }
+            if (rentalDays < 1 || rentalDays > 365) throw new Exception("Gün sayı 1–365 aralığında olmalıdır.");
+            String[] paymentValues = {"cash", "card", "credit"};
+            JSONObject payload = new JSONObject();
+            payload.put("customer_uuid", selectedCustomer[0].optString("customer_uuid", ""));
+            payload.put("console_uuid", selectedConsole.optString("console_uuid", ""));
+            payload.put("consoleless", consoleless);
+            payload.put("controller_count", controllerSpin.getSelectedItemPosition() + 1);
+            payload.put("days", rentalDays);
+            payload.put("coupon_code", coupon.getText().toString().trim().toUpperCase(Locale.ROOT));
+            payload.put("payment_type", paymentValues[Math.max(0, Math.min(paymentValues.length - 1, paymentSpin.getSelectedItemPosition()))]);
+            payload.put("deposit", deposit.getText().toString().trim().isEmpty() ? "0" : deposit.getText().toString().trim());
+            return payload;
+        };
+
+        Button quoteButton = button("Qiyməti hesabla", Color.rgb(238, 246, 255), BLUE);
+        body.addView(quoteButton);
+        spacer(body, 8);
+        quoteButton.setOnClickListener(v -> {
+            try {
+                JSONObject payload = payloadBuilder.call();
+                postJson("/api/mobile/rental/quote", payload, quote -> {
+                    if (!quote.optBoolean("ok", false)) {
+                        toast(quote.optString("message", "Qiymət hesablana bilmədi."));
+                        return;
+                    }
+                    quoteView.setText(rentalQuoteText(quote));
+                });
+            } catch (Exception ex) {
+                toast(ex.getMessage() == null ? "Məlumatları yoxlayın." : ex.getMessage());
+            }
+        });
+
+        Button createButton = button("İcarəni yarat", GREEN, Color.WHITE);
+        body.addView(createButton);
+        createButton.setOnClickListener(v -> {
+            try {
+                JSONObject payload = payloadBuilder.call();
+                postJson("/api/mobile/rental/quote", payload, quote -> {
+                    if (!quote.optBoolean("ok", false)) {
+                        toast(quote.optString("message", "Qiymət hesablana bilmədi."));
+                        return;
+                    }
+                    quoteView.setText(rentalQuoteText(quote));
+                    String customerName = selectedCustomer[0] != null ? selectedCustomer[0].optString("full_name", "Müştəri") : "Müştəri";
+                    String confirm = customerName + "\n" + quote.optString("console_name", "") + "\n" + quote.optInt("days", 0) + " gün • " + quote.optInt("controller_count", 1) + " pult\n\nYekun: " + money(quote.optDouble("total_amount", 0));
+                    new AlertDialog.Builder(this)
+                            .setTitle("Yeni icarəni təsdiqlə")
+                            .setMessage(confirm)
+                            .setNegativeButton("Ləğv", null)
+                            .setPositiveButton("Yarat", (d, w) -> {
+                                final AlertDialog createRentalProgress = showRentalCenteredLoading("İcarə yaradılır, gözləyin...");
+                                postJson("/api/mobile/rental/create", payload, created -> {
+                                    if (createRentalProgress.isShowing()) createRentalProgress.dismiss();
+                                    if (!created.optBoolean("ok", false)) {
+                                        toast(created.optString("message", "İcarə yaradılmadı."));
+                                        return;
+                                    }
+                                    toast(created.optString("message", "İcarə yaradıldı."));
+                                    showRental("active");
+                                }, ex -> {
+                                    if (createRentalProgress.isShowing()) createRentalProgress.dismiss();
+                                    handleApiError(ex);
+                                });
+                            })
+                            .show();
+                });
+            } catch (Exception ex) {
+                toast(ex.getMessage() == null ? "Məlumatları yoxlayın." : ex.getMessage());
+            }
+        });
+    }
+
+    private TextView rentalFormLabel(String label) {
+        TextView t = text(label, 12, MUTED, true);
+        t.setPadding(dp(4), 0, dp(4), dp(4));
+        return t;
+    }
+
+    private String rentalQuoteText(JSONObject quote) {
+        StringBuilder s = new StringBuilder();
+        s.append("Qiymət: ").append(money(quote.optDouble("total_amount", 0)));
+        s.append("\n").append("Hesablanan gün: ").append(quote.optInt("billable_days", quote.optInt("days", 0)));
+        JSONArray applied = quote.optJSONArray("applied");
+        if (applied != null) {
+            for (int i = 0; i < applied.length(); i++) {
+                String line = applied.optString(i, "").trim();
+                if (!line.isEmpty()) s.append("\n• ").append(line);
+            }
+        }
+        String couponMessage = quote.optString("coupon_message", "").trim();
+        if (!couponMessage.isEmpty()) s.append("\n").append(couponMessage);
+        return s.toString();
+    }
+
+    private void showRentalActiveDetails(JSONObject row) {
+        StringBuilder msg = new StringBuilder();
+        msg.append("Telefon: ").append(row.optString("customer_phone", "-")).append("\n");
+        msg.append("Konsol: ").append(row.optString("console_name", "-")).append("\n");
+        msg.append("Pult: ").append(Math.max(1, row.optInt("controller_count", 1))).append("\n");
+        msg.append("Gün: ").append(Math.max(1, row.optInt("days", 1))).append("\n");
+        msg.append("Başlama: ").append(rentalDateTime(row.optString("start_at", ""))).append("\n");
+        msg.append("Təhvil: ").append(rentalDateTime(row.optString("due_at", ""))).append("\n");
+        msg.append("Qalan vaxt: ").append(rentalRemaining(row.optString("due_at", ""))).append("\n");
+        msg.append("Ödəniş: ").append(rentalPaymentLabel(row.optString("payment_type", ""))).append("\n");
+        msg.append("İcarə: ").append(money(row.optDouble("rental_price", 0))).append("\n");
+        msg.append("Ödənib: ").append(money(row.optDouble("paid_amount", 0))).append("\n");
+        msg.append("Qalıq borc: ").append(money(row.optDouble("outstanding_amount", 0))).append("\n");
+        msg.append("Depozit: ").append(money(row.optDouble("deposit_amount", 0)));
+        new AlertDialog.Builder(this).setTitle(row.optString("customer_name", "Aktiv icarə")).setMessage(msg.toString()).setPositiveButton("Bağla", null).show();
+    }
+
+    private void showRentalCustomerDetails(JSONObject row) {
+        String customerUuid = row.optString("customer_uuid", "").trim();
+        if (customerUuid.isEmpty()) {
+            toast("Müştəri UUID məlumatı yoxdur.");
+            return;
+        }
+
+        // v40: müştəri kartına toxunan kimi ortada yüklənmə popupı görünür.
+        // Detal pəncərəsi yalnız məlumat tam gəldikdən sonra açılır və avtomatik refresh edilmir.
+        final AlertDialog customerLoadingDialog = showRentalCenteredLoading("Müştəri məlumatları yüklənir...");
+        loadRentalJsonOnce("/api/mobile/rental/customer_detail?customer_uuid=" + urlEncode(customerUuid),
+                result -> {
+                    if (customerLoadingDialog.isShowing()) customerLoadingDialog.dismiss();
+                    showRentalCustomerDetailDialog(result);
+                },
+                message -> {
+                    if (customerLoadingDialog.isShowing()) customerLoadingDialog.dismiss();
+                    toast("Müştəri məlumatı açıla bilmədi: " + message);
+                });
+    }
+
+    private void showRentalCustomerDetailDialog(JSONObject result) {
+        JSONObject customer = result.optJSONObject("customer");
+        if (customer == null) customer = new JSONObject();
+        JSONObject registration = result.optJSONObject("registration");
+        if (registration == null) registration = new JSONObject();
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(14), dp(8), dp(14), dp(14));
+        scroll.addView(box);
+
+        String fullName = customer.optString("full_name", "Müştəri").trim();
+        String detailWarning = result.optString("warning", "").trim();
+        if (!detailWarning.isEmpty()) {
+            TextView warning = text("⚠ " + detailWarning, 12, Color.rgb(155, 92, 20), true);
+            warning.setPadding(dp(10), dp(8), dp(10), dp(8));
+            warning.setBackground(bg(Color.rgb(255, 248, 224), 10, Color.rgb(235, 202, 120)));
+            box.addView(warning);
+            spacer(box, 8);
+        }
+        addRentalCustomerDetailField(box, "Ad Soyad", fullName);
+        addRentalCustomerDetailField(box, "Telefon", customer.optString("phone", ""));
+        addRentalCustomerDetailField(box, "Qohum telefonu", customer.optString("relative_phone", registration.optString("relative_phone", "")));
+        addRentalCustomerDetailField(box, "E-mail", customer.optString("email", registration.optString("email", "")));
+        addRentalCustomerDetailField(box, "Status", rentalCustomerStatus(customer));
+        addRentalCustomerDetailField(box, "Təsdiqli müştəri", customer.optInt("is_verified", 0) == 1 ? "Bəli" : "Xeyr");
+        addRentalCustomerDetailField(box, "Tamamlanan icarə", String.valueOf(customer.optInt("completed_rentals", 0)));
+        addRentalCustomerDetailField(box, "V2 tamamlanan", String.valueOf(customer.optInt("v2_completed_rentals", 0)));
+        addRentalCustomerDetailField(box, "Köhnə sistem tamamlanan", String.valueOf(customer.optInt("legacy_completed_rentals", 0)));
+        addRentalCustomerDetailField(box, "Mənbə", rentalCustomerSourceLabel(customer.optString("source", "")));
+        addRentalCustomerDetailField(box, "Filial", customer.optString("branch_id", result.optString("branch_id", "")));
+        addRentalCustomerDetailField(box, "Qeydiyyat tarixi", rentalDateTime(customer.optString("created_at", registration.optString("created_at", ""))));
+        addRentalCustomerDetailField(box, "Son dəyişiklik", rentalDateTime(customer.optString("updated_at", "")));
+        addRentalCustomerDetailField(box, "FIN", customer.optString("fin_code", ""));
+        addRentalCustomerDetailField(box, "Şəxsiyyət qeydi", customer.optString("identity_note", ""));
+        addRentalCustomerDetailField(box, "Qeyd", customer.optString("note", ""));
+        addRentalCustomerDetailField(box, "Müştəri UUID", customer.optString("customer_uuid", ""));
+        addRentalCustomerDetailField(box, "Qeydiyyat UUID", registration.optString("registration_uuid", ""));
+        addRentalCustomerDetailField(box, "Sayt qeydiyyat statusu", registration.optString("status", ""));
+        addRentalCustomerDetailField(box, "Sayt qeydiyyat tarixi", rentalDateTime(registration.optString("created_at", "")));
+        addRentalCustomerDetailField(box, "Sayt qeydiyyat yenilənməsi", rentalDateTime(registration.optString("updated_at", "")));
+
+        spacer(box, 8);
+        addRentalCustomerImageCard(box, "Şəxsiyyət vəsiqəsi", registration.optString("id_card_blob", ""), registration.optString("id_card_filename", ""));
+        addRentalCustomerImageCard(box, "Selfi", registration.optString("selfie_blob", ""), registration.optString("selfie_filename", ""));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(fullName.isEmpty() ? "Müştəri" : fullName)
+                .setView(scroll)
+                .setPositiveButton("Bağla", null)
+                .create();
+        dialog.setOnShowListener(d -> {
+            Window w = dialog.getWindow();
+            if (w != null) w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, (int) (getResources().getDisplayMetrics().heightPixels * 0.90f));
+        });
+        dialog.show();
+    }
+
+    private void addRentalCustomerDetailField(LinearLayout box, String label, String value) {
+        String clean = value == null ? "" : value.trim();
+        if (clean.isEmpty()) clean = "-";
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.VERTICAL);
+        row.setPadding(dp(12), dp(8), dp(12), dp(8));
+        row.setBackground(bg(Color.WHITE, 12, BORDER));
+        TextView key = text(label, 11, MUTED, true);
+        TextView val = text(clean, 14, TEXT, false);
+        val.setTextIsSelectable(true);
+        val.setPadding(0, dp(3), 0, 0);
+        row.addView(key);
+        row.addView(val);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, dp(7));
+        box.addView(row, lp);
+    }
+
+    private String rentalCustomerSourceLabel(String source) {
+        String s = source == null ? "" : source.trim().toLowerCase(Locale.ROOT);
+        if ("website".equals(s)) return "Sayt qeydiyyatı";
+        if ("legacy_icare".equals(s)) return "Keçmiş sistem";
+        if ("desktop".equals(s)) return "PC proqramı";
+        return s.isEmpty() ? "-" : source;
+    }
+
+    private Bitmap decodeRentalCustomerImage(String blob) {
+        try {
+            String clean = blob == null ? "" : blob.trim();
+            int comma = clean.indexOf(',');
+            if (clean.startsWith("data:") && comma >= 0) clean = clean.substring(comma + 1);
+            if (clean.isEmpty()) return null;
+            byte[] data = Base64.decode(clean, Base64.DEFAULT);
+            BitmapFactory.Options bounds = new BitmapFactory.Options();
+            bounds.inJustDecodeBounds = true;
+            BitmapFactory.decodeByteArray(data, 0, data.length, bounds);
+            int sample = 1;
+            int maxSide = Math.max(bounds.outWidth, bounds.outHeight);
+            while (maxSide / sample > 1800) sample *= 2;
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inSampleSize = Math.max(1, sample);
+            return BitmapFactory.decodeByteArray(data, 0, data.length, opts);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private void addRentalCustomerImageCard(LinearLayout box, String title, String blob, String filename) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(12), dp(10), dp(12), dp(12));
+        card.setBackground(bg(Color.WHITE, 14, BORDER));
+        card.addView(text(title, 14, TEXT, true));
+        Bitmap bitmap = decodeRentalCustomerImage(blob);
+        if (bitmap == null) {
+            TextView noImage = text("Şəkil yoxdur", 13, MUTED, true);
+            noImage.setGravity(Gravity.CENTER);
+            card.addView(noImage, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(120)));
+        } else {
+            ImageView image = new ImageView(this);
+            image.setImageBitmap(bitmap);
+            image.setAdjustViewBounds(true);
+            image.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            image.setBackground(bg(Color.rgb(248, 250, 252), 10, BORDER));
+            image.setPadding(dp(5), dp(5), dp(5), dp(5));
+            card.addView(image, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(240)));
+            image.setOnClickListener(v -> showRentalCustomerImagePreview(title, bitmap));
+        }
+        String file = filename == null ? "" : filename.trim();
+        if (!file.isEmpty()) {
+            TextView fn = text(file, 11, MUTED, false);
+            fn.setGravity(Gravity.CENTER);
+            fn.setPadding(0, dp(5), 0, 0);
+            card.addView(fn);
+        }
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, dp(10));
+        box.addView(card, lp);
+    }
+
+    private void showRentalCustomerImagePreview(String title, Bitmap bitmap) {
+        ImageView image = new ImageView(this);
+        image.setImageBitmap(bitmap);
+        image.setAdjustViewBounds(true);
+        image.setScaleType(ImageView.ScaleType.FIT_CENTER);
+        image.setPadding(dp(8), dp(8), dp(8), dp(8));
+        new AlertDialog.Builder(this).setTitle(title).setView(image).setPositiveButton("Bağla", null).show();
+    }
+
+    private void showRentalHistoryDetails(JSONObject row) {
+        StringBuilder msg = new StringBuilder();
+        msg.append("Status: ").append(rentalStatusLabel(row.optString("status", ""))).append("\n");
+        String console = row.optString("console_name", "").trim();
+        if (!console.isEmpty()) msg.append("Konsol: ").append(console).append("\n");
+        msg.append("Başlama: ").append(rentalDateTime(row.optString("start_at", ""))).append("\n");
+        msg.append("Təhvil vaxtı: ").append(rentalDateTime(row.optString("due_at", ""))).append("\n");
+        msg.append("Qaytarılma: ").append(rentalDateTime(row.optString("returned_at", ""))).append("\n");
+        msg.append("İcarə: ").append(money(row.optDouble("rental_price", 0))).append("\n");
+        msg.append("Ödənib: ").append(money(row.optDouble("paid_amount", 0))).append("\n");
+        msg.append("Qalıq: ").append(money(row.optDouble("outstanding_amount", 0)));
+        new AlertDialog.Builder(this).setTitle(row.optString("customer_name", "İcarə tarixçəsi")).setMessage(msg.toString()).setPositiveButton("Bağla", null).show();
+    }
+
+    private String rentalCustomerStatus(JSONObject row) {
+        if (row.optInt("is_active", 0) != 1) return "Deaktiv";
+        String approval = row.optString("approval_status", "approved").trim().toLowerCase(Locale.ROOT);
+        if ("pending".equals(approval)) return "Gözləyir";
+        if ("approved".equals(approval)) return "Təsdiqləndi";
+        return approval.isEmpty() ? "Təsdiqləndi" : approval;
+    }
+
+    private String rentalStatusLabel(String status) {
+        String s = status == null ? "" : status.trim().toLowerCase(Locale.ROOT);
+        if ("active".equals(s)) return "Aktiv";
+        if ("overdue".equals(s)) return "Gecikib";
+        if ("returned".equals(s)) return "Qaytarılıb";
+        if ("cancelled".equals(s) || "canceled".equals(s)) return "Ləğv edilib";
+        if ("archived".equals(s)) return "Arxiv";
+        return status == null || status.trim().isEmpty() ? "-" : status;
+    }
+
+    private String rentalPaymentLabel(String payment) {
+        String p = payment == null ? "" : payment.trim().toLowerCase(Locale.ROOT);
+        if ("cash".equals(p) || "nağd".equals(p) || "nagd".equals(p)) return "Nağd";
+        if ("card".equals(p) || "kart".equals(p)) return "Kart";
+        if ("credit".equals(p) || "nisyə".equals(p) || "nisye".equals(p)) return "Nisyə";
+        return payment == null || payment.trim().isEmpty() ? "-" : payment;
+    }
+
+    private java.time.LocalDateTime rentalParseDateTime(String raw) {
+        if (raw == null || raw.trim().isEmpty()) return null;
+        String value = raw.trim().replace(' ', 'T');
+        try { return java.time.OffsetDateTime.parse(value).atZoneSameInstant(java.time.ZoneId.systemDefault()).toLocalDateTime(); }
+        catch (Exception ignored) {}
+        try { return java.time.LocalDateTime.parse(value); }
+        catch (Exception ignored) {}
+        try { return java.time.LocalDate.parse(value).atStartOfDay(); }
+        catch (Exception ignored) {}
+        return null;
+    }
+
+    private String rentalDateTime(String raw) {
+        java.time.LocalDateTime dt = rentalParseDateTime(raw);
+        if (dt == null) return raw == null ? "" : raw.trim();
+        return dt.format(java.time.format.DateTimeFormatter.ofPattern("dd.MM.yyyy HH:mm"));
+    }
+
+    private String rentalRemaining(String raw) {
+        java.time.LocalDateTime due = rentalParseDateTime(raw);
+        if (due == null) return "-";
+        long seconds = java.time.Duration.between(java.time.LocalDateTime.now(), due).getSeconds();
+        boolean overdue = seconds < 0;
+        long value = Math.abs(seconds);
+        long days = value / 86400;
+        long hours = (value % 86400) / 3600;
+        long minutes = (value % 3600) / 60;
+        String text;
+        if (days > 0) text = days + " gün " + hours + " saat";
+        else if (hours > 0) text = hours + " saat " + minutes + " dəq";
+        else text = Math.max(0, minutes) + " dəq";
+        return overdue ? "Gecikib: " + text : "Qalıb: " + text;
+    }
+
+    private void installRentalGestures(View target, String section) {
+        final int swipeThreshold = dp(64);
+        GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override public boolean onDown(MotionEvent e) { return true; }
+            @Override public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                if (e1 == null || e2 == null) return false;
+                float dx = e2.getX() - e1.getX();
+                float dy = e2.getY() - e1.getY();
+                if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy) * 1.60f) return false;
+                int index = 0;
+                for (int i = 0; i < RENTAL_TABS.length; i++) if (RENTAL_TABS[i].equals(section)) { index = i; break; }
+                if (dx > 0) {
+                    if (index > 0) showRental(RENTAL_TABS[index - 1]);
+                    else showNavigationMenu();
+                } else if (index < RENTAL_TABS.length - 1) {
+                    showRental(RENTAL_TABS[index + 1]);
+                }
+                return true;
+            }
+        });
+        target.setOnTouchListener((v, event) -> { detector.onTouchEvent(event); return false; });
+    }
+
+    private LinearLayout buildRentalFooter(String activeSection) {
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(dp(6), dp(8), dp(6), dp(8));
+        footer.setBackground(bg(Color.WHITE, 22, BORDER));
+        footer.setElevation(dp(12));
+        String[] icons = {"🎮", "👥", "🕘"};
+        String[] labels = {"Aktiv icarələr", "Müştərilər", "Tarixçə"};
+        for (int i = 0; i < RENTAL_TABS.length; i++) {
+            String section = RENTAL_TABS[i];
+            LinearLayout tab = buildRentalFooterTab(icons[i], labels[i], section.equals(activeSection));
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+            if (i > 0) lp.setMargins(dp(6), 0, 0, 0);
+            tab.setLayoutParams(lp);
+            tab.setOnClickListener(v -> showRental(section));
+            footer.addView(tab);
+        }
+        return footer;
+    }
+
+    private LinearLayout buildRentalFooterTab(String iconText, String label, boolean active) {
+        LinearLayout tab = new LinearLayout(this);
+        tab.setOrientation(LinearLayout.VERTICAL);
+        tab.setGravity(Gravity.CENTER);
+        tab.setPadding(dp(6), dp(4), dp(6), dp(4));
+        tab.setBackground(bg(active ? Color.rgb(238, 241, 245) : Color.WHITE, 18, active ? Color.rgb(210, 218, 226) : Color.TRANSPARENT));
+        TextView icon = text(iconText, 18, active ? TEXT : MUTED, false);
+        icon.setGravity(Gravity.CENTER);
+        tab.addView(icon, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)));
+        TextView title = text(label, 12, active ? TEXT : MUTED, true);
+        title.setGravity(Gravity.CENTER);
+        title.setMaxLines(2);
+        tab.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
+        return tab;
+    }
+
+    // v51: WordPress "Marakana Playstation Hesab Satışı" plugininin native mobil paneli.
+    // Məlumatlar WordPress REST API-dən gəlir; mobil API açarı Android Keystore ilə şifrəli saxlanılır.
+    private String normalizeWordPressBase(String raw) {
+        String value = raw == null ? "" : raw.trim();
+        if (value.isEmpty()) return "";
+        if (!value.toLowerCase(Locale.ROOT).startsWith("http://") && !value.toLowerCase(Locale.ROOT).startsWith("https://")) {
+            value = "https://" + value;
+        }
+        while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
+        String lower = value.toLowerCase(Locale.ROOT);
+        int wpJson = lower.indexOf("/wp-json/");
+        if (wpJson > 0) value = value.substring(0, wpJson);
+        lower = value.toLowerCase(Locale.ROOT);
+        if (lower.endsWith("/wp-admin")) value = value.substring(0, value.length() - 9);
+        while (value.endsWith("/")) value = value.substring(0, value.length() - 1);
+        return value;
+    }
+
+    private void saveAccountSalesApiKey(String apiKey) {
+        try {
+            String value = apiKey == null ? "" : apiKey.trim();
+            if (value.isEmpty()) {
+                clearAccountSalesApiKey();
+                return;
+            }
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateLoginKey());
+            byte[] encrypted = cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
+            prefs.edit()
+                    .putString(KEY_ACCOUNT_SALES_API_KEY_ENC, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                    .putString(KEY_ACCOUNT_SALES_API_KEY_IV, Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP))
+                    .apply();
+        } catch (Exception ex) {
+            clearAccountSalesApiKey();
+        }
+    }
+
+    private String loadAccountSalesApiKey() {
+        String enc = prefs.getString(KEY_ACCOUNT_SALES_API_KEY_ENC, "");
+        String iv = prefs.getString(KEY_ACCOUNT_SALES_API_KEY_IV, "");
+        if (enc.isEmpty() || iv.isEmpty()) return "";
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec spec = new GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP));
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateLoginKey(), spec);
+            byte[] raw = cipher.doFinal(Base64.decode(enc, Base64.NO_WRAP));
+            return new String(raw, StandardCharsets.UTF_8);
+        } catch (Exception ex) {
+            clearAccountSalesApiKey();
+            return "";
+        }
+    }
+
+    private void clearAccountSalesApiKey() {
+        prefs.edit().remove(KEY_ACCOUNT_SALES_API_KEY_ENC).remove(KEY_ACCOUNT_SALES_API_KEY_IV).apply();
+    }
+
+    private String getAccountSalesSite() {
+        String site = normalizeWordPressBase(prefs.getString(KEY_ACCOUNT_SALES_SITE, ACCOUNT_SALES_DEFAULT_SITE));
+        return site.isEmpty() ? ACCOUNT_SALES_DEFAULT_SITE : site;
+    }
+
+    private boolean hasAccountSalesConnection() {
+        return !getAccountSalesSite().isEmpty() && !loadAccountSalesApiKey().isEmpty();
+    }
+
+    private String normalizeAccountSalesSection(String section) {
+        String value = section == null ? "accounts" : section.trim().toLowerCase(Locale.ROOT);
+        for (String candidate : ACCOUNT_SALES_SECTIONS) if (candidate.equals(value)) return value;
+        return "accounts";
+    }
+
+    // v111: Müştəri detalından açılan hesab əməliyyatı bitəndə əsas Hesablar səhifəsinə deyil,
+    // istifadəçinin olduğu həmin müştəri detalına qayıt.
+    private void returnToAccountSalesSource(String sourceSection) {
+        String source = sourceSection == null ? "" : sourceSection.trim().toLowerCase(Locale.ROOT);
+        if ("customer".equals(source) && accountSalesCustomerDetailContext != null) {
+            showAccountSalesCustomerDetail(accountSalesCustomerDetailContext);
+            return;
+        }
+        showAccountSales(normalizeAccountSalesSection(sourceSection));
+    }
+
+    private void showAccountSalesConnection() {
+        ScrollView sv = screenWithBody("Hesab Satışı • Bağlantı", false, null);
+        LinearLayout body = scrollBody(sv);
+
+        LinearLayout info = card();
+        info.addView(text("WordPress bağlantısı", 18, TEXT, true));
+        TextView help = text("WordPress-də Hesab Satışı → Ayarlar → Mobil APK bağlantısı bölməsindəki API açarını buraya yaz. Bu açar telefonda şifrəli saxlanılır.", 13, MUTED, false);
+        help.setPadding(0, dp(6), 0, dp(4));
+        info.addView(help);
+        body.addView(info);
+
+        TextView siteLabel = text("WordPress ünvanı", 13, MUTED, true);
+        body.addView(siteLabel);
+        EditText site = input("https://marakana.az");
+        site.setText(getAccountSalesSite());
+        site.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        body.addView(site);
+        spacer(body, 10);
+
+        TextView keyLabel = text("Mobil API açarı", 13, MUTED, true);
+        body.addView(keyLabel);
+        EditText key = input("Plugin ayarlarındakı API açarı");
+        key.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        String existing = loadAccountSalesApiKey();
+        if (!existing.isEmpty()) key.setText(existing);
+        body.addView(key);
+        spacer(body, 14);
+
+        Button save = button("Bağlantını yoxla və yadda saxla", BLUE, Color.WHITE);
+        body.addView(save);
+        save.setOnClickListener(v -> {
+            String candidateSite = normalizeWordPressBase(site.getText().toString());
+            String candidateKey = key.getText().toString().trim();
+            if (candidateSite.isEmpty() || candidateKey.isEmpty()) {
+                toast("WordPress ünvanı və API açarı boş qala bilməz.");
+                return;
+            }
+            setBusy(true);
+            io.execute(() -> {
+                try {
+                    JSONObject result = accountSalesRequest(candidateSite, "/ping", "GET", null, candidateKey);
+                    if (!result.optBoolean("ok", false)) throw new Exception("Plugin cavabı düzgün deyil.");
+                    prefs.edit().putString(KEY_ACCOUNT_SALES_SITE, candidateSite).apply();
+                    saveAccountSalesApiKey(candidateKey);
+                    runOnUiThread(() -> {
+                        setBusy(false);
+                        toast("Hesab Satışı bağlantısı hazırdır.");
+                        showAccountSales("accounts");
+                    });
+                } catch (Exception ex) {
+                    runOnUiThread(() -> {
+                        setBusy(false);
+                        toast(accountSalesErrorMessage(ex));
+                    });
+                }
+            });
+        });
+
+        if (hasAccountSalesConnection()) {
+            spacer(body, 10);
+            Button cancel = button("Geri qayıt", CARD, TEXT);
+            body.addView(cancel);
+            cancel.setOnClickListener(v -> showAccountSales("accounts"));
+        }
+    }
+
+    private void showAccountSales(String requestedSection) {
+        if (!canAdmin && !"admin".equals(role)) {
+            toast("Hesab Satışı yalnız Admin üçün açıqdır.");
+            return;
+        }
+        if (!hasAccountSalesConnection()) {
+            showAccountSalesConnection();
+            return;
+        }
+        final String section = normalizeAccountSalesSection(requestedSection);
+        currentBackAction = null;
+        clear();
+
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(8), dp(10), dp(8), 0);
+        content.addView(shell, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        shell.addView(buildMainHeader("Hesab Satışı", false, null));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        installGlobalDrawerSwipe(scroll);
+        addPullToRefreshContent(shell, scroll, () -> showAccountSales(section));
+        LinearLayout body = scrollBody(scroll);
+        body.setPadding(0, dp(4), 0, dp(92));
+
+        LinearLayout topActions = new LinearLayout(this);
+        topActions.setOrientation(LinearLayout.HORIZONTAL);
+        Button settingsButton = button("⚙ Ayarlar", CARD, TEXT);
+        settingsButton.setTextSize(13);
+        topActions.addView(settingsButton, new LinearLayout.LayoutParams(0, dp(48), 1f));
+        settingsButton.setOnClickListener(v -> showAccountSales("settings"));
+        Button refresh = button("↻ Yenilə", CARD, TEXT);
+        refresh.setTextSize(13);
+        LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        refreshLp.setMargins(dp(8), 0, 0, 0);
+        topActions.addView(refresh, refreshLp);
+        refresh.setOnClickListener(v -> showAccountSales(section));
+        Button trash = button("🗑", CARD, Color.rgb(190, 55, 55));
+        trash.setTextSize(17);
+        LinearLayout.LayoutParams trashLp = new LinearLayout.LayoutParams(dp(52), dp(48));
+        trashLp.setMargins(dp(8), 0, 0, 0);
+        topActions.addView(trash, trashLp);
+        trash.setOnClickListener(v -> showAccountSalesTrash());
+        body.addView(topActions);
+        spacer(body, 10);
+
+        LinearLayout createActions = new LinearLayout(this);
+        createActions.setOrientation(LinearLayout.HORIZONTAL);
+        Button add = button("＋ Yeni hesab yarat", GREEN, Color.WHITE);
+        add.setTextSize(13);
+        createActions.addView(add, new LinearLayout.LayoutParams(0, dp(52), 1f));
+        Button addCustomer = button("＋ Yeni müştəri yarat", BLUE, Color.WHITE);
+        addCustomer.setTextSize(13);
+        LinearLayout.LayoutParams addCustomerLp = new LinearLayout.LayoutParams(0, dp(52), 1f);
+        addCustomerLp.setMargins(dp(8), 0, 0, 0);
+        createActions.addView(addCustomer, addCustomerLp);
+        if (!"settings".equals(section) && !"customers".equals(section)) {
+            body.addView(createActions);
+            spacer(body, 10);
+        }
+        add.setEnabled(false);
+        addCustomer.setEnabled(false);
+
+        EditText search = input("customers".equals(section)
+                ? "Ad soyad və ya telefonla axtar"
+                : "Oyun, e-mail, müştəri, telefon və ya məxfi kodla axtar");
+        if (!"settings".equals(section)) {
+            body.addView(search);
+            spacer(body, 10);
+        }
+
+        LinearLayout summaryHost = new LinearLayout(this);
+        summaryHost.setOrientation(LinearLayout.VERTICAL);
+        body.addView(summaryHost);
+        LinearLayout recordsHost = new LinearLayout(this);
+        recordsHost.setOrientation(LinearLayout.VERTICAL);
+        recordsHost.addView(empty("Hesab məlumatları yüklənir..."));
+        body.addView(recordsHost);
+
+        LinearLayout footer = buildAccountSalesFooter(section);
+        shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(86)));
+
+        loadAccountSalesJson("/overview?section=" + urlEncode(section), result -> {
+            JSONObject settings = result.optJSONObject("settings");
+            if (settings == null) settings = new JSONObject();
+            JSONArray gameChoices = result.optJSONArray("game_names");
+            JSONArray customerChoices = result.optJSONArray("customers");
+            accountSalesGameChoices = gameChoices == null ? new JSONArray() : gameChoices;
+            accountSalesCustomerChoices = customerChoices == null ? new JSONArray() : customerChoices;
+            JSONArray onlineEmails = result.optJSONArray("online_emails");
+            accountSalesOnlineEmails = onlineEmails == null ? new JSONArray() : onlineEmails;
+            JSONObject finalSettings = settings;
+            add.setEnabled(true);
+            add.setOnClickListener(v -> {
+                String prefillEmail = "";
+                if ("accounts".equals(section)) {
+                    String searchedValue = search.getText().toString().trim();
+                    if (searchedValue.contains("@")) {
+                        prefillEmail = searchedValue;
+                    }
+                }
+                showAccountSalesForm(null, finalSettings, section, prefillEmail);
+            });
+            addCustomer.setEnabled(true);
+            addCustomer.setOnClickListener(v -> showAccountSalesNewCustomer(section));
+
+            if ("settings".equals(section)) {
+                renderAccountSalesSummary(summaryHost, result.optJSONObject("stats"));
+            } else {
+                summaryHost.removeAllViews();
+            }
+            if ("customers".equals(section)) {
+                JSONArray customers = result.optJSONArray("customers");
+                if (customers == null) customers = new JSONArray();
+                customers = sortAccountSalesCustomersNewestCreatedFirst(customers);
+                final JSONArray finalCustomers = customers;
+                Runnable render = () -> renderAccountSalesCustomers(recordsHost, finalCustomers, search.getText().toString());
+                search.addTextChangedListener(new SimpleTextWatcher(render));
+                render.run();
+            } else if ("settings".equals(section)) {
+                renderAccountSalesSettings(recordsHost, finalSettings);
+            } else {
+                JSONArray records = result.optJSONArray("records");
+                if (records == null) records = new JSONArray();
+                if ("accounts".equals(section)) {
+                    records = sortAccountSalesAccountsPinnedThenCreated(records);
+                } else if ("sold".equals(section) || "unsold".equals(section) || "rental".equals(section)) {
+                    records = sortAccountSalesRecordsLatestActivityFirst(records);
+                }
+                final JSONArray finalRecords = records;
+                Runnable render = () -> renderAccountSalesRecords(recordsHost, finalRecords, search.getText().toString(), finalSettings, section);
+                search.addTextChangedListener(new SimpleTextWatcher(render));
+                render.run();
+            }
+        }, message -> {
+            summaryHost.removeAllViews();
+            recordsHost.removeAllViews();
+            LinearLayout c = card();
+            c.addView(text("Hesab Satışı məlumatları yüklənmədi", 16, Color.rgb(180, 55, 55), true));
+            TextView detail = text(message, 12, MUTED, false);
+            detail.setPadding(0, dp(6), 0, dp(10));
+            c.addView(detail);
+            Button setup = button("Bağlantını düzəlt", BLUE, Color.WHITE);
+            setup.setOnClickListener(v -> showAccountSalesConnection());
+            c.addView(setup);
+            recordsHost.addView(c);
+        });
+    }
+
+    private LinearLayout buildAccountSalesFooter(String activeSection) {
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(dp(4), dp(8), dp(4), dp(8));
+        footer.setBackground(bg(Color.WHITE, 22, BORDER));
+        footer.setElevation(dp(12));
+        String[] labels = {"Hesablar", "Satılanlar", "Satılmayanlar", "İcarə", "Müştəri"};
+        String[] icons = {"🎮", "✓", "✓", "⏳", "👥"};
+        String[] targets = {"accounts", "sold", "unsold", "rental", "customers"};
+        for (int i = 0; i < targets.length; i++) {
+            final String target = targets[i];
+            LinearLayout tab = buildRentalFooterTab(icons[i], labels[i], target.equals(activeSection));
+            if (tab.getChildCount() > 0 && tab.getChildAt(0) instanceof TextView) {
+                TextView footerIcon = (TextView) tab.getChildAt(0);
+                if ("sold".equals(target)) {
+                    footerIcon.setTextColor(Color.rgb(198, 40, 40));
+                    footerIcon.setTextSize(22);
+                } else if ("unsold".equals(target)) {
+                    footerIcon.setTextColor(GREEN);
+                    footerIcon.setTextSize(22);
+                }
+            }
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+            if (i > 0) lp.setMargins(dp(3), 0, 0, 0);
+            tab.setLayoutParams(lp);
+            tab.setOnClickListener(v -> showAccountSales(target));
+            footer.addView(tab);
+        }
+        return footer;
+    }
+
+    private void renderAccountSalesSummary(LinearLayout host, JSONObject stats) {
+        host.removeAllViews();
+        if (stats == null) return;
+        LinearLayout c = card();
+        c.addView(text("Göstəricilər", 13, MUTED, true));
+        String line1 = "Hesab: " + stats.optInt("total", 0) + "  •  Satılanlar: " + stats.optInt("sold", 0) + "  •  Satılmayanlar: " + stats.optInt("unsold", 0) + "  •  İcarə: " + stats.optInt("rental", 0);
+        String line2 = "Bitməyə yaxın: " + stats.optInt("rental_expiring", 0) + "  •  Müddəti bitən: " + stats.optInt("rental_expired", 0) + "  •  Cəmi satış: " + money(stats.optDouble("total_amount", 0));
+        c.addView(text(line1, 15, TEXT, true));
+        TextView totals = text(line2, 12, MUTED, false);
+        totals.setPadding(0, dp(4), 0, 0);
+        c.addView(totals);
+        host.addView(c);
+    }
+
+    private String money(double value) {
+        return String.format(Locale.US, "%.2f AZN", value);
+    }
+
+    private int compareNewestTimestamp(String a, String b) {
+        String left = a == null ? "" : a.trim();
+        String right = b == null ? "" : b.trim();
+        if (left.equals(right)) return 0;
+        if (left.isEmpty()) return 1;
+        if (right.isEmpty()) return -1;
+        return right.compareTo(left);
+    }
+
+    private JSONArray sortAccountSalesRecordsLatestActivityFirst(JSONArray records) {
+        ArrayList<JSONObject> rows = new ArrayList<>();
+        if (records != null) {
+            for (int i = 0; i < records.length(); i++) {
+                JSONObject row = records.optJSONObject(i);
+                if (row != null) rows.add(row);
+            }
+        }
+        java.util.Collections.sort(rows, (a, b) -> {
+            int cmp = compareNewestTimestamp(a.optString("updated_at", ""), b.optString("updated_at", ""));
+            if (cmp != 0) return cmp;
+            cmp = compareNewestTimestamp(a.optString("created_at", ""), b.optString("created_at", ""));
+            if (cmp != 0) return cmp;
+            return Integer.compare(b.optInt("id", 0), a.optInt("id", 0));
+        });
+        JSONArray sorted = new JSONArray();
+        for (JSONObject row : rows) sorted.put(row);
+        return sorted;
+    }
+
+    // v116: Sabitləmə yalnız Hesablar bölməsinin görünüş sırasına təsir edir.
+    // Açar sayt + hesab ID-si ilə saxlanılır ki, başqa WordPress bağlantısındakı eyni ID qarışmasın.
+    private String accountSalesPinnedRecordKey(JSONObject row) {
+        if (row == null) return "";
+        String id = row.optString("id", "").trim();
+        if (id.isEmpty() || "0".equals(id)) return "";
+        return getAccountSalesSite().trim().toLowerCase(Locale.ROOT) + "|" + id;
+    }
+
+    private Set<String> getAccountSalesPinnedRecordKeys() {
+        Set<String> stored = prefs.getStringSet(KEY_ACCOUNT_SALES_PINNED_RECORDS, null);
+        return stored == null ? new HashSet<>() : new HashSet<>(stored);
+    }
+
+    private boolean isAccountSalesRecordPinned(JSONObject row) {
+        String key = accountSalesPinnedRecordKey(row);
+        return !key.isEmpty() && getAccountSalesPinnedRecordKeys().contains(key);
+    }
+
+    private void setAccountSalesRecordPinned(JSONObject row, boolean pinned) {
+        String key = accountSalesPinnedRecordKey(row);
+        if (key.isEmpty()) return;
+        Set<String> keys = getAccountSalesPinnedRecordKeys();
+        if (pinned) keys.add(key);
+        else keys.remove(key);
+        prefs.edit().putStringSet(KEY_ACCOUNT_SALES_PINNED_RECORDS, keys).apply();
+    }
+
+    // Sabit hesablar yuxarıda qalır. Sabitləmə ləğv ediləndə hesab yenidən
+    // created_at vaxtına uyğun öz təbii yerinə qayıdır.
+    private JSONArray sortAccountSalesAccountsPinnedThenCreated(JSONArray records) {
+        ArrayList<JSONObject> rows = new ArrayList<>();
+        if (records != null) {
+            for (int i = 0; i < records.length(); i++) {
+                JSONObject row = records.optJSONObject(i);
+                if (row != null) rows.add(row);
+            }
+        }
+        java.util.Collections.sort(rows, (a, b) -> {
+            boolean aPinned = isAccountSalesRecordPinned(a);
+            boolean bPinned = isAccountSalesRecordPinned(b);
+            if (aPinned != bPinned) return aPinned ? -1 : 1;
+            int cmp = compareNewestTimestamp(a.optString("created_at", ""), b.optString("created_at", ""));
+            if (cmp != 0) return cmp;
+            return Integer.compare(b.optInt("id", 0), a.optInt("id", 0));
+        });
+        JSONArray sorted = new JSONArray();
+        for (JSONObject row : rows) sorted.put(row);
+        return sorted;
+    }
+
+    private JSONArray sortAccountSalesCustomersNewestCreatedFirst(JSONArray customers) {
+        ArrayList<JSONObject> rows = new ArrayList<>();
+        if (customers != null) {
+            for (int i = 0; i < customers.length(); i++) {
+                JSONObject row = customers.optJSONObject(i);
+                if (row != null) rows.add(row);
+            }
+        }
+        java.util.Collections.sort(rows, (a, b) -> {
+            int cmp = compareNewestTimestamp(a.optString("customer_created_at", ""), b.optString("customer_created_at", ""));
+            if (cmp != 0) return cmp;
+            cmp = compareNewestTimestamp(a.optString("last_sale_date", ""), b.optString("last_sale_date", ""));
+            if (cmp != 0) return cmp;
+            return a.optString("customer_name", "").compareToIgnoreCase(b.optString("customer_name", ""));
+        });
+        JSONArray sorted = new JSONArray();
+        for (JSONObject row : rows) sorted.put(row);
+        return sorted;
+    }
+
+    private void renderAccountSalesRecords(LinearLayout host, JSONArray records, String query, JSONObject settings, String section) {
+        host.removeAllViews();
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        int visible = 0;
+        for (int i = 0; i < records.length(); i++) {
+            JSONObject row = records.optJSONObject(i);
+            if (row == null) continue;
+            String haystack = row.optString("game_name", "") + " " + row.optString("email", "") + " " +
+                    row.optString("customer_name", "") + " " + row.optString("phone", "") + " " +
+                    row.optString("secret_code", "") + " " + row.optString("console", "") + " " +
+                    row.optString("account_type", "") + " " + row.optString("stock_status", "") + " " +
+                    row.optString("rental_remaining_text", "");
+            if (!q.isEmpty() && !haystack.toLowerCase(Locale.ROOT).contains(q)) continue;
+            visible++;
+            host.addView(buildAccountSalesRecordCard(row, settings, section));
+        }
+        if (visible == 0) host.addView(empty(q.isEmpty() ? "Hesab yoxdur." : "Axtarışa uyğun hesab tapılmadı."));
+    }
+
+    private LinearLayout buildAccountSalesRecordCard(JSONObject row, JSONObject settings, String section) {
+        LinearLayout c = card();
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.TOP);
+
+        ArrayList<String> cardGames = parseAccountSalesGameSelection(row.optString("game_name", ""));
+        LinearLayout gameColumn = new LinearLayout(this);
+        gameColumn.setOrientation(LinearLayout.VERTICAL);
+        boolean bundleAccount = cardGames.size() > 1;
+        boolean mainAccountSection = "accounts".equals(section) || "sold".equals(section) ||
+                "unsold".equals(section) || "rental".equals(section) || "customer".equals(section);
+
+        String firstGameName = cardGames.isEmpty() ? row.optString("game_name", "Hesab") : cardGames.get(0);
+        LinearLayout firstGameRow = new LinearLayout(this);
+        firstGameRow.setOrientation(LinearLayout.HORIZONTAL);
+        firstGameRow.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView firstGameTitle = text(firstGameName, bundleAccount ? 15 : 16, TEXT, true);
+        firstGameRow.addView(firstGameTitle, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        // v116: Sabitlənən hesabın kartında pin ikonu həmişə görünsün.
+        if ("accounts".equals(section) && isAccountSalesRecordPinned(row)) {
+            ImageView pinnedIcon = new ImageView(this);
+            pinnedIcon.setImageResource(R.drawable.ic_pin);
+            pinnedIcon.setColorFilter(BLUE);
+            pinnedIcon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            pinnedIcon.setContentDescription("Sabitlənib");
+            LinearLayout.LayoutParams pinLp = new LinearLayout.LayoutParams(dp(21), dp(21));
+            pinLp.setMargins(dp(6), 0, 0, 0);
+            firstGameRow.addView(pinnedIcon, pinLp);
+        }
+        gameColumn.addView(firstGameRow, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        if (bundleAccount) {
+            spacer(gameColumn, 2);
+            for (int gameIndex = 1; gameIndex < cardGames.size(); gameIndex++) {
+                TextView gameLine = text(cardGames.get(gameIndex), 15, TEXT, true);
+                gameColumn.addView(gameLine, new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                if (gameIndex < cardGames.size() - 1) spacer(gameColumn, 2);
+            }
+        }
+        String email = row.optString("email", "").trim();
+        String customer = row.optString("customer_name", "").trim();
+        String phone = row.optString("phone", "").trim();
+        String saleDate = row.optString("sale_date", "").trim();
+        String saleDateDisplay = accountSalesDateForDisplay(saleDate);
+        String secretCode = row.optString("secret_code", "").trim();
+        String stockStatus = row.optString("stock_status", "").trim();
+        boolean soldAccount = "Satılıb".equalsIgnoreCase(stockStatus);
+
+        // v109: əsas hesab kartlarında sol sütunun məlumatlarını oyun adının dərhal altında saxla.
+        // Beləliklə sağdakı 3-5 sətir sol tərəfdə lazımsız böyük boşluq yaratmır.
+        if (mainAccountSection) {
+            if (!email.isEmpty()) {
+                spacer(gameColumn, 2);
+                gameColumn.addView(text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, true));
+            }
+            // v113: Hesablar və Satılanlar bölmələrində e-mail ilə müştəri sətrini
+            // vizual olaraq ayırmaq üçün incə xətt göstərilir.
+            if (("accounts".equals(section) || "sold".equals(section)) &&
+                    !email.isEmpty() && (!customer.isEmpty() || !phone.isEmpty())) {
+                View customerDivider = new View(this);
+                customerDivider.setBackgroundColor(Color.parseColor("#D8DDE3"));
+                LinearLayout.LayoutParams dividerLp = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, dp(1));
+                dividerLp.setMargins(0, dp(4), 0, dp(4));
+                gameColumn.addView(customerDivider, dividerLp);
+            }
+            if (!customer.isEmpty() || !phone.isEmpty()) {
+                gameColumn.addView(text((customer.isEmpty() ? "—" : customer) +
+                        (phone.isEmpty() ? "" : "  •  " + phone), 12, TEXT, true));
+            }
+            // Satılmış hesabın tarixi və Məxfi kodu sağ sütunda, Satılıb statusunun altında göstərilir.
+            if (!soldAccount) {
+                if (!saleDateDisplay.isEmpty()) {
+                    gameColumn.addView(text(saleDateDisplay, 12, MUTED, true));
+                }
+                if (!secretCode.isEmpty()) {
+                    gameColumn.addView(text("Məxfi kod: " + secretCode, 12, TEXT, true));
+                }
+            }
+        }
+
+        LinearLayout.LayoutParams gameLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        gameLp.setMargins(0, 0, dp(6), 0);
+        top.addView(gameColumn, gameLp);
+
+        if (mainAccountSection) {
+            LinearLayout.LayoutParams metaLp = new LinearLayout.LayoutParams(dp(146), ViewGroup.LayoutParams.WRAP_CONTENT);
+            // Sağ kənardan təxminən bir hərflik nəfəs yeri saxlanılır; “Satılmayıb” tam görünür.
+            metaLp.setMargins(0, 0, dp(8), 0);
+            top.addView(buildAccountSalesPriceMetaColumn(row), metaLp);
+        } else {
+            String price = row.optString("price_formatted", money(row.optDouble("price", 0)));
+            TextView priceView = text(price, 14, GREEN, true);
+            priceView.setGravity(Gravity.END | Gravity.TOP);
+            top.addView(priceView, new LinearLayout.LayoutParams(dp(112), ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+        c.addView(top);
+
+        if (mainAccountSection) {
+            // Məlumatlar artıq gameColumn daxilindədir.
+        } else if ("customer".equals(section)) {
+            StringBuilder customerInfo = new StringBuilder();
+            if (bundleAccount) customerInfo.append("🎁 ");
+            if (!email.isEmpty()) customerInfo.append(email);
+            if (!customer.isEmpty()) {
+                if (customerInfo.length() > 0) customerInfo.append("  •  ");
+                customerInfo.append(customer);
+            }
+            if (!phone.isEmpty()) {
+                if (customerInfo.length() > 0) customerInfo.append("  •  ");
+                customerInfo.append(phone);
+            }
+            if (!saleDateDisplay.isEmpty()) {
+                if (customerInfo.length() > 0) customerInfo.append("  •  ");
+                customerInfo.append(saleDateDisplay);
+            }
+            if (customerInfo.length() > 0) {
+                spacer(c, 4);
+                c.addView(text(customerInfo.toString(), 12, MUTED, false));
+            }
+            c.addView(buildAccountSalesMetaLine(row));
+        } else {
+            c.addView(text((bundleAccount ? "🎁 " : "") + email, 13, MUTED, true));
+            if (!customer.isEmpty() || !phone.isEmpty()) {
+                c.addView(text((customer.isEmpty() ? "—" : customer) +
+                        (phone.isEmpty() ? "" : "  •  " + phone), 12, TEXT, true));
+            }
+            if (!saleDateDisplay.isEmpty()) c.addView(text(saleDateDisplay, 12, MUTED, false));
+            if (!secretCode.isEmpty()) c.addView(text("Məxfi kod: " + secretCode, 12, TEXT, true));
+            c.addView(buildAccountSalesMetaLine(row));
+        }
+
+        if ("İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim())) {
+            String rentalState = row.optString("rental_state", "");
+            String rentalText = row.optString("rental_remaining_text", "").trim();
+            if (rentalText.isEmpty()) rentalText = "İcarə müddəti göstərilməyib";
+            String prefix = "expired".equals(rentalState) ? "⛔ " : ("expiring".equals(rentalState) ? "⚠️ " : "⏳ ");
+            int rentalColor = "expired".equals(rentalState) ? ORANGE : ("expiring".equals(rentalState) ? ORANGE : GREEN);
+            c.addView(text(prefix + rentalText, 13, rentalColor, true));
+            String rentalEnds = accountSalesDateTimeForDisplay(row.optString("rental_ends_at", ""));
+            if (!rentalEnds.isEmpty()) c.addView(text("Bitmə: " + rentalEnds, 11, MUTED, false));
+        }
+        spacer(c, 8);
+        installAccountSalesRecordCardActions(c, row, settings, section);
+        return c;
+    }
+
+    private LinearLayout buildAccountSalesPriceMetaColumn(JSONObject row) {
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setGravity(Gravity.END | Gravity.TOP);
+
+        String price = row.optString("price_formatted", money(row.optDouble("price", 0)));
+        TextView priceView = text(price, 14, GREEN, true);
+        priceView.setGravity(Gravity.END);
+        column.addView(priceView, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        String type = row.optString("account_type", "").trim();
+        String console = row.optString("console", "").trim();
+        String status = row.optString("stock_status", "").trim();
+
+        StringBuilder meta = new StringBuilder();
+        if (!type.isEmpty()) meta.append(type);
+        if (!console.isEmpty()) {
+            if (meta.length() > 0) meta.append(" • ");
+            meta.append(console);
+        }
+        if (meta.length() > 0) {
+            TextView metaView = text(meta.toString(), 11, TEXT, true);
+            metaView.setGravity(Gravity.END);
+            column.addView(metaView, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+        if (!status.isEmpty()) {
+            TextView statusView = text(status, 13, accountSalesStatusColor(status), true); // v115: status yazıları bütün hesab görünüşlərində +2sp
+            statusView.setGravity(Gravity.END);
+            column.addView(statusView, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+
+        // v109: Satılmış hesabda tarix Satılıb statusunun dərhal altında və qalın göstərilir.
+        // Məxfi kod varsa əvvəlki qaydaya uyğun olaraq tarixin altında qalır.
+        if ("Satılıb".equalsIgnoreCase(status)) {
+            String saleDateDisplay = accountSalesDateForDisplay(row.optString("sale_date", "").trim());
+            if (!saleDateDisplay.isEmpty()) {
+                TextView dateView = text(saleDateDisplay, 11, TEXT, true);
+                dateView.setGravity(Gravity.END);
+                column.addView(dateView, new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            }
+            String secretCode = row.optString("secret_code", "").trim();
+            if (!secretCode.isEmpty()) {
+                TextView secretView = text("Məxfi kod: " + secretCode, 11, TEXT, true);
+                secretView.setGravity(Gravity.END);
+                column.addView(secretView, new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            }
+        }
+        return column;
+    }
+
+    private LinearLayout buildAccountSalesInlineMeta(JSONObject row) {
+        LinearLayout line = new LinearLayout(this);
+        line.setOrientation(LinearLayout.HORIZONTAL);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+
+        String type = row.optString("account_type", "").trim();
+        String console = row.optString("console", "").trim();
+        String status = row.optString("stock_status", "").trim();
+
+        StringBuilder prefix = new StringBuilder();
+        if (!type.isEmpty()) prefix.append(type);
+        if (!console.isEmpty()) {
+            if (prefix.length() > 0) prefix.append(" • ");
+            prefix.append(console);
+        }
+        if (prefix.length() > 0 && !status.isEmpty()) prefix.append(" • ");
+
+        if (prefix.length() > 0) {
+            line.addView(text(prefix.toString(), 11, MUTED, true));
+        }
+        if (!status.isEmpty()) {
+            line.addView(text(status, 13, accountSalesStatusColor(status), true)); // v115: +2sp
+        }
+        return line;
+    }
+
+    private LinearLayout buildAccountSalesMetaLine(JSONObject row) {
+        LinearLayout line = new LinearLayout(this);
+        line.setOrientation(LinearLayout.HORIZONTAL);
+        line.setGravity(Gravity.CENTER_VERTICAL);
+
+        String type = row.optString("account_type", "").trim();
+        String console = row.optString("console", "").trim();
+        String status = row.optString("stock_status", "").trim();
+
+        StringBuilder prefix = new StringBuilder();
+        if (!type.isEmpty()) prefix.append(type);
+        if (!console.isEmpty()) {
+            if (prefix.length() > 0) prefix.append("  •  ");
+            prefix.append(console);
+        }
+        if (prefix.length() > 0 && !status.isEmpty()) prefix.append("  •  ");
+
+        if (prefix.length() > 0) line.addView(text(prefix.toString(), 12, TEXT, true));
+        if (!status.isEmpty()) line.addView(text(status, 14, accountSalesStatusColor(status), true)); // v115: +2sp
+        return line;
+    }
+
+    private int accountSalesStatusColor(String status) {
+        if ("Satılıb".equalsIgnoreCase(status)) return Color.rgb(198, 40, 40);
+        if ("Satılmayıb".equalsIgnoreCase(status)) return GREEN;
+        if ("İcarə".equalsIgnoreCase(status)) return ORANGE;
+        return TEXT;
+    }
+
+    private void installAccountSalesRecordCardActions(View card, JSONObject row, JSONObject settings, String section) {
+        boolean tapToOpen = "accounts".equals(section) || "sold".equals(section) ||
+                "unsold".equals(section) || "rental".equals(section);
+
+        card.setClickable(true);
+        card.setFocusable(true);
+        card.setOnTouchListener(null);
+
+        if (tapToOpen) {
+            card.setOnClickListener(v -> showAccountSalesRecordActions(row, settings, section));
+            return;
+        }
+
+        // Müştəri tarixçəsi kimi köhnə köməkçi görünüşlərdə əvvəlki 1 saniyəlik hold saxlanılır.
+        final Handler holdHandler = new Handler(Looper.getMainLooper());
+        final float[] down = new float[2];
+        final int moveTolerance = dp(12);
+        final Runnable openActions = () -> showAccountSalesRecordActions(row, settings, section);
+        card.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    down[0] = event.getX();
+                    down[1] = event.getY();
+                    holdHandler.removeCallbacks(openActions);
+                    holdHandler.postDelayed(openActions, 1000L);
+                    return true;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(event.getX() - down[0]) > moveTolerance || Math.abs(event.getY() - down[1]) > moveTolerance) {
+                        holdHandler.removeCallbacks(openActions);
+                    }
+                    return true;
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    holdHandler.removeCallbacks(openActions);
+                    return true;
+                default:
+                    return true;
+            }
+        });
+    }
+
+    private LinearLayout accountSalesActionRow(int iconRes, String label, String description, int iconColor, Runnable action) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(10), dp(12), dp(10));
+        row.setBackground(bg(Color.rgb(249, 251, 253), 16, BORDER));
+        row.setClickable(true);
+        row.setFocusable(true);
+
+        FrameLayout iconBox = new FrameLayout(this);
+        iconBox.setBackground(bg(Color.rgb(238, 244, 250), 13, Color.TRANSPARENT));
+        ImageView icon = new ImageView(this);
+        icon.setImageResource(iconRes);
+        icon.setColorFilter(iconColor);
+        icon.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        FrameLayout.LayoutParams iconLp = new FrameLayout.LayoutParams(dp(24), dp(24), Gravity.CENTER);
+        iconBox.addView(icon, iconLp);
+        row.addView(iconBox, new LinearLayout.LayoutParams(dp(46), dp(46)));
+
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.setGravity(Gravity.CENTER_VERTICAL);
+        TextView title = text(label, 15, TEXT, true);
+        TextView sub = text(description, 12, MUTED, false);
+        labels.addView(title);
+        labels.addView(sub);
+        LinearLayout.LayoutParams labelsLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        labelsLp.setMargins(dp(12), 0, 0, 0);
+        row.addView(labels, labelsLp);
+
+        TextView arrow = text("›", 27, MUTED, false);
+        arrow.setGravity(Gravity.CENTER);
+        row.addView(arrow, new LinearLayout.LayoutParams(dp(24), dp(46)));
+        row.setOnClickListener(v -> action.run());
+        return row;
+    }
+
+    private void showAccountSalesRecordActions(JSONObject row, JSONObject settings, String section) {
+        String title = row.optString("game_name", "Hesab").trim();
+        if (title.isEmpty()) title = "Hesab";
+        boolean accountOrSoldSection = "accounts".equals(section) || "sold".equals(section) || "rental".equals(section);
+        boolean unsoldStatus = "Satılmayıb".equalsIgnoreCase(row.optString("stock_status", "").trim());
+        boolean detailActions = accountOrSoldSection && !unsoldStatus;
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(18), dp(18), dp(14));
+        box.setBackground(bg(CARD, 22, Color.TRANSPARENT));
+
+        TextView heading = text(title, 18, TEXT, true);
+        box.addView(heading);
+        TextView hint = text("Əməliyyat seç", 12, MUTED, false);
+        LinearLayout.LayoutParams hintLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        hintLp.setMargins(0, dp(4), 0, dp(14));
+        box.addView(hint, hintLp);
+
+        final AlertDialog[] dialogRef = new AlertDialog[1];
+        Runnable dismiss = () -> { if (dialogRef[0] != null) dialogRef[0].dismiss(); };
+
+        // v116: Hesablar bölməsində hesabı yuxarıda sabit saxlamaq / sabitləməni ləğv etmək.
+        if ("accounts".equals(section)) {
+            boolean pinned = isAccountSalesRecordPinned(row);
+            LinearLayout pin = accountSalesActionRow(R.drawable.ic_pin,
+                    pinned ? "Sabitləməni ləğv et" : "Sabitle",
+                    pinned ? "Hesabı yaradılma vaxtına uyğun öz yerinə qaytar" : "Hesabı Hesablar siyahısının yuxarısında saxla",
+                    pinned ? ORANGE : BLUE, () -> {
+                        dismiss.run();
+                        setAccountSalesRecordPinned(row, !pinned);
+                        toast(pinned ? "Sabitləmə ləğv edildi." : "Hesab sabitləndi.");
+                        showAccountSales("accounts");
+                    });
+            box.addView(pin);
+            spacer(box, 8);
+        }
+
+        boolean unsoldSection = ("unsold".equals(section) || "accounts".equals(section)) && unsoldStatus;
+        if (unsoldSection) {
+            LinearLayout sell = accountSalesActionRow(android.R.drawable.ic_menu_send,
+                    "Sat", "Müştəri məlumatlarını daxil edib hesabı sat", GREEN, () -> {
+                        dismiss.run();
+                        showAccountSalesFormForStatus(row, settings, "Satılıb", section);
+                    });
+            box.addView(sell);
+            spacer(box, 8);
+
+            LinearLayout rent = accountSalesActionRow(android.R.drawable.ic_menu_recent_history,
+                    "İcarə ver", "Müddət seçib hesabı icarəyə ver", ORANGE, () -> {
+                        dismiss.run();
+                        showAccountSalesFormForStatus(row, settings, "İcarə", section);
+                    });
+            box.addView(rent);
+            spacer(box, 8);
+        }
+
+        boolean soldSection = "sold".equals(section) && "Satılıb".equalsIgnoreCase(row.optString("stock_status", "").trim());
+        if (soldSection) {
+            LinearLayout copy = accountSalesActionRow(android.R.drawable.ic_menu_add,
+                    "Kopyala", "Eyni hesabı müştəri və satış tarixi boş Satılmayan kimi yarat", BLUE, () -> {
+                        dismiss.run();
+                        confirmCopyAccountSaleAsUnsold(row, section);
+                    });
+            box.addView(copy);
+            spacer(box, 8);
+        }
+
+        boolean rentalSectionAccount = "rental".equals(section)
+                && "İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim());
+        if (rentalSectionAccount) {
+            LinearLayout returned = accountSalesActionRow(android.R.drawable.ic_menu_revert,
+                    "Təhvil aldım", "İcarəni bağla və hesabı Satılmayıb-a qaytar", GREEN, () -> {
+                        dismiss.run();
+                        confirmAccountSalesRentalReturned(row, section);
+                    });
+            box.addView(returned);
+            spacer(box, 8);
+        }
+
+        LinearLayout edit = accountSalesActionRow(android.R.drawable.ic_menu_edit,
+                "Düzənlə", "Hesab məlumatlarını dəyiş", BLUE, () -> {
+                    dismiss.run();
+                    showAccountSalesForm(row, settings, section);
+                });
+        box.addView(edit);
+        spacer(box, 8);
+
+        if (detailActions) {
+            LinearLayout detail = accountSalesActionRow(android.R.drawable.ic_menu_info_details,
+                    "Ətraflı məlumat", "Bütün hesab məlumatlarına bax", GREEN, () -> {
+                        dismiss.run();
+                        showAccountSalesRecordDetail(row);
+                    });
+            box.addView(detail);
+            spacer(box, 8);
+
+            LinearLayout send = accountSalesActionRow(android.R.drawable.ic_menu_send,
+                    "Məlumatı göndər", "WhatsApp ilə müştəriyə göndər", Color.rgb(31, 154, 92), () -> {
+                        dismiss.run();
+                        sendAccountSalesInfoWhatsApp(row);
+                    });
+            box.addView(send);
+            spacer(box, 8);
+        }
+
+        if (!"rental".equals(section)) {
+            LinearLayout delete = accountSalesActionRow(android.R.drawable.ic_menu_delete,
+                    "Sil", "Hesabı 30 günlük zibil qutusuna köçür", Color.rgb(190, 55, 55), () -> {
+                        dismiss.run();
+                        confirmDeleteAccountSale(row, section);
+                    });
+            box.addView(delete);
+            spacer(box, 8);
+        }
+
+        if ("accounts".equals(section)) {
+            LinearLayout psApp = accountSalesActionRow(android.R.drawable.ic_menu_share,
+                    "PS App giriş", "E-maili kopyala və PlayStation App-i aç", BLUE, () -> {
+                        dismiss.run();
+                        openPlayStationAppForAccount(row);
+                    });
+            box.addView(psApp);
+            spacer(box, 8);
+        }
+
+        boolean demoSection = "accounts".equals(section) || "sold".equals(section) || "unsold".equals(section);
+        if (demoSection) {
+            LinearLayout demo = accountSalesActionRow(android.R.drawable.ic_media_play,
+                    "Demo izlə", "YouTube-da oyunun videosunu axtar", Color.rgb(229, 57, 53), () -> {
+                        dismiss.run();
+                        showAccountSalesDemoChooser(row);
+                    });
+            box.addView(demo);
+        }
+
+        TextView close = text("Bağla", 14, BLUE, true);
+        close.setGravity(Gravity.CENTER);
+        close.setPadding(0, dp(12), 0, dp(2));
+        close.setClickable(true);
+        close.setOnClickListener(v -> dismiss.run());
+        box.addView(close);
+
+        AlertDialog dialog = new AlertDialog.Builder(this).setView(box).create();
+        dialogRef[0] = dialog;
+        dialog.setOnShowListener(d -> {
+            Window window = dialog.getWindow();
+            if (window != null) window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        });
+        dialog.show();
+    }
+
+    private void openPlayStationAppForAccount(JSONObject row) {
+        String email = row == null ? "" : row.optString("email", "").trim();
+        if (email.isEmpty()) {
+            toast("Hesabın e-mail məlumatı yoxdur.");
+            return;
+        }
+
+        try {
+            android.content.ClipboardManager clipboard =
+                    (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard != null) {
+                clipboard.setPrimaryClip(android.content.ClipData.newPlainText("PSN e-mail", email));
+            }
+        } catch (Exception ignored) {
+        }
+
+        try {
+            Intent launch = getPackageManager().getLaunchIntentForPackage("com.scee.psxandroid");
+            if (launch != null) {
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(launch);
+                toast("E-mail kopyalandı. PS App giriş xanasına yapışdır.");
+                return;
+            }
+        } catch (Exception ignored) {
+        }
+
+        toast("PlayStation App tapılmadı.");
+        try {
+            Intent market = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("market://details?id=com.scee.psxandroid"));
+            startActivity(market);
+            return;
+        } catch (Exception ignored) {
+        }
+
+        try {
+            Intent web = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://play.google.com/store/apps/details?id=com.scee.psxandroid"));
+            startActivity(web);
+        } catch (Exception e) {
+            toast("PlayStation App açıla bilmədi.");
+        }
+    }
+
+    private void showAccountSalesDemoChooser(JSONObject row) {
+        ArrayList<String> games = parseAccountSalesGameSelection(row == null ? "" : row.optString("game_name", ""));
+        if (games.isEmpty()) {
+            toast("Oyun adı tapılmadı.");
+            return;
+        }
+
+        if (games.size() == 1) {
+            openAccountSalesYouTubeSearch(games.get(0));
+            return;
+        }
+
+        String[] items = games.toArray(new String[0]);
+        new AlertDialog.Builder(this)
+                .setTitle("Demo izlə")
+                .setItems(items, (dialog, which) -> {
+                    if (which >= 0 && which < games.size()) {
+                        openAccountSalesYouTubeSearch(games.get(which));
+                    }
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
+    }
+
+    private void openAccountSalesYouTubeSearch(String gameName) {
+        String clean = gameName == null ? "" : gameName.trim();
+        if (clean.isEmpty()) {
+            toast("Oyun adı tapılmadı.");
+            return;
+        }
+
+        String query = clean + " gameplay";
+        try {
+            Intent appIntent = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("vnd.youtube://results?search_query=" + Uri.encode(query)));
+            appIntent.setPackage("com.google.android.youtube");
+            startActivity(appIntent);
+            return;
+        } catch (Exception ignored) {
+        }
+
+        try {
+            Intent webIntent = new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query)));
+            startActivity(webIntent);
+        } catch (Exception e) {
+            toast("YouTube açılmadı.");
+        }
+    }
+
+    private void showAccountSalesRecordDetail(JSONObject row) {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(10), dp(18), dp(12));
+        scroll.addView(box, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        ArrayList<String> games = parseAccountSalesGameSelection(row.optString("game_name", ""));
+        if (games.size() > 1) {
+            StringBuilder bundle = new StringBuilder();
+            for (int i = 0; i < games.size(); i++) {
+                if (i > 0) bundle.append("\n");
+                bundle.append("• ").append(games.get(i));
+            }
+            addAccountSalesDetailField(box, "🎁", "Bundle oyunları", bundle.toString());
+        } else {
+            String gameName = games.isEmpty() ? row.optString("game_name", "") : games.get(0);
+            addAccountSalesDetailField(box, "🎮", "Oyun", gameName);
+        }
+        addAccountSalesDetailField(box, "📧", "E-mail", row.optString("email", ""));
+        addAccountSalesDetailField(box, "🔐", "Məxfi kod", row.optString("secret_code", ""));
+        addAccountSalesDetailField(box, "🏷️", "Növ", row.optString("account_type", ""));
+        addAccountSalesDetailField(box, "🕹️", "Konsol", row.optString("console", ""));
+        addAccountSalesDetailField(box, "💰", "Qiymət", row.optString("price_formatted", money(row.optDouble("price", 0))));
+        addAccountSalesDetailField(box, "👤", "Müştəri", row.optString("customer_name", ""));
+        addAccountSalesDetailField(box, "📱", "Telefon", row.optString("phone", ""));
+        addAccountSalesDetailField(box, "📅", "Satış tarixi", accountSalesDateForDisplay(row.optString("sale_date", "")));
+        addAccountSalesDetailField(box, "📦", "Status", row.optString("stock_status", ""));
+        if ("İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim())) {
+            addAccountSalesDetailField(box, "⏱️", "İcarə müddəti", row.optString("rental_duration_label", ""));
+            addAccountSalesDetailField(box, "▶️", "İcarə başlanıb", accountSalesDateTimeForDisplay(row.optString("rental_started_at", "")));
+            addAccountSalesDetailField(box, "🏁", "İcarə bitir", accountSalesDateTimeForDisplay(row.optString("rental_ends_at", "")));
+            addAccountSalesDetailField(box, "⏳", "Qalan müddət", row.optString("rental_remaining_text", ""));
+        }
+        addAccountSalesDetailField(box, "🆔", "Hesab ID", String.valueOf(row.optInt("id", 0)));
+        addAccountSalesDetailField(box, "🕒", "Yaradılıb", accountSalesDateTimeForDisplay(row.optString("created_at", "")));
+        addAccountSalesDetailField(box, "♻️", "Son dəyişiklik", accountSalesDateTimeForDisplay(row.optString("updated_at", "")));
+
+        new AlertDialog.Builder(this)
+                .setTitle("Ətraflı məlumat")
+                .setView(scroll)
+                .setPositiveButton("Bağla", null)
+                .show();
+    }
+
+    private void addAccountSalesDetailField(LinearLayout box, String icon, String label, String value) {
+        String clean = value == null ? "" : value.trim();
+        if (clean.isEmpty()) clean = "—";
+        TextView line = text(icon + "  " + label + ": " + clean, 14, TEXT, false);
+        line.setPadding(0, dp(6), 0, dp(6));
+        box.addView(line, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
+
+    private String accountSalesDateTimeForDisplay(String value) {
+        String clean = value == null ? "" : value.trim();
+        if (clean.length() >= 10 && clean.charAt(4) == '-' && clean.charAt(7) == '-') {
+            String date = clean.substring(8, 10) + "-" + clean.substring(5, 7) + "-" + clean.substring(0, 4);
+            return clean.length() > 10 ? date + clean.substring(10) : date;
+        }
+        return clean;
+    }
+
+    private void sendAccountSalesInfoWhatsApp(JSONObject row) {
+        String phone = normalizeWhatsAppPhone(row.optString("phone", ""));
+        if (phone.isEmpty()) {
+            toast("Bu hesab üçün müştəri telefon nömrəsi yoxdur.");
+            return;
+        }
+
+        String customer = row.optString("customer_name", "").trim();
+        ArrayList<String> games = parseAccountSalesGameSelection(row.optString("game_name", ""));
+        StringBuilder message = new StringBuilder();
+        message.append("🎮 *OYUN HESABI MƏLUMATLARI*\n\n");
+        message.append("👤 *Müştəri:* ").append(customer.isEmpty() ? "—" : customer).append("\n");
+        message.append("📱 *Telefon:* ").append(row.optString("phone", "—")).append("\n");
+        if (games.size() > 1) {
+            message.append("🎁 *Bundle oyunları:*\n");
+            for (String game : games) message.append("🎮 ").append(game).append("\n");
+        } else {
+            String gameName = games.isEmpty() ? row.optString("game_name", "—") : games.get(0);
+            message.append("🎮 *Oyun:* ").append(gameName).append("\n");
+        }
+        message.append("📧 *E-mail:* ").append(row.optString("email", "—")).append("\n");
+        message.append("🏷️ *Növ:* ").append(row.optString("account_type", "—")).append("\n");
+        message.append("🕹️ *Konsol:* ").append(row.optString("console", "—")).append("\n");
+        message.append("💰 *Qiymət:* ").append(row.optString("price_formatted", money(row.optDouble("price", 0)))).append("\n");
+        String saleDate = accountSalesDateForDisplay(row.optString("sale_date", ""));
+        if (!saleDate.isEmpty()) message.append("📅 *Satış tarixi:* ").append(saleDate).append("\n");
+        message.append("📦 *Status:* ").append(row.optString("stock_status", "—")).append("\n");
+        if ("İcarə".equalsIgnoreCase(row.optString("stock_status", "").trim())) {
+            message.append("⏱️ *İcarə müddəti:* ").append(row.optString("rental_duration_label", "—")).append("\n");
+            message.append("🏁 *İcarə bitir:* ").append(accountSalesDateTimeForDisplay(row.optString("rental_ends_at", ""))).append("\n");
+            message.append("⏳ *Qalan:* ").append(row.optString("rental_remaining_text", "—")).append("\n");
+        }
+        message.append("🆔 *Hesab ID:* ").append(row.optInt("id", 0)).append("\n");
+        message.append("\n🎮 *Marakana Game Center*");
+
+        openWhatsAppChooser(phone, message.toString());
+    }
+
+    private void confirmAccountSalesRentalReturned(JSONObject row, String sourceSection) {
+        String title = row.optString("game_name", "Hesab").trim();
+        if (title.isEmpty()) title = "Hesab";
+        new AlertDialog.Builder(this)
+                .setTitle("Təhvil aldım")
+                .setMessage(title + " hesabının icarəsi bağlansın və Satılmayıb bölməsinə qaytarılsın?")
+                .setNegativeButton("Xeyr", null)
+                .setPositiveButton("Təhvil aldım", (d, w) -> returnAccountSalesRentalToUnsold(row, sourceSection))
+                .show();
+    }
+
+    private void returnAccountSalesRentalToUnsold(JSONObject row, String sourceSection) {
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("id", row.optInt("id", 0));
+            payload.put("game_name", row.optString("game_name", ""));
+            payload.put("game_ids", accountSalesGameIdsForSelection(row.optString("game_name", "")));
+            payload.put("account_type", row.optString("account_type", "Online"));
+            payload.put("email", row.optString("email", ""));
+            payload.put("price", String.valueOf(row.optDouble("price", 0)));
+            payload.put("console", row.optString("console", "PS5"));
+            payload.put("customer_name", "");
+            payload.put("phone", "");
+            payload.put("sale_date", "");
+            String paymentType = row.optString("payment_type", "Nağd").trim();
+            payload.put("payment_type", paymentType.isEmpty() ? "Nağd" : paymentType);
+            payload.put("stock_status", "Satılmayıb");
+            payload.put("rental_duration_value", "0");
+            payload.put("rental_duration_unit", "day");
+        } catch (Exception ignored) {}
+
+        postAccountSalesJson("/save", payload, result -> {
+            toast("Hesab təhvil alındı və Satılmayanlara qaytarıldı.");
+            showAccountSales(normalizeAccountSalesSection(sourceSection));
+        });
+    }
+
+    private void confirmCopyAccountSaleAsUnsold(JSONObject row, String sourceSection) {
+        String title = row.optString("game_name", "Hesab").trim();
+        if (title.isEmpty()) title = "Hesab";
+        new AlertDialog.Builder(this)
+                .setTitle("Hesabı kopyala")
+                .setMessage(title + " hesabının Satılmayan nüsxəsi yaradılsın?\n\nMüştəri məlumatları, satış tarixi və Məxfi kod boş qalacaq. Yeni nüsxənin Məxfi kodunu Sat və ya Düzənlə ekranından ayrıca təyin edə bilərsən.")
+                .setNegativeButton("Xeyr", null)
+                .setPositiveButton("Kopyala", (d, w) -> copyAccountSaleAsUnsold(row, sourceSection))
+                .show();
+    }
+
+    private void copyAccountSaleAsUnsold(JSONObject row, String sourceSection) {
+        try {
+            JSONObject payload = new JSONObject();
+            String gameName = row.optString("game_name", "");
+            payload.put("game_name", gameName);
+            payload.put("game_ids", accountSalesGameIdsForSelection(gameName));
+            payload.put("email", row.optString("email", ""));
+            payload.put("price", row.optDouble("price", 0));
+            payload.put("console", row.optString("console", "PS5"));
+
+            JSONArray accountTypes = new JSONArray();
+            String copyType = row.optString("account_type", "Online");
+            accountTypes.put(copyType);
+            payload.put("account_types", accountTypes);
+            JSONObject copySecretCodes = new JSONObject();
+            copySecretCodes.put(copyType, "");
+            payload.put("secret_codes", copySecretCodes);
+            payload.put("secret_code", "");
+
+            postAccountSalesJson("/create-accounts", payload, result -> {
+                int created = result.optInt("created_count", 1);
+                if (created > 0) {
+                    toast("Hesabın Satılmayan nüsxəsi yaradıldı.");
+                    showAccountSales(normalizeAccountSalesSection(sourceSection));
+                } else {
+                    toast("Hesab kopyalana bilmədi.");
+                }
+            });
+        } catch (Exception ex) {
+            toast("Hesab kopyalana bilmədi: " + ex.getMessage());
+        }
+    }
+
+    private void confirmDeleteAccountSale(JSONObject row, String sourceSection) {
+        String title = row.optString("game_name", "Hesab");
+        new AlertDialog.Builder(this)
+                .setTitle("Zibil qutusuna köçür")
+                .setMessage(title + " zibil qutusuna köçürülsün?\n\nHesab 30 gün ərzində geri qaytarıla bilər.")
+                .setNegativeButton("Xeyr", null)
+                .setPositiveButton("Sil", (d, w) -> {
+                    JSONObject payload = new JSONObject();
+                    try { payload.put("id", row.optInt("id", 0)); } catch (Exception ignored) {}
+                    postAccountSalesJson("/delete", payload, result -> {
+                        toast("Hesab zibil qutusuna köçürüldü.");
+                        returnToAccountSalesSource(sourceSection);
+                    });
+                }).show();
+    }
+
+    private void showAccountSalesTrash() {
+        ScrollView sv = screenWithBody("Zibil qutusu", true, () -> showAccountSales("accounts"), this::showAccountSalesTrash);
+        LinearLayout body = scrollBody(sv);
+
+        LinearLayout info = card();
+        info.addView(text("🗑 Zibil qutusu", 18, TEXT, true));
+        TextView note = text("Silinən hesablar burada 30 gün saxlanılır. 30 gün tamam olduqda server onları avtomatik birdəfəlik silir.", 12, MUTED, false);
+        note.setPadding(0, dp(5), 0, 0);
+        info.addView(note);
+        body.addView(info);
+
+        EditText search = input("Silinən hesabları oyun, e-mail və ya məxfi kodla axtar");
+        body.addView(search);
+        spacer(body, 10);
+
+        LinearLayout host = new LinearLayout(this);
+        host.setOrientation(LinearLayout.VERTICAL);
+        host.addView(empty("Zibil qutusu yüklənir..."));
+        body.addView(host);
+
+        loadAccountSalesJson("/trash", result -> {
+            JSONArray records = result.optJSONArray("records");
+            final JSONArray trashRecords = records == null ? new JSONArray() : records;
+            Runnable render = () -> renderAccountSalesTrash(host, trashRecords, search.getText().toString());
+            search.addTextChangedListener(new SimpleTextWatcher(render));
+            render.run();
+        }, message -> {
+            host.removeAllViews();
+            host.addView(empty(message));
+        });
+    }
+
+    private void renderAccountSalesTrash(LinearLayout host, JSONArray records, String query) {
+        host.removeAllViews();
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        int shown = 0;
+        for (int i = 0; i < records.length(); i++) {
+            JSONObject row = records.optJSONObject(i);
+            if (row == null) continue;
+            String haystack = (row.optString("game_name", "") + " " + row.optString("email", "") + " "
+                    + row.optString("customer_name", "") + " " + row.optString("phone", "") + " "
+                    + row.optString("secret_code", "")).toLowerCase(Locale.ROOT);
+            if (!q.isEmpty() && !haystack.contains(q)) continue;
+            shown++;
+
+            LinearLayout c = card();
+            LinearLayout top = new LinearLayout(this);
+            top.setOrientation(LinearLayout.HORIZONTAL);
+            TextView title = text(row.optString("game_name", "Hesab"), 15, TEXT, true);
+            top.addView(title, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+            TextView price = text(row.optString("price_formatted", money(row.optDouble("price", 0))), 13, GREEN, true);
+            top.addView(price);
+            c.addView(top);
+
+            String email = row.optString("email", "");
+            if (!email.isEmpty()) c.addView(text(email, 12, MUTED, true));
+            c.addView(text(row.optString("account_type", "") + "  •  " + row.optString("console", "") + "  •  " + row.optString("stock_status", ""), 12, TEXT, true));
+
+            String deletedAt = accountSalesDateTimeForDisplay(row.optString("deleted_at", ""));
+            int days = row.optInt("trash_days_remaining", 0);
+            TextView deleted = text("Silinib: " + (deletedAt.isEmpty() ? "—" : deletedAt) + "  •  Qalan: " + days + " gün", 12, Color.rgb(190, 55, 55), true);
+            deleted.setPadding(0, dp(4), 0, 0);
+            c.addView(deleted);
+            c.setClickable(true);
+            c.setOnClickListener(v -> showAccountSalesTrashActions(row));
+            host.addView(c);
+        }
+        if (shown == 0) host.addView(empty(q.isEmpty() ? "Zibil qutusu boşdur." : "Axtarışa uyğun silinmiş hesab tapılmadı."));
+    }
+
+    private void showAccountSalesTrashActions(JSONObject row) {
+        String title = row.optString("game_name", "Hesab");
+        new AlertDialog.Builder(this)
+                .setTitle(title)
+                .setItems(new String[]{"↩ Geri yüklə", "🗑 Birdəfəlik sil"}, (dialog, which) -> {
+                    if (which == 0) confirmAccountSalesTrashRestore(row);
+                    else confirmAccountSalesTrashPermanentDelete(row);
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
+    }
+
+    private void confirmAccountSalesTrashRestore(JSONObject row) {
+        new AlertDialog.Builder(this)
+                .setTitle("Hesabı geri yüklə")
+                .setMessage(row.optString("game_name", "Hesab") + " əvvəlki məlumatları ilə geri qaytarılsın?")
+                .setNegativeButton("Xeyr", null)
+                .setPositiveButton("Geri yüklə", (d, w) -> {
+                    JSONObject payload = new JSONObject();
+                    try { payload.put("id", row.optInt("id", 0)); } catch (Exception ignored) {}
+                    postAccountSalesJson("/trash/restore", payload, result -> {
+                        toast("Hesab geri yükləndi.");
+                        showAccountSalesTrash();
+                    });
+                }).show();
+    }
+
+    private void confirmAccountSalesTrashPermanentDelete(JSONObject row) {
+        new AlertDialog.Builder(this)
+                .setTitle("Birdəfəlik sil")
+                .setMessage(row.optString("game_name", "Hesab") + " birdəfəlik silinsin? Bu əməliyyatı geri qaytarmaq mümkün deyil.")
+                .setNegativeButton("Xeyr", null)
+                .setPositiveButton("Birdəfəlik sil", (d, w) -> {
+                    JSONObject payload = new JSONObject();
+                    try { payload.put("id", row.optInt("id", 0)); } catch (Exception ignored) {}
+                    postAccountSalesJson("/trash/delete", payload, result -> {
+                        toast("Hesab birdəfəlik silindi.");
+                        showAccountSalesTrash();
+                    });
+                }).show();
+    }
+
+    private void showAccountSalesFormForStatus(JSONObject record, JSONObject settings, String preferredStatus, String sourceSection) {
+        JSONObject prepared = record;
+        try {
+            prepared = new JSONObject(record == null ? "{}" : record.toString());
+            String previousStatus = prepared.optString("stock_status", "").trim();
+            prepared.put("stock_status", preferredStatus == null ? "" : preferredStatus);
+
+            // Satılmayan stokdan Sat / İcarə ver axını həmişə təmiz müştəri sahələri ilə başlayır.
+            if ("Satılmayıb".equalsIgnoreCase(previousStatus)) {
+                prepared.put("customer_name", "");
+                prepared.put("phone", "");
+                prepared.put("sale_date", "");
+                prepared.put("rental_duration_value", 0);
+                prepared.put("rental_duration_unit", "day");
+            }
+            if ("Satılıb".equals(preferredStatus) && prepared.optString("sale_date", "").trim().isEmpty()) {
+                prepared.put("sale_date", new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date()));
+            }
+        } catch (Exception ignored) {}
+        showAccountSalesTransactionForm(prepared, settings, preferredStatus, sourceSection);
+    }
+
+    private void showAccountSalesTransactionForm(JSONObject record, JSONObject settings, String preferredStatus, String sourceSection) {
+        final boolean rental = "İcarə".equals(preferredStatus);
+        final boolean sold = "Satılıb".equals(preferredStatus);
+        String screenTitle = rental ? "Hesabı icarəyə ver" : "Hesabı sat";
+        final String returnSection = normalizeAccountSalesSection(sourceSection);
+        ScrollView sv = screenWithBody(screenTitle, true, () -> showAccountSales(returnSection));
+        LinearLayout body = scrollBody(sv);
+
+        TextView infoTitle = text("Hesab məlumatları", 15, TEXT, true);
+        body.addView(infoTitle);
+        spacer(body, 6);
+
+        // Satışda Məxfi kod istəyə bağlı redaktə olunur; qalan oyun-hesab məlumatları yalnız görünüşdür.
+        LinearLayout info = card();
+        ArrayList<String> games = parseAccountSalesGameSelection(record.optString("game_name", ""));
+        if (games.size() > 1) {
+            StringBuilder bundle = new StringBuilder();
+            for (int i = 0; i < games.size(); i++) {
+                if (i > 0) bundle.append("\n");
+                bundle.append("• ").append(games.get(i));
+            }
+            addAccountSalesDetailField(info, "🎁", "Bundle oyunları", bundle.toString());
+        } else {
+            String gameName = games.isEmpty() ? record.optString("game_name", "") : games.get(0);
+            addAccountSalesDetailField(info, "🎮", "Oyun", gameName);
+        }
+        addAccountSalesDetailField(info, "📧", "E-mail", record.optString("email", ""));
+        EditText transactionSecretCode = null;
+        if (sold) {
+            transactionSecretCode = accountField(
+                    info,
+                    "Məxfi kod (istəyə bağlı)",
+                    "Boş saxlamaq olar",
+                    record.optString("secret_code", ""),
+                    InputType.TYPE_CLASS_TEXT
+            );
+        } else {
+            addAccountSalesDetailField(info, "🔐", "Məxfi kod", record.optString("secret_code", ""));
+        }
+        addAccountSalesDetailField(info, "🏷️", "Növ", record.optString("account_type", ""));
+        String existingTransactionConsole = record.optString("console", "").trim();
+        String transactionConsoleInitial = ("PS4".equals(existingTransactionConsole) || "PS5".equals(existingTransactionConsole) || "PS4/PS5".equals(existingTransactionConsole))
+                ? existingTransactionConsole : "Konsol seçin";
+        Spinner transactionConsole = accountSpinnerField(
+                info,
+                "Konsol *",
+                new String[]{"Konsol seçin", "PS4", "PS5", "PS4/PS5"},
+                transactionConsoleInitial
+        );
+        addAccountSalesDetailField(info, "💰", "Qiymət", record.optString("price_formatted", money(record.optDouble("price", 0))));
+        addAccountSalesDetailField(info, "📦", "Status", preferredStatus);
+        body.addView(info);
+
+        TextView customerTitle = text(rental ? "İcarə məlumatları" : "Satış məlumatları", 15, TEXT, true);
+        body.addView(customerTitle);
+        spacer(body, 6);
+
+        EditText customer = accountField(body, "Ad soyad *", "Kliklə müştəri seç və ya axtar", record.optString("customer_name", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        EditText phone = accountField(body, "Telefon *", "0705603030", record.optString("phone", ""), InputType.TYPE_CLASS_PHONE);
+        customer.setFocusable(false);
+        customer.setClickable(true);
+        customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone, sold || rental));
+
+        EditText transactionPrice = accountField(
+                body,
+                rental ? "İcarə qiyməti *" : "Satış qiyməti *",
+                "Məsələn: 30.00",
+                String.valueOf(record.optDouble("price", 0)),
+                InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL
+        );
+
+        EditText date = null;
+        if (sold) {
+            String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
+            date = accountField(body, "Satış tarixi *", "DD-MM-YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
+            attachAccountSalesDatePicker(date);
+        }
+
+        EditText rentalDuration = null;
+        Spinner rentalUnit = null;
+        if (rental) {
+            rentalDuration = accountField(
+                    body,
+                    "İcarə müddəti *",
+                    "Məsələn: 3",
+                    record.optInt("rental_duration_value", 0) > 0 ? String.valueOf(record.optInt("rental_duration_value", 0)) : "",
+                    InputType.TYPE_CLASS_NUMBER
+            );
+            String rentalUnitValue = "hour".equalsIgnoreCase(record.optString("rental_duration_unit", "day")) ? "Saat" : "Gün";
+            rentalUnit = accountSpinnerField(body, "Müddət vahidi *", new String[]{"Saat", "Gün"}, rentalUnitValue);
+        }
+
+        TextView note = text(
+                rental ? "Oyun məlumatları yalnız baxış üçündür. Müştəri və icarə müddətini daxil et."
+                        : "Məxfi kodu istəsən dəyişə və ya boş saxlaya bilərsən. Müştəri və satış tarixini daxil et.",
+                12, MUTED, false);
+        note.setPadding(dp(4), dp(4), dp(4), dp(10));
+        body.addView(note);
+
+        Button save = button(rental ? "İcarəyə ver" : "Satışı yadda saxla", GREEN, Color.WHITE);
+        body.addView(save);
+
+        final EditText saleDateField = date;
+        final EditText rentalDurationField = rentalDuration;
+        final Spinner rentalUnitField = rentalUnit;
+        final Spinner transactionConsoleField = transactionConsole;
+        final EditText transactionPriceField = transactionPrice;
+        final EditText transactionSecretCodeField = transactionSecretCode;
+        save.setOnClickListener(v -> {
+            String customerValue = customer.getText().toString().trim();
+            String phoneValue = normalizeAzerbaijanPhone(phone.getText().toString().trim());
+            phone.setText(phoneValue);
+            if (customerValue.isEmpty() || phoneValue.isEmpty()) {
+                toast((rental ? "İcarə" : "Satış") + " üçün müştəri adı və telefon məcburidir.");
+                return;
+            }
+
+            String transactionPriceValue = transactionPriceField == null ? "" : transactionPriceField.getText().toString().trim().replace(',', '.');
+            double parsedTransactionPrice;
+            try {
+                parsedTransactionPrice = Double.parseDouble(transactionPriceValue);
+            } catch (Exception ex) {
+                toast((rental ? "İcarə" : "Satış") + " qiymətini düzgün daxil et.");
+                return;
+            }
+            if (parsedTransactionPrice < 0) {
+                toast((rental ? "İcarə" : "Satış") + " qiyməti mənfi ola bilməz.");
+                return;
+            }
+
+            String selectedConsole = transactionConsoleField == null ? "" : String.valueOf(transactionConsoleField.getSelectedItem()).trim();
+            if (!("PS4".equals(selectedConsole) || "PS5".equals(selectedConsole) || "PS4/PS5".equals(selectedConsole))) {
+                toast("Konsol seçin.");
+                return;
+            }
+
+            if (sold && (saleDateField == null || saleDateField.getText().toString().trim().isEmpty())) {
+                toast("Satış tarixini daxil et.");
+                return;
+            }
+
+            int durationValue = 0;
+            if (rental) {
+                String durationText = rentalDurationField == null ? "" : rentalDurationField.getText().toString().trim();
+                try { durationValue = Integer.parseInt(durationText); } catch (Exception ignored) {}
+                if (durationValue <= 0) {
+                    toast("İcarə müddətini düzgün daxil et.");
+                    return;
+                }
+            }
+
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("id", record.optInt("id", 0));
+                payload.put("game_name", record.optString("game_name", ""));
+                payload.put("game_ids", accountSalesGameIdsForSelection(record.optString("game_name", "")));
+                payload.put("account_type", record.optString("account_type", "Online"));
+                payload.put("email", record.optString("email", ""));
+                payload.put("secret_code", sold && transactionSecretCodeField != null
+                        ? transactionSecretCodeField.getText().toString()
+                        : record.optString("secret_code", ""));
+                payload.put("price", transactionPriceValue);
+                payload.put("console", selectedConsole);
+                payload.put("customer_name", customerValue);
+                payload.put("phone", phoneValue);
+                payload.put("sale_date", sold && saleDateField != null ? accountSalesDateForApi(saleDateField.getText().toString()) : "");
+                String paymentType = record.optString("payment_type", "Nağd").trim();
+                payload.put("payment_type", paymentType.isEmpty() ? "Nağd" : paymentType);
+                payload.put("stock_status", preferredStatus);
+                if (rental) {
+                    payload.put("rental_duration_value", String.valueOf(durationValue));
+                    payload.put("rental_duration_unit", rentalUnitField != null && "Saat".equals(String.valueOf(rentalUnitField.getSelectedItem())) ? "hour" : "day");
+                }
+            } catch (Exception ignored) {}
+
+            postAccountSalesJson("/save", payload, result -> {
+                toast(rental ? "Hesab icarəyə verildi." : "Hesab satıldı.");
+                showAccountSales(returnSection);
+            });
+        });
+    }
+
+    private void showAccountSalesForm(JSONObject record, JSONObject settings) {
+        showAccountSalesForm(record, settings, "accounts", "");
+    }
+
+    private void showAccountSalesForm(JSONObject record, JSONObject settings, String sourceSection) {
+        showAccountSalesForm(record, settings, sourceSection, "");
+    }
+
+    // v117: Hesablar bölməsində e-mail ilə axtarış edib "Yeni hesab yarat" seçiləndə
+    // axtarışdakı e-mail yeni hesab formasının E-mail xanasına avtomatik ötürülür.
+    private void showAccountSalesForm(JSONObject record, JSONObject settings, String sourceSection, String prefillEmail) {
+        final boolean editing = record != null && record.optInt("id", 0) > 0;
+        final String returnSection = normalizeAccountSalesSection(sourceSection);
+        final String returnSource = sourceSection;
+        ScrollView sv = screenWithBody(editing ? "Hesabı düzəlt" : "Yeni hesab yarat", true, () -> returnToAccountSalesSource(returnSource));
+        LinearLayout body = scrollBody(sv);
+
+        EditText game = accountField(body, "Oyunun adı *", "Kliklə seç və ya axtar", editing ? record.optString("game_name", "") : "", InputType.TYPE_CLASS_TEXT);
+        game.setFocusable(false);
+        game.setClickable(true);
+        game.setOnClickListener(v -> showAccountSalesGamePicker(game, true));
+        String initialEmail = editing
+                ? record.optString("email", "")
+                : (prefillEmail == null ? "" : prefillEmail.trim());
+        EditText email = accountField(body, "E-mail *", "example@mail.com", initialEmail, InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS);
+        EditText secretCodeField = null;
+        if (editing) {
+            // Məxfi kod bu konkret hesab sətrinə/ID-yə aiddir. Eyni e-maildəki başqa
+            // Online / Universal PS4 / Universal PS5 və kopyalanmış hesabların koduna toxunmur.
+            secretCodeField = accountField(body, "Məxfi kod", "Məsələn: şifrə və ya giriş kodu", record.optString("secret_code", ""), InputType.TYPE_CLASS_TEXT);
+        }
+        // Lambda daxilində istifadə olunduğu üçün final istinad saxlayırıq.
+        // Bu yalnız Java compile xətasını aradan qaldırır, məntiqi dəyişmir.
+        final EditText secretCode = secretCodeField;
+        EditText price = accountField(body, "Qiymət *", editing ? "35.50" : "", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+
+        // Server həmişə əsas mənbədir: form açılarkən köhnə in-memory oyun/müştəri siyahısını yenilə.
+        loadAccountSalesJson("/overview?section=settings", result -> {
+            JSONArray loadedGames = result.optJSONArray("game_names");
+            JSONArray loadedCustomers = result.optJSONArray("customers");
+            accountSalesGameChoices = loadedGames == null ? new JSONArray() : loadedGames;
+            accountSalesCustomerChoices = loadedCustomers == null ? new JSONArray() : loadedCustomers;
+            JSONArray onlineEmails = result.optJSONArray("online_emails");
+            accountSalesOnlineEmails = onlineEmails == null ? new JSONArray() : onlineEmails;
+        });
+
+        if (!editing) {
+            TextView note = text("Hesab növlərini seçəndə hər Online / Universal PS4 / Universal PS5 üçün Məxfi kod ayrıca yazılır. Kodlar bir-birindən müstəqildir və boş qala bilər. Konsol Sat və ya İcarə ver zamanı seçilir.", 12, MUTED, false);
+            note.setPadding(dp(4), dp(4), dp(4), dp(10));
+            body.addView(note);
+
+            Button save = button("Hesabı əlavə et", GREEN, Color.WHITE);
+            body.addView(save);
+            save.setOnClickListener(v -> showAccountSalesCreateTypeDialog(
+                    game.getText().toString(),
+                    email.getText().toString(),
+                    price.getText().toString(),
+                    returnSection
+            ));
+            return;
+        }
+
+        String editingAccountType = record.optString("account_type", "Online");
+        if ("Offline".equalsIgnoreCase(editingAccountType)) editingAccountType = "Universal PS4";
+        if ("Universal".equalsIgnoreCase(editingAccountType)) editingAccountType = "Universal PS5";
+        Spinner type = accountSpinnerField(body, "Növ *", new String[]{"Online", "Universal PS4", "Universal PS5"}, editingAccountType);
+        EditText customer = accountField(body, "Ad soyad", "Kliklə müştəri seç və ya axtar", record.optString("customer_name", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        EditText phone = accountField(body, "Telefon", "0705603030", record.optString("phone", ""), InputType.TYPE_CLASS_PHONE);
+        customer.setFocusable(false);
+        customer.setClickable(true);
+        customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone));
+        String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
+        EditText date = accountField(body, "Satış tarixi", "DD-MM-YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
+        attachAccountSalesDatePicker(date);
+
+        String defaultStock = settings == null ? "Satılıb" : settings.optString("default_stock_status", "Satılıb");
+        Spinner stock = accountSpinnerField(body, "Status *", new String[]{"Satılıb", "Satılmayıb", "İcarə"}, record.optString("stock_status", defaultStock));
+
+        LinearLayout consoleBox = new LinearLayout(this);
+        consoleBox.setOrientation(LinearLayout.VERTICAL);
+        String existingEditConsole = record.optString("console", "").trim();
+        String editConsoleInitial = ("PS4".equals(existingEditConsole) || "PS5".equals(existingEditConsole) || "PS4/PS5".equals(existingEditConsole))
+                ? existingEditConsole : "Konsol seçin";
+        Spinner console = accountSpinnerField(
+                consoleBox,
+                "Konsol *",
+                new String[]{"Konsol seçin", "PS4", "PS5", "PS4/PS5"},
+                editConsoleInitial
+        );
+        body.addView(consoleBox);
+
+        LinearLayout rentalBox = new LinearLayout(this);
+        rentalBox.setOrientation(LinearLayout.VERTICAL);
+        EditText rentalDuration = accountField(
+                rentalBox,
+                "İcarə müddəti *",
+                "Məsələn: 3",
+                record.optInt("rental_duration_value", 0) > 0 ? String.valueOf(record.optInt("rental_duration_value", 0)) : "",
+                InputType.TYPE_CLASS_NUMBER
+        );
+        String rentalUnitValue = "hour".equalsIgnoreCase(record.optString("rental_duration_unit", "day")) ? "Saat" : "Gün";
+        Spinner rentalUnit = accountSpinnerField(rentalBox, "Müddət vahidi *", new String[]{"Saat", "Gün"}, rentalUnitValue);
+        body.addView(rentalBox);
+
+        TextView note = text("Satılıb seçilərsə ad soyad, telefon və satış tarixi məcburidir.", 12, MUTED, false);
+        note.setPadding(dp(4), dp(4), dp(4), dp(10));
+        body.addView(note);
+
+        Runnable syncRentalFields = () -> {
+            String status = String.valueOf(stock.getSelectedItem());
+            boolean rental = "İcarə".equals(status);
+            boolean needsConsole = "Satılıb".equals(status) || rental;
+            consoleBox.setVisibility(needsConsole ? View.VISIBLE : View.GONE);
+            rentalBox.setVisibility(rental ? View.VISIBLE : View.GONE);
+            if ("Satılıb".equals(status)) {
+                note.setText("Satılıb seçilib: ad soyad, telefon və satış tarixi məcburidir.");
+            } else if (rental) {
+                note.setText("İcarə seçilib: ad soyad, telefon və icarə müddəti məcburidir.");
+            } else {
+                note.setText("Satılmayıb seçilib: müştəri məlumatları boş qala bilər.");
+            }
+        };
+        stock.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) { syncRentalFields.run(); }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent) { syncRentalFields.run(); }
+        });
+        syncRentalFields.run();
+
+        Button save = button("Dəyişiklikləri yadda saxla", GREEN, Color.WHITE);
+        body.addView(save);
+        save.setOnClickListener(v -> {
+            String selectedStatus = String.valueOf(stock.getSelectedItem());
+            String selectedEditConsole = String.valueOf(console.getSelectedItem()).trim();
+            if (("Satılıb".equals(selectedStatus) || "İcarə".equals(selectedStatus)) &&
+                    !("PS4".equals(selectedEditConsole) || "PS5".equals(selectedEditConsole) || "PS4/PS5".equals(selectedEditConsole))) {
+                toast("Konsol seçin.");
+                return;
+            }
+            if ("İcarə".equals(selectedStatus)) {
+                String durationText = rentalDuration.getText().toString().trim();
+                int durationValue = 0;
+                try { durationValue = Integer.parseInt(durationText); } catch (Exception ignored) {}
+                if (durationValue <= 0) {
+                    toast("İcarə müddətini düzgün daxil et.");
+                    return;
+                }
+                if (customer.getText().toString().trim().isEmpty() || phone.getText().toString().trim().isEmpty()) {
+                    toast("İcarə üçün müştəri adı və telefon məcburidir.");
+                    return;
+                }
+            }
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("id", record.optInt("id", 0));
+                payload.put("game_name", game.getText().toString());
+                payload.put("game_ids", accountSalesGameIdsForSelection(game.getText().toString()));
+                payload.put("account_type", String.valueOf(type.getSelectedItem()));
+                payload.put("email", email.getText().toString());
+                payload.put("secret_code", secretCode == null ? "" : secretCode.getText().toString());
+                payload.put("price", price.getText().toString());
+                payload.put("console", "Satılmayıb".equals(selectedStatus) ? "" : selectedEditConsole);
+                // Satılmış hesab Satılmayıb statusuna qaytarılanda əvvəlki satış/müştəri izi saxlanmır.
+                // Beləliklə hesab Satılmayanlar bölməsinə tam təmiz stok kimi qayıdır.
+                if ("Satılmayıb".equals(selectedStatus)) {
+                    payload.put("customer_name", "");
+                    payload.put("phone", "");
+                    payload.put("sale_date", "");
+                } else {
+                    payload.put("customer_name", customer.getText().toString());
+                    String normalizedPhone = normalizeAzerbaijanPhone(phone.getText().toString());
+                    phone.setText(normalizedPhone);
+                    payload.put("phone", normalizedPhone);
+                    payload.put("sale_date", accountSalesDateForApi(date.getText().toString()));
+                }
+                // Ödəniş növü artıq UI-da yoxdur. Mövcud dəyəri yalnız köhnə WordPress
+                // validasiyası ilə uyğunluq üçün səssiz saxlayırıq; istifadəçiyə göstərilmir/seçdirilmir.
+                payload.put("payment_type", record.optString("payment_type", "Nağd"));
+                payload.put("stock_status", selectedStatus);
+                if ("İcarə".equals(selectedStatus)) {
+                    payload.put("rental_duration_value", rentalDuration.getText().toString().trim());
+                    payload.put("rental_duration_unit", "Saat".equals(String.valueOf(rentalUnit.getSelectedItem())) ? "hour" : "day");
+                }
+            } catch (Exception ignored) {}
+            postAccountSalesJson("/save", payload, result -> {
+                if ("İcarə".equals(selectedStatus)) {
+                    toast("Hesab icarəyə verildi.");
+                } else if ("Satılmayıb".equals(selectedStatus)) {
+                    toast("Hesab Satılmayanlara qaytarıldı.");
+                } else {
+                    toast("Hesab yeniləndi.");
+                }
+                returnToAccountSalesSource(returnSource);
+            });
+        });
+    }
+
+    private boolean accountSalesEmailHasOnline(String email) {
+        String target = email == null ? "" : email.trim();
+        if (target.isEmpty()) return false;
+        for (int i = 0; i < accountSalesOnlineEmails.length(); i++) {
+            String existing = accountSalesOnlineEmails.optString(i, "").trim();
+            if (!existing.isEmpty() && existing.equalsIgnoreCase(target)) return true;
+        }
+        return false;
+    }
+
+    private void showAccountSalesCreateTypeDialog(String gameName, String email, String price, String sourceSection) {
+        String game = gameName == null ? "" : gameName.trim();
+        String mail = email == null ? "" : email.trim();
+        String amount = price == null ? "" : price.trim();
+        if (game.isEmpty()) {
+            toast("Oyunun adını daxil et.");
+            return;
+        }
+        if (mail.isEmpty()) {
+            toast("E-mail daxil et.");
+            return;
+        }
+        if (amount.isEmpty()) {
+            toast("Qiyməti daxil et.");
+            return;
+        }
+
+        final String[] types = {"Online", "Universal PS4", "Universal PS5"};
+        final CheckBox[] checks = new CheckBox[types.length];
+        final EditText[] secretFields = new EditText[types.length];
+        final boolean onlineAlreadyExists = accountSalesEmailHasOnline(mail);
+
+        ScrollView dialogScroll = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(12), dp(18), dp(8));
+        dialogScroll.addView(box, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView info = text(
+                onlineAlreadyExists
+                        ? "Bu e-mail üçün Online hesab artıq yaradılıb. Universal PS4 və ya Universal PS5 seçə bilərsən."
+                        : "Hər seçilən hesab növünün Məxfi kodu ayrıdır. İstəsən boş saxlaya bilərsən.",
+                13, MUTED, false);
+        info.setPadding(0, 0, 0, dp(10));
+        box.addView(info);
+
+        for (int i = 0; i < types.length; i++) {
+            final int index = i;
+            if (onlineAlreadyExists && "Online".equals(types[i])) {
+                checks[i] = null;
+                secretFields[i] = null;
+                continue;
+            }
+            CheckBox check = new CheckBox(this);
+            check.setText(types[i]);
+            check.setTextSize(15);
+            check.setTextColor(TEXT);
+            check.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
+            check.setPadding(0, dp(2), 0, dp(2));
+            box.addView(check, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            checks[i] = check;
+
+            EditText code = input(types[i] + " məxfi kod (istəyə bağlı)");
+            code.setInputType(InputType.TYPE_CLASS_TEXT);
+            code.setEnabled(false);
+            code.setAlpha(0.55f);
+            box.addView(code);
+            secretFields[i] = code;
+            spacer(box, 10);
+
+            check.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                secretFields[index].setEnabled(isChecked);
+                secretFields[index].setAlpha(isChecked ? 1f : 0.55f);
+                if (isChecked) secretFields[index].requestFocus();
+            });
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Hesab növü və məxfi kodlar")
+                .setView(dialogScroll)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yarat", null)
+                .create();
+
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            JSONArray selectedTypes = new JSONArray();
+            JSONObject secretCodes = new JSONObject();
+            String firstSelectedSecret = "";
+            boolean firstSecretSet = false;
+            for (int i = 0; i < types.length; i++) {
+                if (checks[i] == null || !checks[i].isChecked()) continue;
+                String value = secretFields[i] == null ? "" : secretFields[i].getText().toString().trim();
+                selectedTypes.put(types[i]);
+                try { secretCodes.put(types[i], value); } catch (Exception ignored) {}
+                if (!firstSecretSet) {
+                    firstSelectedSecret = value;
+                    firstSecretSet = true;
+                }
+            }
+            if (selectedTypes.length() == 0) {
+                toast("Ən azı bir hesab növü seç.");
+                return;
+            }
+
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("game_name", game);
+                payload.put("game_ids", accountSalesGameIdsForSelection(game));
+                payload.put("email", mail);
+                // v106 server hər növ üçün secret_codes xəritəsini istifadə edir.
+                // secret_code yalnız geriyə uyğunluq üçündür; birdən çox növ seçiləndə
+                // köhnə serverin eyni kodu bütün sətrlərə yaymaması üçün boş göndərilir.
+                payload.put("secret_codes", secretCodes);
+                payload.put("secret_code", selectedTypes.length() == 1 ? firstSelectedSecret : "");
+                payload.put("price", amount);
+                payload.put("account_types", selectedTypes);
+            } catch (Exception ignored) {}
+            dialog.dismiss();
+            postAccountSalesJson("/create-accounts", payload, result -> {
+                int created = result.optInt("created_count", selectedTypes.length());
+                toast(created + " hesab yaradıldı. Məxfi kodlar ayrı-ayrı saxlanıldı.");
+                showAccountSales(normalizeAccountSalesSection(sourceSection));
+            });
+        }));
+        dialog.show();
+    }
+
+    private void attachAccountSalesDatePicker(EditText field) {
+        if (field == null) return;
+        field.setFocusable(false);
+        field.setClickable(true);
+        field.setCursorVisible(false);
+        field.setOnClickListener(v -> {
+            java.util.Calendar selected = java.util.Calendar.getInstance();
+            String current = field.getText().toString().trim();
+            if (current.matches("\\d{2}-\\d{2}-\\d{4}")) {
+                try {
+                    java.text.SimpleDateFormat displayFormat = new java.text.SimpleDateFormat("dd-MM-yyyy", java.util.Locale.US);
+                    displayFormat.setLenient(false);
+                    java.util.Date parsed = displayFormat.parse(current);
+                    if (parsed != null) selected.setTime(parsed);
+                } catch (Exception ignored) {}
+            }
+
+            android.app.DatePickerDialog picker = new android.app.DatePickerDialog(
+                    this,
+                    (view, year, month, dayOfMonth) -> field.setText(String.format(
+                            java.util.Locale.US, "%02d-%02d-%04d", dayOfMonth, month + 1, year)),
+                    selected.get(java.util.Calendar.YEAR),
+                    selected.get(java.util.Calendar.MONTH),
+                    selected.get(java.util.Calendar.DAY_OF_MONTH)
+            );
+            picker.setTitle("Satış tarixini seç");
+            picker.setButton(android.content.DialogInterface.BUTTON_NEUTRAL, "Bu gün", (dialog, which) -> {
+                java.util.Calendar today = java.util.Calendar.getInstance();
+                field.setText(String.format(
+                        java.util.Locale.US, "%02d-%02d-%04d",
+                        today.get(java.util.Calendar.DAY_OF_MONTH),
+                        today.get(java.util.Calendar.MONTH) + 1,
+                        today.get(java.util.Calendar.YEAR)));
+            });
+            picker.show();
+        });
+    }
+
+    private String accountSalesDateForDisplay(String value) {
+        String s = value == null ? "" : value.trim();
+        if (s.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            return s.substring(8, 10) + "-" + s.substring(5, 7) + "-" + s.substring(0, 4);
+        }
+        return s;
+    }
+
+    private String accountSalesDateForApi(String value) {
+        String s = value == null ? "" : value.trim();
+        if (s.matches("\\d{2}-\\d{2}-\\d{4}")) {
+            return s.substring(6, 10) + "-" + s.substring(3, 5) + "-" + s.substring(0, 2);
+        }
+        return s;
+    }
+
+    private ArrayList<String> parseAccountSalesGameSelection(String value) {
+        ArrayList<String> selected = new ArrayList<>();
+        String raw = value == null ? "" : value.trim();
+        if (raw.isEmpty()) return selected;
+        String[] parts = raw.split("\\s*(?:,|;|\\n|\\s+\\+\\s+|·)\\s*");
+        for (String part : parts) {
+            String name = part == null ? "" : part.trim();
+            if (name.isEmpty()) continue;
+            boolean exists = false;
+            for (String current : selected) {
+                if (current.equalsIgnoreCase(name)) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) selected.add(name);
+        }
+        return selected;
+    }
+
+    private boolean accountSalesGameSelectionContains(ArrayList<String> selected, String gameName) {
+        if (selected == null || gameName == null) return false;
+        for (String name : selected) {
+            if (name != null && name.equalsIgnoreCase(gameName.trim())) return true;
+        }
+        return false;
+    }
+
+    private void toggleAccountSalesGameSelection(ArrayList<String> selected, String gameName) {
+        if (selected == null || gameName == null) return;
+        String wanted = gameName.trim();
+        if (wanted.isEmpty()) return;
+        for (int i = 0; i < selected.size(); i++) {
+            if (selected.get(i).equalsIgnoreCase(wanted)) {
+                selected.remove(i);
+                return;
+            }
+        }
+        selected.add(wanted);
+    }
+
+    private String joinAccountSalesGameSelection(ArrayList<String> selected) {
+        if (selected == null || selected.isEmpty()) return "";
+        StringBuilder out = new StringBuilder();
+        for (String name : selected) {
+            String clean = name == null ? "" : name.trim();
+            if (clean.isEmpty()) continue;
+            if (out.length() > 0) out.append(", ");
+            out.append(clean);
+        }
+        return out.toString();
+    }
+
+    private JSONArray accountSalesGameIdsForSelection(String value) {
+        JSONArray ids = new JSONArray();
+        ArrayList<String> selectedNames = parseAccountSalesGameSelection(value);
+        for (String selectedName : selectedNames) {
+            if (selectedName == null || selectedName.trim().isEmpty()) continue;
+            for (int i = 0; i < accountSalesGameChoices.length(); i++) {
+                JSONObject row = accountSalesGameChoices.optJSONObject(i);
+                if (row == null) continue;
+                String name = row.optString("game_name", "").trim();
+                int gameId = row.optInt("game_id", row.optInt("id", 0));
+                if (gameId > 0 && name.equalsIgnoreCase(selectedName.trim())) {
+                    ids.put(gameId);
+                    break;
+                }
+            }
+        }
+        return ids;
+    }
+
+    private void showAccountSalesGamePicker(EditText target, boolean allowBundle) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(8), dp(18), 0);
+
+        LinearLayout searchRow = new LinearLayout(this);
+        searchRow.setOrientation(LinearLayout.HORIZONTAL);
+        searchRow.setGravity(Gravity.CENTER_VERTICAL);
+        Button bundle = button("🎁 Bundle", CARD, TEXT);
+        bundle.setTextSize(13);
+        bundle.setVisibility(allowBundle ? View.VISIBLE : View.GONE);
+        if (allowBundle) {
+            searchRow.addView(bundle, new LinearLayout.LayoutParams(dp(132), dp(48)));
+        }
+        EditText search = input("Oyunun adını yazıb axtar");
+        LinearLayout.LayoutParams searchLp = new LinearLayout.LayoutParams(0, dp(48), 1f);
+        if (allowBundle) searchLp.setMargins(dp(8), 0, 0, 0);
+        searchRow.addView(search, searchLp);
+
+        Button clearSearch = button("✕", CARD, MUTED);
+        clearSearch.setTextSize(12);
+        clearSearch.setVisibility(View.GONE);
+        LinearLayout.LayoutParams clearLp = new LinearLayout.LayoutParams(dp(44), dp(48));
+        clearLp.setMargins(dp(8), 0, 0, 0);
+        searchRow.addView(clearSearch, clearLp);
+        box.addView(searchRow);
+        spacer(box, 8);
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(list);
+        box.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(330)));
+
+        Button applyBundle = button("Seçilənləri təsdiqlə", GREEN, Color.WHITE);
+        applyBundle.setTextSize(14);
+        applyBundle.setVisibility(View.GONE);
+        LinearLayout.LayoutParams applyLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        applyLp.setMargins(0, dp(8), 0, 0);
+        box.addView(applyBundle, applyLp);
+
+        final boolean[] bundleMode = {allowBundle && parseAccountSalesGameSelection(target.getText().toString()).size() > 1};
+        final ArrayList<String> selectedGames = parseAccountSalesGameSelection(target.getText().toString());
+        final AlertDialog[] dialogHolder = new AlertDialog[1];
+        final Runnable[] renderHolder = new Runnable[1];
+
+        Runnable updateBundleUi = () -> {
+            bundle.setText(bundleMode[0] ? "✓ 🎁 Bundle" : "🎁 Bundle");
+            bundle.setBackground(bg(bundleMode[0] ? GREEN : CARD, 12, bundleMode[0] ? GREEN : BORDER));
+            bundle.setTextColor(bundleMode[0] ? Color.WHITE : TEXT);
+            applyBundle.setVisibility(bundleMode[0] ? View.VISIBLE : View.GONE);
+            applyBundle.setText("Seçilənləri təsdiqlə (" + selectedGames.size() + ")");
+        };
+
+        renderHolder[0] = () -> {
+            list.removeAllViews();
+            String typed = search.getText().toString().trim();
+            clearSearch.setVisibility(typed.isEmpty() ? View.GONE : View.VISIBLE);
+            String q = typed.toLowerCase(Locale.ROOT);
+            int count = 0;
+            boolean exactMatch = false;
+            for (int i = 0; i < accountSalesGameChoices.length(); i++) {
+                JSONObject row = accountSalesGameChoices.optJSONObject(i);
+                String name = row == null ? accountSalesGameChoices.optString(i, "") : row.optString("game_name", "");
+                name = name.trim();
+                if (name.isEmpty() || (!q.isEmpty() && !name.toLowerCase(Locale.ROOT).contains(q))) continue;
+                if (!typed.isEmpty() && name.equalsIgnoreCase(typed)) exactMatch = true;
+                count++;
+                boolean isSelected = bundleMode[0] && accountSalesGameSelectionContains(selectedGames, name);
+                Button choose = button((isSelected ? "☑ " : "") + name, isSelected ? GREEN : CARD, isSelected ? Color.WHITE : TEXT);
+                choose.setTextSize(14);
+                final String selected = name;
+                if (bundleMode[0]) {
+                    installAccountSalesBundleGameHoldActions(choose, selected, target, search, dialogHolder, renderHolder, selectedGames, updateBundleUi);
+                } else {
+                    installAccountSalesGameHoldActions(choose, selected, target, search, dialogHolder, renderHolder);
+                }
+                list.addView(choose, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+                spacer(list, 4);
+            }
+            if (count == 0) {
+                list.addView(empty(typed.isEmpty() ? "Oyun siyahısı boşdur." : "Uyğun oyun tapılmadı."));
+            }
+            if (!typed.isEmpty() && !exactMatch) {
+                spacer(list, 6);
+                Button createGame = button("＋ Yeni oyun yarat", GREEN, Color.WHITE);
+                createGame.setTextSize(14);
+                createGame.setOnClickListener(v -> {
+                    if (bundleMode[0]) {
+                        createAccountSalesGameForBundleFromPicker(typed, target, search, dialogHolder[0], selectedGames, renderHolder[0], updateBundleUi);
+                    } else {
+                        createAccountSalesGameFromPicker(typed, target, dialogHolder[0]);
+                    }
+                });
+                list.addView(createGame, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
+            }
+            updateBundleUi.run();
+        };
+        search.addTextChangedListener(new SimpleTextWatcher(renderHolder[0]));
+        clearSearch.setOnClickListener(v -> {
+            search.setText("");
+            search.requestFocus();
+        });
+
+        if (allowBundle) {
+            bundle.setOnClickListener(v -> {
+                bundleMode[0] = !bundleMode[0];
+                if (bundleMode[0] && selectedGames.isEmpty()) {
+                    selectedGames.addAll(parseAccountSalesGameSelection(target.getText().toString()));
+                }
+                if (!bundleMode[0] && selectedGames.size() > 1) {
+                    String first = selectedGames.get(0);
+                    selectedGames.clear();
+                    selectedGames.add(first);
+                    target.setText(first);
+                }
+                renderHolder[0].run();
+            });
+            applyBundle.setOnClickListener(v -> {
+                if (selectedGames.isEmpty()) {
+                    toast("Bundle üçün ən azı bir oyun seç.");
+                    return;
+                }
+                target.setText(joinAccountSalesGameSelection(selectedGames));
+                if (dialogHolder[0] != null) dialogHolder[0].dismiss();
+            });
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Oyunun adı")
+                .setView(box)
+                .setNegativeButton("Bağla", null)
+                .create();
+        dialogHolder[0] = dialog;
+        dialog.setOnShowListener(d -> {
+            updateBundleUi.run();
+            // Picker hər açılışda WordPress-dən təzə oyun siyahısını alır.
+            // Beləliklə serverdə “Bazanı tam təmizlə” edildikdən sonra köhnə oyun adları RAM-dan geri görünmür.
+            list.removeAllViews();
+            list.addView(empty("Oyun siyahısı yenilənir..."));
+            loadAccountSalesJson("/overview?section=settings", result -> {
+                JSONArray loadedGames = result.optJSONArray("game_names");
+                accountSalesGameChoices = loadedGames == null ? new JSONArray() : loadedGames;
+                JSONArray onlineEmails = result.optJSONArray("online_emails");
+                accountSalesOnlineEmails = onlineEmails == null ? new JSONArray() : onlineEmails;
+                renderHolder[0].run();
+            });
+        });
+        dialog.show();
+    }
+
+    private void installAccountSalesBundleGameHoldActions(Button gameButton, String gameName, EditText target,
+                                                           EditText search, AlertDialog[] pickerDialog,
+                                                           Runnable[] rerender, ArrayList<String> selectedGames,
+                                                           Runnable updateBundleUi) {
+        final Handler holdHandler = new Handler(Looper.getMainLooper());
+        final float[] down = new float[2];
+        final boolean[] holdFired = {false};
+        final int moveTolerance = dp(12);
+        final Runnable openActions = () -> {
+            holdFired[0] = true;
+            showAccountSalesBundleGameActions(gameName, target, search,
+                    pickerDialog != null && pickerDialog.length > 0 ? pickerDialog[0] : null,
+                    rerender != null && rerender.length > 0 ? rerender[0] : null,
+                    selectedGames, updateBundleUi);
+        };
+
+        gameButton.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    down[0] = event.getX();
+                    down[1] = event.getY();
+                    holdFired[0] = false;
+                    holdHandler.removeCallbacks(openActions);
+                    holdHandler.postDelayed(openActions, 1000L);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(event.getX() - down[0]) > moveTolerance || Math.abs(event.getY() - down[1]) > moveTolerance) {
+                        holdHandler.removeCallbacks(openActions);
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                    holdHandler.removeCallbacks(openActions);
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    holdHandler.removeCallbacks(openActions);
+                    holdFired[0] = false;
+                    break;
+                default:
+                    break;
+            }
+            return false;
+        });
+        gameButton.setOnClickListener(v -> {
+            if (holdFired[0]) {
+                holdFired[0] = false;
+                return;
+            }
+            toggleAccountSalesGameSelection(selectedGames, gameName);
+            if (updateBundleUi != null) updateBundleUi.run();
+            if (rerender != null && rerender.length > 0 && rerender[0] != null) rerender[0].run();
+        });
+    }
+
+    private void showAccountSalesBundleGameActions(String gameName, EditText target, EditText search,
+                                                    AlertDialog pickerDialog, Runnable rerender,
+                                                    ArrayList<String> selectedGames, Runnable updateBundleUi) {
+        new AlertDialog.Builder(this)
+                .setTitle(gameName)
+                .setItems(new String[]{"Düzənlə"}, (dialog, which) -> {
+                    if (which == 0) {
+                        showAccountSalesRenameGameDialogForBundle(gameName, target, search, pickerDialog, rerender, selectedGames, updateBundleUi);
+                    }
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
+    }
+
+    private void createAccountSalesGameForBundleFromPicker(String initialName, EditText target, EditText search,
+                                                           AlertDialog pickerDialog, ArrayList<String> selectedGames,
+                                                           Runnable rerender, Runnable updateBundleUi) {
+        String newName = initialName == null ? "" : initialName.trim();
+        if (newName.isEmpty()) {
+            toast("Oyun adını daxil et.");
+            return;
+        }
+        JSONObject payload = new JSONObject();
+        try { payload.put("game_name", newName); } catch (Exception ignored) {}
+        postAccountSalesJson("/game/save", payload, result -> {
+            JSONArray refreshed = result.optJSONArray("game_names");
+            if (refreshed != null) accountSalesGameChoices = refreshed;
+            String savedName = result.optString("game_name", newName).trim();
+            if (savedName.isEmpty()) savedName = newName;
+            if (!accountSalesGameSelectionContains(selectedGames, savedName)) selectedGames.add(savedName);
+            if (search != null) {
+                search.setText("");
+                search.clearFocus();
+            }
+            if (updateBundleUi != null) updateBundleUi.run();
+            if (rerender != null) rerender.run();
+            toast("Yeni oyun yaradıldı və Bundle-a seçildi.");
+        });
+    }
+
+    private void createAccountSalesGameFromPicker(String initialName, EditText target, AlertDialog pickerDialog) {
+        String newName = initialName == null ? "" : initialName.trim();
+        if (newName.isEmpty()) {
+            toast("Oyun adını daxil et.");
+            return;
+        }
+        JSONObject payload = new JSONObject();
+        try { payload.put("game_name", newName); } catch (Exception ignored) {}
+        postAccountSalesJson("/game/save", payload, result -> {
+            JSONArray refreshed = result.optJSONArray("game_names");
+            if (refreshed != null) accountSalesGameChoices = refreshed;
+            String savedName = result.optString("game_name", newName).trim();
+            target.setText(savedName.isEmpty() ? newName : savedName);
+            toast("Yeni oyun yaradıldı və seçildi.");
+            if (pickerDialog != null) pickerDialog.dismiss();
+        });
+    }
+
+    private void showAccountSalesCreateGameDialogForBundle(String initialName, EditText target, EditText search,
+                                                           AlertDialog pickerDialog, ArrayList<String> selectedGames,
+                                                           Runnable rerender, Runnable updateBundleUi) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        EditText name = input("Yeni oyun adı");
+        name.setText(initialName == null ? "" : initialName.trim());
+        name.setSelection(name.getText().length());
+        box.addView(name);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Yeni oyun yarat")
+                .setView(box)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yarat və seç", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String newName = name.getText().toString().trim();
+            if (newName.isEmpty()) {
+                toast("Oyun adını daxil et.");
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try { payload.put("game_name", newName); } catch (Exception ignored) {}
+            postAccountSalesJson("/game/save", payload, result -> {
+                JSONArray refreshed = result.optJSONArray("game_names");
+                if (refreshed != null) accountSalesGameChoices = refreshed;
+                String savedName = result.optString("game_name", newName).trim();
+                if (savedName.isEmpty()) savedName = newName;
+                if (!accountSalesGameSelectionContains(selectedGames, savedName)) selectedGames.add(savedName);
+                if (search != null) search.setText("");
+                if (updateBundleUi != null) updateBundleUi.run();
+                if (rerender != null) rerender.run();
+                toast("Yeni oyun əlavə edildi və Bundle-a seçildi.");
+                dialog.dismiss();
+            });
+        }));
+        dialog.show();
+    }
+
+    private void showAccountSalesRenameGameDialogForBundle(String oldName, EditText target, EditText search,
+                                                           AlertDialog pickerDialog, Runnable rerender,
+                                                           ArrayList<String> selectedGames, Runnable updateBundleUi) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        EditText name = input("Düzgün oyun adı");
+        name.setText(oldName == null ? "" : oldName);
+        name.setSelection(name.getText().length());
+        box.addView(name);
+        TextView note = text("Bu dəyişiklik həmin oyun adı ilə olan əvvəlki Satılan və Satılmayan bütün hesablara tətbiq ediləcək.", 12, MUTED, false);
+        note.setPadding(0, dp(8), 0, 0);
+        box.addView(note);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Oyun adını düzəlt")
+                .setView(box)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yadda saxla", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String newName = name.getText().toString().trim();
+            if (newName.isEmpty()) {
+                toast("Oyun adı boş ola bilməz.");
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("old_name", oldName == null ? "" : oldName);
+                payload.put("new_name", newName);
+            } catch (Exception ignored) {}
+            postAccountSalesJson("/game/save", payload, result -> {
+                JSONArray refreshed = result.optJSONArray("game_names");
+                if (refreshed != null) accountSalesGameChoices = refreshed;
+                String savedName = result.optString("game_name", newName).trim();
+                if (savedName.isEmpty()) savedName = newName;
+                for (int i = 0; i < selectedGames.size(); i++) {
+                    if (selectedGames.get(i).equalsIgnoreCase(oldName == null ? "" : oldName)) {
+                        selectedGames.set(i, savedName);
+                    }
+                }
+                int changed = result.optInt("updated_records", 0);
+                toast("Oyun adı düzəldildi. " + changed + " əvvəlki hesab yeniləndi.");
+                dialog.dismiss();
+                if (search != null) search.setText("");
+                if (updateBundleUi != null) updateBundleUi.run();
+                if (rerender != null) rerender.run();
+            });
+        }));
+        dialog.show();
+    }
+
+    private void installAccountSalesGameHoldActions(Button gameButton, String gameName, EditText target,
+                                                     EditText search, AlertDialog[] pickerDialog,
+                                                     Runnable[] rerender) {
+        final Handler holdHandler = new Handler(Looper.getMainLooper());
+        final float[] down = new float[2];
+        final boolean[] holdFired = {false};
+        final int moveTolerance = dp(12);
+        final Runnable openActions = () -> {
+            holdFired[0] = true;
+            showAccountSalesGameActions(gameName, target, search,
+                    pickerDialog != null && pickerDialog.length > 0 ? pickerDialog[0] : null,
+                    rerender != null && rerender.length > 0 ? rerender[0] : null);
+        };
+
+        gameButton.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    down[0] = event.getX();
+                    down[1] = event.getY();
+                    holdFired[0] = false;
+                    holdHandler.removeCallbacks(openActions);
+                    holdHandler.postDelayed(openActions, 1000L);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(event.getX() - down[0]) > moveTolerance || Math.abs(event.getY() - down[1]) > moveTolerance) {
+                        holdHandler.removeCallbacks(openActions);
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                    holdHandler.removeCallbacks(openActions);
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    holdHandler.removeCallbacks(openActions);
+                    holdFired[0] = false;
+                    break;
+                default:
+                    break;
+            }
+            return false;
+        });
+        gameButton.setOnClickListener(v -> {
+            if (holdFired[0]) {
+                holdFired[0] = false;
+                return;
+            }
+            target.setText(gameName);
+            if (pickerDialog != null && pickerDialog.length > 0 && pickerDialog[0] != null) {
+                pickerDialog[0].dismiss();
+            }
+        });
+    }
+
+    private void showAccountSalesGameActions(String gameName, EditText target, EditText search,
+                                             AlertDialog pickerDialog, Runnable rerender) {
+        new AlertDialog.Builder(this)
+                .setTitle(gameName)
+                .setItems(new String[]{"Düzənlə"}, (dialog, which) -> {
+                    if (which == 0) {
+                        showAccountSalesRenameGameDialog(gameName, target, search, pickerDialog, rerender);
+                    }
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
+    }
+
+    private void showAccountSalesCreateGameDialog(String initialName, EditText target, AlertDialog pickerDialog) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        EditText name = input("Yeni oyun adı");
+        name.setText(initialName == null ? "" : initialName.trim());
+        name.setSelection(name.getText().length());
+        box.addView(name);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Yeni oyun yarat")
+                .setView(box)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yarat", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String newName = name.getText().toString().trim();
+            if (newName.isEmpty()) {
+                toast("Oyun adını daxil et.");
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try { payload.put("game_name", newName); } catch (Exception ignored) {}
+            postAccountSalesJson("/game/save", payload, result -> {
+                JSONArray refreshed = result.optJSONArray("game_names");
+                if (refreshed != null) accountSalesGameChoices = refreshed;
+                String savedName = result.optString("game_name", newName).trim();
+                target.setText(savedName.isEmpty() ? newName : savedName);
+                toast("Yeni oyun adı əlavə edildi.");
+                dialog.dismiss();
+                if (pickerDialog != null) pickerDialog.dismiss();
+            });
+        }));
+        dialog.show();
+    }
+
+    private void showAccountSalesRenameGameDialog(String oldName, EditText target, EditText search,
+                                                   AlertDialog pickerDialog, Runnable rerender) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(20), dp(8), dp(20), 0);
+        EditText name = input("Düzgün oyun adı");
+        name.setText(oldName == null ? "" : oldName);
+        name.setSelection(name.getText().length());
+        box.addView(name);
+        TextView note = text("Bu dəyişiklik həmin oyun adı ilə olan əvvəlki Satılan və Satılmayan bütün hesablara tətbiq ediləcək.", 12, MUTED, false);
+        note.setPadding(0, dp(8), 0, 0);
+        box.addView(note);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Oyun adını düzəlt")
+                .setView(box)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yadda saxla", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String newName = name.getText().toString().trim();
+            if (newName.isEmpty()) {
+                toast("Oyun adı boş ola bilməz.");
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("old_name", oldName == null ? "" : oldName);
+                payload.put("new_name", newName);
+            } catch (Exception ignored) {}
+            postAccountSalesJson("/game/save", payload, result -> {
+                JSONArray refreshed = result.optJSONArray("game_names");
+                if (refreshed != null) accountSalesGameChoices = refreshed;
+                String savedName = result.optString("game_name", newName).trim();
+                if (target.getText().toString().trim().equalsIgnoreCase(oldName == null ? "" : oldName)) {
+                    target.setText(savedName.isEmpty() ? newName : savedName);
+                }
+                int changed = result.optInt("updated_records", 0);
+                toast("Oyun adı düzəldildi. " + changed + " əvvəlki hesab yeniləndi.");
+                dialog.dismiss();
+                if (search != null) search.setText(savedName.isEmpty() ? newName : savedName);
+                if (rerender != null) rerender.run();
+            });
+        }));
+        dialog.show();
+    }
+
+    private void showAccountSalesCustomerPicker(EditText nameTarget, EditText phoneTarget) {
+        showAccountSalesCustomerPicker(nameTarget, phoneTarget, false);
+    }
+
+    private void showAccountSalesCustomerPicker(EditText nameTarget, EditText phoneTarget, boolean allowCreateWhenMissing) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(8), dp(18), 0);
+        EditText search = input("Ad soyad və ya telefonla axtar");
+        box.addView(search);
+        spacer(box, 8);
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        scroll.addView(list);
+        box.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(330)));
+
+        final AlertDialog[] dialogHolder = new AlertDialog[1];
+        Runnable render = () -> {
+            list.removeAllViews();
+            String q = search.getText().toString().trim().toLowerCase(Locale.ROOT);
+            int count = 0;
+            for (int i = 0; i < accountSalesCustomerChoices.length(); i++) {
+                JSONObject row = accountSalesCustomerChoices.optJSONObject(i);
+                if (row == null) continue;
+                String name = row.optString("customer_name", "").trim();
+                String phone = row.optString("phone", "").trim();
+                String haystack = (name + " " + phone).toLowerCase(Locale.ROOT);
+                if (name.isEmpty() || (!q.isEmpty() && !haystack.contains(q))) continue;
+                count++;
+                String label = phone.isEmpty() ? name : name + "  •  " + phone;
+                Button choose = button(label, CARD, TEXT);
+                choose.setTextSize(14);
+                final String selectedName = name;
+                final String selectedPhone = phone;
+                choose.setOnClickListener(v -> {
+                    nameTarget.setText(selectedName);
+                    phoneTarget.setText(selectedPhone);
+                    if (dialogHolder[0] != null) dialogHolder[0].dismiss();
+                });
+                list.addView(choose, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+                spacer(list, 4);
+            }
+            if (count == 0) {
+                list.addView(empty(q.isEmpty() ? "Müştəri siyahısı boşdur." : "Uyğun müştəri tapılmadı."));
+                if (allowCreateWhenMissing && !q.isEmpty()) {
+                    spacer(list, 8);
+                    Button createCustomer = button("＋ Yeni müştəri yarat", BLUE, Color.WHITE);
+                    createCustomer.setTextSize(13);
+                    createCustomer.setOnClickListener(v -> showAccountSalesQuickCreateCustomerDialog(
+                            search.getText().toString().trim(), nameTarget, phoneTarget, dialogHolder[0]));
+                    list.addView(createCustomer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+                }
+            }
+        };
+        search.addTextChangedListener(new SimpleTextWatcher(render));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Ad soyad")
+                .setView(box)
+                .setNegativeButton("Bağla", null)
+                .setPositiveButton("Yazdığımı istifadə et", null)
+                .create();
+        dialogHolder[0] = dialog;
+        dialog.setOnShowListener(d -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                String typed = search.getText().toString().trim();
+                if (typed.isEmpty()) {
+                    toast("Ad soyad yaz və ya siyahıdan seç.");
+                    return;
+                }
+                nameTarget.setText(typed);
+                phoneTarget.setText("");
+                dialog.dismiss();
+            });
+            render.run();
+        });
+        dialog.show();
+    }
+
+    private boolean accountSalesCustomerPhoneExists(String phoneValue, String excludePhone) {
+        String normalized = normalizeAzerbaijanPhone(phoneValue == null ? "" : phoneValue);
+        String excluded = normalizeAzerbaijanPhone(excludePhone == null ? "" : excludePhone);
+        if (normalized.isEmpty()) return false;
+        for (int i = 0; i < accountSalesCustomerChoices.length(); i++) {
+            JSONObject row = accountSalesCustomerChoices.optJSONObject(i);
+            if (row == null) continue;
+            String existing = normalizeAzerbaijanPhone(row.optString("phone", ""));
+            if (existing.isEmpty()) continue;
+            if (!excluded.isEmpty() && existing.equals(excluded)) continue;
+            if (existing.equals(normalized)) return true;
+        }
+        return false;
+    }
+
+    private void showAccountSalesQuickCreateCustomerDialog(String initialName, EditText nameTarget, EditText phoneTarget, AlertDialog parentDialog) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(10), dp(18), 0);
+
+        TextView nameLabel = text("Ad soyad *", 13, MUTED, true);
+        box.addView(nameLabel);
+        EditText customerName = input("CAN EMRE");
+        customerName.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        customerName.setText(initialName == null ? "" : initialName.trim());
+        box.addView(customerName);
+        spacer(box, 10);
+
+        TextView phoneLabel = text("Telefon *", 13, MUTED, true);
+        box.addView(phoneLabel);
+        EditText customerPhone = input("0705603030");
+        customerPhone.setInputType(InputType.TYPE_CLASS_PHONE);
+        installPhoneAutoFormat(customerPhone);
+        box.addView(customerPhone);
+
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Yeni müştəri yarat")
+                .setView(box)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yarat", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String nameValue = customerName.getText().toString().trim();
+            String phoneValue = normalizeAzerbaijanPhone(customerPhone.getText().toString().trim());
+            customerPhone.setText(phoneValue);
+            if (nameValue.isEmpty()) {
+                toast("Ad soyad boş ola bilməz.");
+                customerName.requestFocus();
+                return;
+            }
+            if (phoneValue.isEmpty()) {
+                toast("Telefon boş ola bilməz.");
+                customerPhone.requestFocus();
+                return;
+            }
+            if (accountSalesCustomerPhoneExists(phoneValue, "")) {
+                toast("Bu telefon nömrəsi ilə müştəri artıq qeydiyyatdadır.");
+                customerPhone.requestFocus();
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("customer_name", nameValue);
+                payload.put("phone", phoneValue);
+            } catch (Exception ignored) {}
+            postAccountSalesJson("/customer/save", payload, result -> {
+                String savedName = result.optString("customer_name", nameValue).trim();
+                String savedPhone = result.optString("phone", phoneValue).trim();
+                loadAccountSalesJson("/overview?section=settings", refreshed -> {
+                    JSONArray loadedCustomers = refreshed.optJSONArray("customers");
+                    accountSalesCustomerChoices = loadedCustomers == null ? new JSONArray() : loadedCustomers;
+                    nameTarget.setText(savedName.isEmpty() ? nameValue : savedName);
+                    phoneTarget.setText(savedPhone.isEmpty() ? phoneValue : savedPhone);
+                    if (parentDialog != null) parentDialog.dismiss();
+                    dialog.dismiss();
+                    toast("Yeni müştəri yaradıldı və seçildi.");
+                }, message -> {
+                    nameTarget.setText(savedName.isEmpty() ? nameValue : savedName);
+                    phoneTarget.setText(savedPhone.isEmpty() ? phoneValue : savedPhone);
+                    if (parentDialog != null) parentDialog.dismiss();
+                    dialog.dismiss();
+                    toast("Yeni müştəri yaradıldı və seçildi.");
+                });
+            });
+        }));
+        dialog.show();
+    }
+
+    private void showAccountSalesNewCustomer(String sourceSection) {
+        final String returnSection = normalizeAccountSalesSection(sourceSection);
+        ScrollView sv = screenWithBody("Yeni müştəri yarat", true, () -> showAccountSales(returnSection));
+        LinearLayout body = scrollBody(sv);
+
+        LinearLayout c = card();
+        c.addView(text("Yeni müştəri", 18, TEXT, true));
+        TextView info = text("Müştərini hesab satışı etmədən əvvəl yadda saxlaya bilərsən.", 12, MUTED, false);
+        info.setPadding(0, dp(4), 0, dp(10));
+        c.addView(info);
+
+        EditText customerName = accountField(c, "Ad soyad *", "CAN EMRE", "", InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        EditText customerPhone = accountField(c, "Telefon *", "0705603030", "", InputType.TYPE_CLASS_PHONE);
+
+        Button saveCustomer = button("Müştərini yarat", BLUE, Color.WHITE);
+        c.addView(saveCustomer);
+        body.addView(c);
+
+        saveCustomer.setOnClickListener(v -> {
+            String nameValue = customerName.getText().toString().trim();
+            String phoneValue = normalizeAzerbaijanPhone(customerPhone.getText().toString().trim());
+            customerPhone.setText(phoneValue);
+            if (nameValue.isEmpty()) {
+                toast("Ad soyad boş ola bilməz.");
+                customerName.requestFocus();
+                return;
+            }
+            if (phoneValue.isEmpty()) {
+                toast("Telefon boş ola bilməz.");
+                customerPhone.requestFocus();
+                return;
+            }
+            if (accountSalesCustomerPhoneExists(phoneValue, "")) {
+                toast("Bu telefon nömrəsi ilə müştəri artıq qeydiyyatdadır.");
+                customerPhone.requestFocus();
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("customer_name", nameValue);
+                payload.put("phone", phoneValue);
+            } catch (Exception ignored) {}
+            postAccountSalesJson("/customer/save", payload, result -> {
+                toast("Müştəri yaradıldı.");
+                showAccountSales(returnSection);
+            });
+        });
+    }
+
+    private EditText accountField(LinearLayout body, String label, String hint, String value, int inputType) {
+        TextView l = text(label, 13, MUTED, true);
+        body.addView(l);
+        EditText e = input(hint);
+        e.setInputType(inputType);
+        String initialValue = value == null ? "" : value;
+        if (inputType == InputType.TYPE_CLASS_PHONE) initialValue = normalizeAzerbaijanPhone(initialValue);
+        e.setText(initialValue);
+        if (inputType == InputType.TYPE_CLASS_PHONE) installPhoneAutoFormat(e);
+        body.addView(e);
+        spacer(body, 10);
+        return e;
+    }
+
+    private Spinner accountSpinnerField(LinearLayout body, String label, String[] options, String selected) {
+        TextView l = text(label, 13, MUTED, true);
+        body.addView(l);
+        Spinner spinner = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, options);
+        spinner.setAdapter(adapter);
+        spinner.setBackground(bg(CARD, 14, BORDER));
+        spinner.setPadding(dp(10), 0, dp(10), 0);
+        int index = 0;
+        for (int i = 0; i < options.length; i++) if (options[i].equals(selected)) { index = i; break; }
+        spinner.setSelection(index);
+        body.addView(spinner, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+        spacer(body, 10);
+        return spinner;
+    }
+
+    private void renderAccountSalesCustomers(LinearLayout host, JSONArray customers, String query) {
+        host.removeAllViews();
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        int visible = 0;
+        for (int i = 0; i < customers.length(); i++) {
+            JSONObject customer = customers.optJSONObject(i);
+            if (customer == null) continue;
+            String haystack = customer.optString("customer_name", "") + " " + customer.optString("phone", "");
+            if (!q.isEmpty() && !haystack.toLowerCase(Locale.ROOT).contains(q)) continue;
+            visible++;
+            LinearLayout c = card();
+            String detail = customer.optString("customer_name", "Müştəri")
+                    + "  •  " + customer.optString("phone", "")
+                    + "  •  " + customer.optInt("game_count", 0) + " alış"
+                    + "  •  " + customer.optString("total_amount_formatted", money(customer.optDouble("total_amount", 0)));
+            TextView inline = text(detail, 14, TEXT, true);
+            inline.setSingleLine(true);
+            c.addView(inline);
+
+            installAccountSalesCustomerCardActions(c, customer);
+            host.addView(c);
+        }
+        if (visible == 0) host.addView(empty(q.isEmpty() ? "Müştəri yoxdur." : "Axtarışa uyğun müştəri tapılmadı."));
+    }
+
+    private void showAccountSalesCustomerDetail(JSONObject customer) {
+        accountSalesCustomerDetailContext = customer;
+        String phone = customer.optString("phone", "");
+        ScrollView sv = screenWithBody("Müştəri • " + customer.optString("customer_name", ""), true, () -> showAccountSales("customers"));
+        LinearLayout body = scrollBody(sv);
+        LinearLayout summary = card();
+        summary.addView(text(customer.optString("customer_name", "Müştəri"), 18, TEXT, true));
+        summary.addView(text(phone, 13, MUTED, false));
+        summary.addView(text(customer.optInt("game_count", 0) + " alış  •  " + customer.optString("total_amount_formatted", ""), 13, TEXT, true));
+        body.addView(summary);
+        LinearLayout host = new LinearLayout(this);
+        host.setOrientation(LinearLayout.VERTICAL);
+        host.addView(empty("Alışlar yüklənir..."));
+        body.addView(host);
+        loadAccountSalesJson("/customer?phone=" + urlEncode(phone), result -> {
+            host.removeAllViews();
+            JSONArray records = result.optJSONArray("records");
+            if (records == null || records.length() == 0) {
+                host.addView(empty("Alış tarixçəsi yoxdur."));
+                return;
+            }
+            JSONObject emptySettings = new JSONObject();
+            for (int i = 0; i < records.length(); i++) {
+                JSONObject row = records.optJSONObject(i);
+                if (row == null) continue;
+                host.addView(buildAccountSalesRecordCard(row, emptySettings, "customer"));
+            }
+        }, message -> {
+            host.removeAllViews();
+            host.addView(empty(message));
+        });
+    }
+
+    private void installAccountSalesCustomerCardActions(View card, JSONObject customer) {
+        card.setClickable(true);
+        card.setFocusable(true);
+
+        final Handler holdHandler = new Handler(Looper.getMainLooper());
+        final float[] down = new float[2];
+        final boolean[] holdFired = {false};
+        final int moveTolerance = dp(12);
+        final Runnable openActions = () -> {
+            holdFired[0] = true;
+            showAccountSalesCustomerActions(customer);
+        };
+
+        card.setOnTouchListener((v, event) -> {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    down[0] = event.getX();
+                    down[1] = event.getY();
+                    holdFired[0] = false;
+                    holdHandler.removeCallbacks(openActions);
+                    holdHandler.postDelayed(openActions, 1000L);
+                    break;
+                case MotionEvent.ACTION_MOVE:
+                    if (Math.abs(event.getX() - down[0]) > moveTolerance || Math.abs(event.getY() - down[1]) > moveTolerance) {
+                        holdHandler.removeCallbacks(openActions);
+                    }
+                    break;
+                case MotionEvent.ACTION_UP:
+                    holdHandler.removeCallbacks(openActions);
+                    if (!holdFired[0]) {
+                        showAccountSalesCustomerDetail(customer);
+                    }
+                    holdFired[0] = false;
+                    break;
+                case MotionEvent.ACTION_CANCEL:
+                    holdHandler.removeCallbacks(openActions);
+                    holdFired[0] = false;
+                    break;
+                default:
+                    break;
+            }
+            return true;
+        });
+    }
+
+    private void showAccountSalesCustomerActions(JSONObject customer) {
+        new AlertDialog.Builder(this)
+                .setTitle(customer.optString("customer_name", "Müştəri"))
+                .setItems(new String[]{"Düzənlə"}, (dialog, which) -> {
+                    if (which == 0) showAccountSalesEditCustomer(customer);
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
+    }
+
+    private void showAccountSalesEditCustomer(JSONObject customer) {
+        ScrollView sv = screenWithBody("Müştərini düzəlt", true, () -> showAccountSales("customers"));
+        LinearLayout body = scrollBody(sv);
+
+        LinearLayout card = card();
+        card.addView(text("Müştəri məlumatları", 17, TEXT, true));
+        spacer(card, 6);
+        EditText customerName = accountField(card, "Ad soyad *", "CAN EMRE", customer.optString("customer_name", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        EditText customerPhone = accountField(card, "Telefon *", "0705603030", customer.optString("phone", ""), InputType.TYPE_CLASS_PHONE);
+
+        TextView note = text("Buradan müştərinin ad soyadını və ya telefon nömrəsini düzəldə bilərsən.", 12, MUTED, false);
+        note.setPadding(dp(4), dp(4), dp(4), dp(10));
+        card.addView(note);
+
+        Button save = button("Dəyişiklikləri yadda saxla", BLUE, Color.WHITE);
+        card.addView(save);
+        body.addView(card);
+
+        save.setOnClickListener(v -> {
+            String nameValue = customerName.getText().toString().trim();
+            String phoneValue = normalizeAzerbaijanPhone(customerPhone.getText().toString().trim());
+            customerPhone.setText(phoneValue);
+
+            if (nameValue.isEmpty()) {
+                toast("Ad soyad boş ola bilməz.");
+                customerName.requestFocus();
+                return;
+            }
+            if (phoneValue.isEmpty()) {
+                toast("Telefon boş ola bilməz.");
+                customerPhone.requestFocus();
+                return;
+            }
+            String oldPhoneValue = normalizeAzerbaijanPhone(customer.optString("phone", ""));
+            if (accountSalesCustomerPhoneExists(phoneValue, oldPhoneValue)) {
+                toast("Bu telefon nömrəsi başqa müştəridə artıq qeydiyyatdadır.");
+                customerPhone.requestFocus();
+                return;
+            }
+
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("id", customer.optInt("id", 0));
+                payload.put("customer_name", nameValue);
+                payload.put("phone", phoneValue);
+                String oldPhone = customer.optString("phone", "").trim();
+                if (!oldPhone.isEmpty()) payload.put("old_phone", oldPhone);
+            } catch (Exception ignored) {}
+
+            postAccountSalesJson("/customer/save", payload, result -> {
+                JSONArray refreshed = result.optJSONArray("customers");
+                if (refreshed != null) accountSalesCustomerChoices = refreshed;
+                toast("Müştəri məlumatları yeniləndi.");
+                showAccountSales("customers");
+            });
+        });
+    }
+
+    private void renderAccountSalesSettings(LinearLayout host, JSONObject settings) {
+        host.removeAllViews();
+        LinearLayout c = card();
+        c.addView(text("Plugin ayarları", 17, TEXT, true));
+        spacer(c, 6);
+        EditText currency = accountField(c, "Pul vahidi", "AZN", settings.optString("currency", "AZN"), InputType.TYPE_CLASS_TEXT);
+        Spinner stock = accountSpinnerField(c, "Default stok", new String[]{"Satılıb", "Satılmayıb"}, settings.optString("default_stock_status", "Satılıb"));
+        CheckBox phoneFormat = new CheckBox(this);
+        phoneFormat.setText("Telefon formatlama aktivdir");
+        phoneFormat.setTextColor(TEXT);
+        phoneFormat.setChecked("1".equals(settings.optString("phone_format_enabled", "1")) || settings.optBoolean("phone_format_enabled", false));
+        c.addView(phoneFormat);
+        spacer(c, 8);
+        Button save = button("Ayarları saxla", BLUE, Color.WHITE);
+        c.addView(save);
+        save.setOnClickListener(v -> {
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("currency", currency.getText().toString());
+                payload.put("default_stock_status", String.valueOf(stock.getSelectedItem()));
+                // Ödəniş seçimi UI-dan ləğv edilib; köhnə server ayarını dəyişmədən saxla.
+                payload.put("default_payment_type", settings.optString("default_payment_type", "Nağd"));
+                payload.put("phone_format_enabled", phoneFormat.isChecked());
+            } catch (Exception ignored) {}
+            postAccountSalesJson("/settings", payload, result -> {
+                toast("Hesab Satışı ayarları yadda saxlandı.");
+                showAccountSales("settings");
+            });
+        });
+        host.addView(c);
+
+        LinearLayout connection = card();
+        connection.addView(text("Mobil bağlantı", 16, TEXT, true));
+        connection.addView(text(getAccountSalesSite(), 12, MUTED, false));
+        Button change = button("WordPress / API açarını dəyiş", CARD, TEXT);
+        connection.addView(change);
+        change.setOnClickListener(v -> showAccountSalesConnection());
+        host.addView(connection);
+    }
+
+    private interface AccountSalesFailure { void accept(String message); }
+
+    private void loadAccountSalesJson(String path, JsonConsumer success, AccountSalesFailure failure) {
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject result = accountSalesRequest(getAccountSalesSite(), path, "GET", null, loadAccountSalesApiKey());
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    success.accept(result);
+                });
+            } catch (Exception ex) {
+                String message = accountSalesErrorMessage(ex);
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    if (failure != null) failure.accept(message);
+                    else toast(message);
+                });
+            }
+        });
+    }
+
+    private void loadAccountSalesJson(String path, JsonConsumer success) {
+        loadAccountSalesJson(path, success, null);
+    }
+
+    private void postAccountSalesJson(String path, JSONObject payload, JsonConsumer success) {
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject result = accountSalesRequest(getAccountSalesSite(), path, "POST", payload, loadAccountSalesApiKey());
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    success.accept(result);
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    toast(accountSalesErrorMessage(ex));
+                });
+            }
+        });
+    }
+
+    private String accountSalesErrorMessage(Exception ex) {
+        String message = ex == null || ex.getMessage() == null ? "WordPress bağlantı xətası" : ex.getMessage();
+        if (message.contains("401")) return "Hesab Satışı API açarı yanlışdır və ya yenilənib.";
+        if (message.contains("404")) return "WordPress-də Hesab Satışı mobil API-si tapılmadı. Pluginin mobil API versiyasını quraşdır.";
+        return message;
+    }
+
+    private JSONObject accountSalesRequest(String site, String path, String method, JSONObject payload, String apiKey) throws Exception {
+        String base = normalizeWordPressBase(site);
+        String suffix = path == null ? "" : path.trim();
+        if (!suffix.startsWith("/")) suffix = "/" + suffix;
+        URL url = new URL(base + ACCOUNT_SALES_API_PATH + suffix);
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(8000);
+        c.setReadTimeout(30000);
+        c.setInstanceFollowRedirects(true);
+        c.setRequestMethod(method);
+        c.setRequestProperty("Accept", "application/json");
+        c.setRequestProperty("X-Marakana-Account-Key", apiKey == null ? "" : apiKey);
+        if (payload != null && "POST".equals(method)) {
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
+            try (OutputStream os = c.getOutputStream()) { os.write(bytes); }
+        }
+        int code = c.getResponseCode();
+        InputStream is = (code >= 200 && code < 300) ? c.getInputStream() : c.getErrorStream();
+        StringBuilder sb = new StringBuilder();
+        if (is != null) try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+        }
+        String raw = sb.toString();
+        JSONObject obj = raw.isEmpty() ? new JSONObject() : new JSONObject(raw);
+        if (code < 200 || code >= 300) {
+            String error = obj.optString("message", obj.optString("error", "HTTP " + code));
+            throw new Exception(code + ": " + error);
+        }
+        return obj;
+    }
+
+    private void showDebt(String category) {
+        currentBackAction = null;
+        clear();
+
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(8), dp(10), dp(8), 0);
+        content.addView(shell, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        shell.addView(buildMainHeader("Borc Dəftəri", false, null));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        addPullToRefreshContent(shell, scroll, () -> showDebt(category));
+
+        LinearLayout body = scrollBody(scroll);
+        body.setPadding(0, dp(4), 0, dp(92));
+
+        Button create = button("Yeni borclu yarat", BLUE, Color.WHITE);
+        body.addView(create);
+        create.setOnClickListener(v -> createDebtorDialog(category));
+        spacer(body, 10);
+
+        EditText search = input("Ad, telefon və ya ID ilə axtar");
+        body.addView(search);
+        spacer(body, 10);
+
+        LinearLayout recordsHost = new LinearLayout(this);
+        recordsHost.setOrientation(LinearLayout.VERTICAL);
+        body.addView(recordsHost);
+
+        installDebtGestures(scroll, category);
+        installDebtGestures(body, category);
+
+        LinearLayout footer = buildDebtFooter(category);
+        shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(86)));
+
+        loadJson("/api/mobile/debt/list?category=" + urlEncode(category), result -> {
+            JSONArray records = result.optJSONArray("records");
+            if (records == null) records = new JSONArray();
+            final JSONArray finalRecords = records;
+            Runnable render = () -> renderDebtRecords(recordsHost, finalRecords, category, search.getText().toString());
+            search.addTextChangedListener(new SimpleTextWatcher(render));
+            render.run();
+        });
+    }
+
+    private void installDebtGestures(View target, String category) {
+        final int swipeThreshold = dp(64);
+        GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return true;
+            }
+
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                if (e1 == null || e2 == null) return false;
+                float dx = e2.getX() - e1.getX();
+                float dy = e2.getY() - e1.getY();
+                if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy) * 1.60f) return false;
+
+                if (dx > 0) {
+                    // Sağa swipe: əvvəlki kateqoriya. Birinci kateqoriyadayıqsa sol menyunu aç.
+                    String previous = shiftDebtCategory(category, -1);
+                    if (!previous.equals(category)) showDebt(previous);
+                    else showNavigationMenu();
+                } else {
+                    // Sola swipe: növbəti kateqoriya.
+                    String next = shiftDebtCategory(category, 1);
+                    if (!next.equals(category)) showDebt(next);
+                }
+                return true;
+            }
+        });
+        target.setOnTouchListener((v, event) -> {
+            detector.onTouchEvent(event);
+            return false;
+        });
+    }
+
+    private String shiftDebtCategory(String current, int direction) {
+        int index = 0;
+        for (int i = 0; i < DEBT_CATEGORIES.length; i++) {
+            if (DEBT_CATEGORIES[i].equals(current)) {
+                index = i;
+                break;
+            }
+        }
+        int next = index + direction;
+        if (next < 0 || next >= DEBT_CATEGORIES.length) return current;
+        return DEBT_CATEGORIES[next];
+    }
+
+    private LinearLayout buildDebtFooter(String activeCategory) {
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(dp(6), dp(8), dp(6), dp(8));
+        footer.setBackground(bg(Color.WHITE, 22, BORDER));
+        footer.setElevation(dp(12));
+
+        String[] icons = {"👤", "👥", "🏢"};
+        for (int i = 0; i < DEBT_CATEGORIES.length; i++) {
+            String category = DEBT_CATEGORIES[i];
+            boolean active = category.equals(activeCategory);
+            LinearLayout tab = buildDebtFooterTab(icons[i], category, active);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+            if (i > 0) lp.setMargins(dp(6), 0, 0, 0);
+            tab.setLayoutParams(lp);
+            tab.setOnClickListener(v -> showDebt(category));
+            footer.addView(tab);
+        }
+        return footer;
+    }
+
+    private LinearLayout buildDebtFooterTab(String iconText, String label, boolean active) {
+        LinearLayout tab = new LinearLayout(this);
+        tab.setOrientation(LinearLayout.VERTICAL);
+        tab.setGravity(Gravity.CENTER);
+        tab.setPadding(dp(8), dp(6), dp(8), dp(6));
+        int bgColor = active ? Color.rgb(238, 241, 245) : Color.WHITE;
+        int stroke = active ? Color.rgb(210, 218, 226) : Color.TRANSPARENT;
+        tab.setBackground(bg(bgColor, 18, stroke));
+
+        TextView icon = text(iconText, 18, active ? TEXT : MUTED, false);
+        icon.setGravity(Gravity.CENTER);
+        tab.addView(icon, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)));
+
+        TextView title = text(label, 14, active ? TEXT : MUTED, true);
+        title.setGravity(Gravity.CENTER);
+        tab.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)));
+        return tab;
+    }
+
+    private void renderDebtRecords(LinearLayout host, JSONArray records, String category, String query) {
+        host.removeAllViews();
+        String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+        double total = 0;
+        for (int i = 0; i < records.length(); i++) {
+            JSONObject r = records.optJSONObject(i);
+            if (r == null) continue;
+            total += r.optDouble("total_debt", 0);
+        }
+
+        LinearLayout sum = card();
+        sum.addView(text("Toplam borc", 13, MUTED, true));
+        sum.addView(text(money(total), 22, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+        host.addView(sum);
+
+        for (int i = 0; i < records.length(); i++) {
+            JSONObject r = records.optJSONObject(i);
+            if (r == null) continue;
+            String hay = (r.optString("full_name", "") + " " + r.optString("phone", "") + " " + r.optString("id", "")).toLowerCase(Locale.ROOT);
+            if (!q.isEmpty() && !hay.contains(q)) continue;
+
+            LinearLayout c = card();
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.addView(text(r.optString("full_name", ""), 17, TEXT, true), new LinearLayout.LayoutParams(0, dp(38), 1f));
+            TextView amt = text(money(r.optDouble("total_debt", 0)), 17, GREEN, true);
+            amt.setGravity(Gravity.RIGHT | Gravity.CENTER_VERTICAL);
+            row.addView(amt, new LinearLayout.LayoutParams(dp(145), dp(38)));
+            c.addView(row);
+
+            c.addView(text(r.optString("phone", "") + "  •  ID: " + r.optString("id", "") + "  •  " + r.optString("last_change", ""), 12, MUTED, true),
+                    new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36)));
+
+            c.setClickable(true);
+            c.setFocusable(true);
+            c.setOnClickListener(v -> showDebtActions(category, r));
+            host.addView(c);
+        }
+    }
+
+    private void showDebtActions(String category, JSONObject record) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(14), dp(6), dp(14), dp(4));
+
+        TextView balance = text("Cari borc: " + money(record.optDouble("total_debt", 0)), 15, GREEN, true);
+        box.addView(balance, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
+
+        Button increase = button("Borcu artır", Color.rgb(234, 247, 241), GREEN);
+        box.addView(increase, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
+
+        Button decrease = button("Borcu azalt", Color.rgb(255, 245, 239), ORANGE);
+        LinearLayout.LayoutParams decreaseLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        decreaseLp.setMargins(0, dp(8), 0, 0);
+        box.addView(decrease, decreaseLp);
+
+        Button history = button("Tarixçə", Color.rgb(238, 246, 255), BLUE);
+        LinearLayout.LayoutParams historyLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        historyLp.setMargins(0, dp(8), 0, 0);
+        box.addView(history, historyLp);
+
+        Button notify = button("Bildiriş göndər", Color.rgb(232, 248, 240), GREEN);
+        LinearLayout.LayoutParams notifyLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        notifyLp.setMargins(0, dp(8), 0, 0);
+        box.addView(notify, notifyLp);
+
+        Button call = button("Zəng et", Color.rgb(245, 247, 250), TEXT);
+        LinearLayout.LayoutParams callLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        callLp.setMargins(0, dp(8), 0, 0);
+        box.addView(call, callLp);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(record.optString("full_name", "Borclu"))
+                .setView(box)
+                .setNegativeButton("Bağla", null)
+                .create();
+
+        increase.setOnClickListener(v -> {
+            dialog.dismiss();
+            debtChangeDialog(category, record, "increase");
+        });
+        decrease.setOnClickListener(v -> {
+            dialog.dismiss();
+            debtChangeDialog(category, record, "decrease");
+        });
+        history.setOnClickListener(v -> {
+            dialog.dismiss();
+            showDebtHistory(record);
+        });
+        notify.setOnClickListener(v -> {
+            dialog.dismiss();
+            sendDebtNotificationWhatsApp(category, record);
+        });
+        call.setOnClickListener(v -> {
+            dialog.dismiss();
+            callDebtContact(record);
+        });
+        dialog.show();
+    }
+
+    private void callDebtContact(JSONObject record) {
+        String phone = record.optString("phone", "").trim();
+        if (phone.isEmpty()) {
+            toast("Bu qeyd üçün telefon nömrəsi yoxdur.");
+            return;
+        }
+        try {
+            String dialPhone = phone.replaceAll("[^0-9+]", "");
+            Intent intent = new Intent(Intent.ACTION_DIAL, Uri.parse("tel:" + Uri.encode(dialPhone)));
+            startActivity(intent);
+        } catch (Exception ex) {
+            toast("Telefon tətbiqi açıla bilmədi.");
+        }
+    }
+
+    private void sendDebtNotificationWhatsApp(String category, JSONObject record) {
+        String phone = normalizeWhatsAppPhone(record.optString("phone", ""));
+        if (phone.isEmpty()) {
+            toast("Bu borclunun telefon nömrəsi yoxdur.");
+            return;
+        }
+
+        String name = record.optString("full_name", category.equals("Firma") ? "Firma" : "Müştəri").trim();
+        double debt = record.optDouble("total_debt", 0);
+        String lastChange = record.optString("last_change", "").trim();
+
+        StringBuilder message = new StringBuilder();
+        if (category.equals("Firma")) {
+            message.append("📣 *ÖDƏNİŞ MƏLUMATI*\n\n");
+            message.append("🏢 *Firma:* ").append(name.isEmpty() ? "Firma" : name).append("\n");
+            message.append("💳 *Sizə olan cari borcumuz:* ").append(money(debt)).append("\n");
+            if (!lastChange.isEmpty()) message.append("🕒 *Son dəyişiklik:* ").append(lastChange).append("\n");
+            message.append("\n🤝 *Məlumat:* Borcumuzu mümkün qədər tez ödəməyə çalışacağıq.\n");
+            message.append("🙏 Ödəniş etdikdə sizə məlumat veriləcək.\n\n");
+            message.append("🎮 *Marakana Game Center*");
+        } else {
+            message.append("🔔 *BORC BİLDİRİŞİ*\n\n");
+            message.append("👤 *Ad Soyad:* ").append(name.isEmpty() ? "Müştəri" : name).append("\n");
+            message.append("💰 *Cari borc:* ").append(money(debt)).append("\n");
+            if (!lastChange.isEmpty()) message.append("🕒 *Son dəyişiklik:* ").append(lastChange).append("\n");
+            message.append("\n⚠️ *Xatırlatma:* Borcunuzu mümkün qədər tez ödəməyinizi xahiş edirik.\n");
+            message.append("🙏 Ödəniş etdikdən sonra məlumat verməyiniz kifayətdir.\n\n");
+            message.append("🎮 *Marakana Game Center*");
+        }
+
+        openWhatsAppChooser(phone, message.toString());
+    }
+
+    private void openWhatsAppChooser(String phone, String message) {
+        final String standardPackage = "com.whatsapp";
+        final String businessPackage = "com.whatsapp.w4b";
+        boolean hasStandard = isPackageInstalled(standardPackage);
+        boolean hasBusiness = isPackageInstalled(businessPackage);
+
+        String savedPackage = prefs.getString(KEY_WHATSAPP_PACKAGE, "");
+        if (!savedPackage.isEmpty() && isPackageInstalled(savedPackage)) {
+            openWhatsAppPackage(savedPackage, phone, message);
+            return;
+        }
+
+        if (hasStandard && hasBusiness) {
+            LinearLayout box = new LinearLayout(this);
+            box.setOrientation(LinearLayout.VERTICAL);
+            box.setPadding(dp(18), dp(4), dp(18), 0);
+
+            CheckBox remember = new CheckBox(this);
+            remember.setText("Seçimi default olaraq yadda saxla");
+            remember.setTextColor(TEXT);
+            remember.setTextSize(14);
+            box.addView(remember, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+
+            AlertDialog dialog = new AlertDialog.Builder(this)
+                    .setTitle("WhatsApp seç")
+                    .setMessage("Bildirişi hansı WhatsApp ilə göndərmək istəyirsiniz?")
+                    .setView(box)
+                    .setNegativeButton("Ləğv", null)
+                    .create();
+
+            dialog.setButton(AlertDialog.BUTTON_POSITIVE, "WhatsApp", (d, which) -> { });
+            dialog.setButton(AlertDialog.BUTTON_NEUTRAL, "WhatsApp Business", (d, which) -> { });
+            dialog.setOnShowListener(d -> {
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+                    if (remember.isChecked()) prefs.edit().putString(KEY_WHATSAPP_PACKAGE, standardPackage).apply();
+                    dialog.dismiss();
+                    openWhatsAppPackage(standardPackage, phone, message);
+                });
+                dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v -> {
+                    if (remember.isChecked()) prefs.edit().putString(KEY_WHATSAPP_PACKAGE, businessPackage).apply();
+                    dialog.dismiss();
+                    openWhatsAppPackage(businessPackage, phone, message);
+                });
+            });
+            dialog.show();
+            return;
+        }
+
+        if (hasBusiness) {
+            openWhatsAppPackage(businessPackage, phone, message);
+            return;
+        }
+        if (hasStandard) {
+            openWhatsAppPackage(standardPackage, phone, message);
+            return;
+        }
+
+        try {
+            String url = "https://wa.me/" + phone + "?text=" + urlEncode(message);
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception ex) {
+            toast("WhatsApp və WhatsApp Business tapılmadı.");
+        }
+    }
+
+    private boolean isPackageInstalled(String packageName) {
+        try {
+            getPackageManager().getPackageInfo(packageName, 0);
+            return true;
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    private void openWhatsAppPackage(String packageName, String phone, String message) {
+        String url = "https://wa.me/" + phone + "?text=" + urlEncode(message);
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        intent.setPackage(packageName);
+        try {
+            startActivity(intent);
+        } catch (Exception ex) {
+            prefs.edit().remove(KEY_WHATSAPP_PACKAGE).apply();
+            toast("Seçilmiş WhatsApp açıla bilmədi. Yenidən seçim edin.");
+        }
+    }
+
+    private String normalizeWhatsAppPhone(String raw) {
+        String digits = raw == null ? "" : raw.replaceAll("[^0-9]", "");
+        if (digits.isEmpty()) return "";
+        if (digits.startsWith("00994")) digits = digits.substring(2);
+        if (digits.startsWith("994")) return digits;
+        if (digits.startsWith("0") && digits.length() >= 10) return "994" + digits.substring(1);
+        if (digits.length() == 9) return "994" + digits;
+        return digits;
+    }
+
+    private void debtChangeDialog(String category, JSONObject record, String action) {
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(6),dp(18),0); EditText amount=input("Məbləğ");amount.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);box.addView(amount); EditText note=input("Qeyd (istəyə bağlı)");LinearLayout.LayoutParams np=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(54));np.setMargins(0,dp(8),0,0);note.setLayoutParams(np);box.addView(note);
+        String label=action.equals("decrease")?"Azalt":"Artır";
+        new AlertDialog.Builder(this).setTitle(label+" • "+record.optString("full_name","")).setView(box).setNegativeButton("Ləğv",null).setPositiveButton(label,(d,w)->{ JSONObject p=new JSONObject();try{p.put("category",category);p.put("debt_id",record.optString("id",""));p.put("action",action);p.put("amount",amount.getText().toString());p.put("note",note.getText().toString());}catch(Exception ignored){} postJson("/api/mobile/debt/update",p,r->showDebt(category)); }).show();
+    }
+
+    private void createDebtorDialog(String category) {
+        LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(6),dp(18),0); EditText name=input(category.equals("Firma")?"Firma adı":"Ad Soyad");box.addView(name); EditText phone=input("Telefon"); phone.setInputType(InputType.TYPE_CLASS_PHONE); installPhoneAutoFormat(phone); addDialogField(box,phone); EditText amount=input("İlkin borc (0 ola bilər)");amount.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);addDialogField(box,amount); EditText note=input("Qeyd");addDialogField(box,note);
+        new AlertDialog.Builder(this).setTitle("Yeni borclu • "+category).setView(box).setNegativeButton("Ləğv",null).setPositiveButton("Yarat",(d,w)->{ JSONObject p=new JSONObject();try{p.put("category",category);p.put("full_name",name.getText().toString());String normalizedPhone=normalizeAzerbaijanPhone(phone.getText().toString());phone.setText(normalizedPhone);p.put("phone",normalizedPhone);p.put("amount",amount.getText().toString());p.put("note",note.getText().toString());}catch(Exception ignored){} postJson("/api/mobile/debt/create",p,r->showDebt(category)); }).show();
+    }
+
+    private void addDialogField(LinearLayout box, EditText e) { LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(54));p.setMargins(0,dp(8),0,0);e.setLayoutParams(p);box.addView(e); }
+
+    private void showDebtHistory(JSONObject record) {
+        ScrollView sv=screenWithBody("Tarixçə",true,()->showDebt(record.optString("category","İşçi"))); LinearLayout body=scrollBody(sv); LinearLayout head=card();head.addView(text(record.optString("full_name",""),19,TEXT,true));head.addView(text("Cari borc: "+money(record.optDouble("total_debt",0)),15,GREEN,true),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(38)));body.addView(head); JSONArray h=record.optJSONArray("history"); if(h==null||h.length()==0){body.addView(empty("Tarixçə yoxdur."));return;} for(int i=0;i<h.length();i++){JSONObject x=h.optJSONObject(i);if(x==null)continue;LinearLayout c=card();c.addView(text(x.optString("action","Əməliyyat")+"  •  "+money(x.optDouble("amount",0)),15,TEXT,true));c.addView(text(x.optString("timestamp","")+"  •  Qalıq: "+money(x.optDouble("balance_after",0)),12,MUTED,true),new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,dp(34)));if(!x.optString("note","").isEmpty())c.addView(text(x.optString("note",""),13,MUTED,false));body.addView(c);} }
+
+    private String kitchenClearedTicketPrefsKey() {
+        String serverKey = normalizeServerBase(serverBase);
+        return KEY_KITCHEN_CLEARED_TICKET_IDS + "|" + serverKey;
+    }
+
+    private void loadKitchenClearedTicketIds() {
+        kitchenClearedTicketIds.clear();
+        if (prefs == null) return;
+        try {
+            Set<String> stored = prefs.getStringSet(kitchenClearedTicketPrefsKey(), null);
+            if (stored == null) return;
+            for (String raw : stored) {
+                try {
+                    int id = Integer.parseInt(String.valueOf(raw));
+                    if (id > 0) kitchenClearedTicketIds.add(id);
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception ignored) {}
+    }
+
+    private void persistKitchenClearedTicketIds() {
+        if (prefs == null) return;
+        try {
+            Set<String> stored = new HashSet<>();
+            for (Integer id : kitchenClearedTicketIds) {
+                if (id != null && id > 0) stored.add(String.valueOf(id));
+            }
+            prefs.edit().putStringSet(kitchenClearedTicketPrefsKey(), stored).apply();
+        } catch (Exception ignored) {}
+    }
+
+    private boolean isKitchenTicketFullyRemoved(JSONObject ticket) {
+        if (ticket == null) return false;
+        JSONArray items = ticket.optJSONArray("items");
+        if (items == null || items.length() == 0) return false;
+        int activeTotal = 0;
+        int removedTotal = 0;
+        for (int i = 0; i < items.length(); i++) {
+            JSONObject item = items.optJSONObject(i);
+            if (item == null) continue;
+            int orderedQty = Math.max(0, item.optInt("ordered_qty", item.optInt("qty", 0)));
+            int removedQty = Math.max(0, item.optInt("removed_qty", 0));
+            int activeQty = item.has("active_qty")
+                    ? Math.max(0, item.optInt("active_qty", 0))
+                    : Math.max(0, orderedQty - removedQty);
+            activeTotal += activeQty;
+            removedTotal += removedQty;
+        }
+        return activeTotal <= 0 && removedTotal > 0;
+    }
+
+    private void markKitchenTicketClearedLocally(int ticketId) {
+        if (ticketId <= 0) return;
+        kitchenClearedTicketIds.add(ticketId);
+        persistKitchenClearedTicketIds();
+    }
+
+    private void showKitchen() { showKitchen("Hazırlanır"); }
+
+    private void showKitchen(String category) {
+        currentBackAction = null;
+        loadKitchenClearedTicketIds();
+        requestKitchenNotificationPermissionIfNeeded();
+        ensureKitchenNotificationChannel();
+        clear();
+
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(8), dp(10), dp(8), 0);
+        content.addView(shell, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        shell.addView(buildMainHeader("Mətbəx", false, null));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        addPullToRefreshContent(shell, scroll, () -> showKitchen(category));
+
+        LinearLayout body = scrollBody(scroll);
+        body.setPadding(0, dp(4), 0, dp(92));
+
+        LinearLayout recordsHost = new LinearLayout(this);
+        recordsHost.setOrientation(LinearLayout.VERTICAL);
+        body.addView(recordsHost);
+
+        installKitchenGestures(scroll, category);
+        installKitchenGestures(body, category);
+
+        LinearLayout footer = buildKitchenFooter(category);
+        shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(86)));
+
+        recordsHost.addView(empty("Mətbəx sifarişləri gözlənilir..."));
+        startKitchenAutoRefresh(recordsHost, category);
+    }
+
+    private void startKitchenAutoRefresh(LinearLayout recordsHost, String category) {
+        stopKitchenAutoRefresh();
+        kitchenAutoRefreshActive = true;
+        kitchenLiveRecordsHost = recordsHost;
+        kitchenLiveCategory = category;
+        kitchenLastTicketsSignature = "";
+        kitchenKnownTicketKeys.clear();
+        kitchenNotificationSnapshotInitialized = false;
+        final int generation = ++kitchenRefreshGeneration;
+
+        kitchenRefreshRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (!kitchenAutoRefreshActive || generation != kitchenRefreshGeneration || !activityVisible) return;
+                if (kitchenLiveRecordsHost == null || kitchenLiveRecordsHost.getParent() == null || sessionToken.isEmpty()) return;
+
+                final String tokenForRequest = sessionToken;
+                io.execute(() -> {
+                    try {
+                        JSONObject result = request(serverBase, "/api/mobile/kitchen/tickets", "GET", null, tokenForRequest);
+                        JSONArray tickets = result.optJSONArray("tickets");
+                        if (tickets == null) tickets = new JSONArray();
+                        final JSONArray finalTickets = tickets;
+                        final String signature = finalTickets.toString();
+
+                        runOnUiThread(() -> {
+                            if (!kitchenAutoRefreshActive || generation != kitchenRefreshGeneration) return;
+                            if (kitchenLiveRecordsHost == null || kitchenLiveRecordsHost.getParent() == null) return;
+                            if (!signature.equals(kitchenLastTicketsSignature)) {
+                                kitchenLastTicketsSignature = signature;
+                                renderKitchenTickets(kitchenLiveRecordsHost, finalTickets, kitchenLiveCategory);
+                            }
+                            scheduleNextKitchenRefresh(generation);
+                        });
+                    } catch (Exception ex) {
+                        runOnUiThread(() -> {
+                            if (!kitchenAutoRefreshActive || generation != kitchenRefreshGeneration) return;
+                            String message = ex.getMessage() == null ? "" : ex.getMessage();
+                            if (message.contains("401") || message.toLowerCase(Locale.ROOT).contains("sessiya")) {
+                                stopKitchenAutoRefresh();
+                                handleApiError(ex);
+                                return;
+                            }
+                            // Local şəbəkə qısa müddətlik kəsilsə ekranı popup-larla doldurmuruq;
+                            // əlaqə bərpa olunan kimi növbəti səssiz yoxlama sifarişləri gətirəcək.
+                            scheduleNextKitchenRefresh(generation);
+                        });
+                    }
+                });
+            }
+        };
+
+        if (activityVisible) kitchenRefreshHandler.post(kitchenRefreshRunnable);
+    }
+
+    private void scheduleNextKitchenRefresh(int generation) {
+        if (!activityVisible || !kitchenAutoRefreshActive || generation != kitchenRefreshGeneration) return;
+        if (kitchenRefreshRunnable == null) return;
+        kitchenRefreshHandler.removeCallbacks(kitchenRefreshRunnable);
+        kitchenRefreshHandler.postDelayed(kitchenRefreshRunnable, KITCHEN_LIVE_REFRESH_MS);
+    }
+
+    private void stopKitchenAutoRefresh() {
+        kitchenAutoRefreshActive = false;
+        kitchenRefreshGeneration++;
+        if (kitchenRefreshRunnable != null) {
+            kitchenRefreshHandler.removeCallbacks(kitchenRefreshRunnable);
+        }
+        kitchenRefreshRunnable = null;
+        kitchenLiveRecordsHost = null;
+        kitchenLastTicketsSignature = "";
+        kitchenKnownTicketKeys.clear();
+        kitchenNotificationSnapshotInitialized = false;
+    }
+
+    private void requestKitchenNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFICATION_PERMISSION);
+        }
+    }
+
+    private Uri getKitchenNotificationSoundUri() {
+        String stored = prefs.getString(KEY_KITCHEN_NOTIFICATION_SOUND, "");
+        if (KITCHEN_NOTIFICATION_SILENT.equals(stored)) return null;
+        if (stored != null && !stored.trim().isEmpty()) {
+            try { return Uri.parse(stored); } catch (Exception ignored) {}
+        }
+        return RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION);
+    }
+
+    private String getKitchenNotificationSoundTitle() {
+        String stored = prefs.getString(KEY_KITCHEN_NOTIFICATION_SOUND, "");
+        if (KITCHEN_NOTIFICATION_SILENT.equals(stored)) return "Səssiz";
+        Uri uri = getKitchenNotificationSoundUri();
+        if (uri == null) return "Səssiz";
+        try {
+            android.media.Ringtone ringtone = RingtoneManager.getRingtone(this, uri);
+            if (ringtone != null) {
+                String title = ringtone.getTitle(this);
+                if (title != null && !title.trim().isEmpty()) return title.trim();
+            }
+        } catch (Exception ignored) {}
+        return (stored == null || stored.trim().isEmpty()) ? "Standart bildiriş səsi" : "Seçilmiş bildiriş səsi";
+    }
+
+    private String kitchenNotificationChannelId() {
+        String stored = prefs.getString(KEY_KITCHEN_NOTIFICATION_SOUND, "");
+        if (stored == null || stored.trim().isEmpty()) stored = "default";
+        return KITCHEN_NOTIFICATION_CHANNEL_PREFIX + Integer.toHexString(stored.hashCode());
+    }
+
+    private String ensureKitchenNotificationChannel() {
+        String channelId = kitchenNotificationChannelId();
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager == null) return channelId;
+        if (manager.getNotificationChannel(channelId) == null) {
+            NotificationChannel channel = new NotificationChannel(
+                    channelId,
+                    "Mətbəx sifarişləri",
+                    NotificationManager.IMPORTANCE_HIGH
+            );
+            channel.setDescription("Yeni mətbəx sifarişi gələndə yuxarı bildiriş və səs göstərir.");
+            channel.enableVibration(true);
+            Uri sound = getKitchenNotificationSoundUri();
+            if (sound == null) {
+                channel.setSound(null, null);
+            } else {
+                AudioAttributes attributes = new AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_NOTIFICATION)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build();
+                channel.setSound(sound, attributes);
+            }
+            manager.createNotificationChannel(channel);
+        }
+        return channelId;
+    }
+
+    private void chooseKitchenNotificationSound() {
+        requestKitchenNotificationPermissionIfNeeded();
+        Intent picker = new Intent(RingtoneManager.ACTION_RINGTONE_PICKER);
+        picker.putExtra(RingtoneManager.EXTRA_RINGTONE_TYPE, RingtoneManager.TYPE_NOTIFICATION);
+        picker.putExtra(RingtoneManager.EXTRA_RINGTONE_TITLE, "Mətbəx bildiriş səsi");
+        picker.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_DEFAULT, true);
+        picker.putExtra(RingtoneManager.EXTRA_RINGTONE_SHOW_SILENT, true);
+        picker.putExtra(RingtoneManager.EXTRA_RINGTONE_EXISTING_URI, getKitchenNotificationSoundUri());
+        startActivityForResult(picker, REQUEST_KITCHEN_SOUND);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode != REQUEST_KITCHEN_SOUND || resultCode != RESULT_OK || data == null) return;
+        Uri picked = data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
+        if (picked == null) {
+            prefs.edit().putString(KEY_KITCHEN_NOTIFICATION_SOUND, KITCHEN_NOTIFICATION_SILENT).apply();
+            toast("Mətbəx bildiriş səsi: Səssiz");
+        } else {
+            prefs.edit().putString(KEY_KITCHEN_NOTIFICATION_SOUND, picked.toString()).apply();
+            String title = "Seçildi";
+            try {
+                android.media.Ringtone ringtone = RingtoneManager.getRingtone(this, picked);
+                if (ringtone != null) title = ringtone.getTitle(this);
+            } catch (Exception ignored) {}
+            toast("Mətbəx bildiriş səsi: " + title);
+        }
+        ensureKitchenNotificationChannel();
+    }
+
+    private String kitchenTicketKey(JSONObject ticket) {
+        int id = ticket.optInt("id", 0);
+        if (id > 0) return "id:" + id;
+        return ticket.optString("station_name", "") + "|"
+                + ticket.optString("created_at_text", "") + "|"
+                + ticket.optString("created_at", "") + "|"
+                + String.valueOf(ticket.optJSONArray("items"));
+    }
+
+    private void handleKitchenTicketNotifications(JSONArray tickets) {
+        List<JSONObject> newlyArrived = new ArrayList<>();
+        Set<String> currentKeys = new HashSet<>();
+        for (int i = 0; i < tickets.length(); i++) {
+            JSONObject ticket = tickets.optJSONObject(i);
+            if (ticket == null) continue;
+            String key = kitchenTicketKey(ticket);
+            currentKeys.add(key);
+            boolean ready = "ready".equalsIgnoreCase(ticket.optString("status", ""));
+            if (kitchenNotificationSnapshotInitialized && !kitchenKnownTicketKeys.contains(key) && !ready) {
+                newlyArrived.add(ticket);
+            }
+        }
+
+        if (!kitchenNotificationSnapshotInitialized) {
+            kitchenKnownTicketKeys.clear();
+            kitchenKnownTicketKeys.addAll(currentKeys);
+            kitchenNotificationSnapshotInitialized = true;
+            return;
+        }
+
+        kitchenKnownTicketKeys.addAll(currentKeys);
+        for (JSONObject ticket : newlyArrived) showKitchenOrderNotification(ticket);
+    }
+
+    private void showKitchenOrderNotification(JSONObject ticket) {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            return;
+        }
+
+        String station = ticket.optString("station_name", "Mətbəx");
+        int totalQty = ticket.optInt("total_qty", 0);
+        String shortText = station + " • " + totalQty + " məhsul";
+        StringBuilder details = new StringBuilder(shortText);
+        JSONArray items = ticket.optJSONArray("items");
+        if (items != null) {
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject item = items.optJSONObject(i);
+                if (item == null) continue;
+                details.append("\n• ")
+                        .append(item.optString("name", "Məhsul"))
+                        .append(" x")
+                        .append(item.optInt("qty", 1));
+            }
+        }
+
+        Intent openApp = new Intent(this, MainActivity.class);
+        openApp.putExtra("open_kitchen", true);
+        openApp.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent contentIntent = PendingIntent.getActivity(
+                this,
+                7303,
+                openApp,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        String channelId = ensureKitchenNotificationChannel();
+        Notification.Builder builder = new Notification.Builder(this, channelId)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
+                .setContentTitle("Yeni mətbəx sifarişi")
+                .setContentText(shortText)
+                .setStyle(new Notification.BigTextStyle().bigText(details.toString()))
+                .setContentIntent(contentIntent)
+                .setAutoCancel(true)
+                .setCategory(Notification.CATEGORY_MESSAGE)
+                .setPriority(Notification.PRIORITY_HIGH)
+                .setVisibility(Notification.VISIBILITY_PUBLIC)
+                .setWhen(System.currentTimeMillis())
+                .setShowWhen(true);
+
+        // v38: Samsung/Android-un bildiriş mətnindən "Haritayı aç" kimi
+        // lazımsız smart/contextual action yaratmasına icazə vermə.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            builder.setAllowSystemGeneratedContextualActions(false);
+        }
+
+        NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
+        if (manager != null) {
+            int ticketId = ticket.optInt("id", 0);
+            int notificationId = ticketId > 0 ? 41000 + ticketId : ++kitchenNotificationSequence;
+            manager.notify(notificationId, builder.build());
+        }
+    }
+
+    private void installKitchenGestures(View target, String category) {
+        final int swipeThreshold = dp(64);
+        GestureDetector detector = new GestureDetector(this, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return true;
+            }
+
+            @Override
+            public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+                if (e1 == null || e2 == null) return false;
+                float dx = e2.getX() - e1.getX();
+                float dy = e2.getY() - e1.getY();
+                if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy) * 1.60f) return false;
+
+                if (dx > 0) {
+                    // Hazırdır -> Hazırlanır -> sol menyu.
+                    if ("Hazırdır".equals(category)) showKitchen("Hazırlanır");
+                    else showNavigationMenu();
+                } else {
+                    // Hazırlanır -> Hazırdır.
+                    if ("Hazırlanır".equals(category)) showKitchen("Hazırdır");
+                }
+                return true;
+            }
+        });
+        target.setOnTouchListener((v, event) -> {
+            detector.onTouchEvent(event);
+            return false;
+        });
+    }
+
+    private LinearLayout buildKitchenFooter(String activeCategory) {
+        LinearLayout footer = new LinearLayout(this);
+        footer.setOrientation(LinearLayout.HORIZONTAL);
+        footer.setGravity(Gravity.CENTER);
+        footer.setPadding(dp(6), dp(8), dp(6), dp(8));
+        footer.setBackground(bg(Color.WHITE, 22, BORDER));
+        footer.setElevation(dp(12));
+
+        String[] icons = {"⏳", "✅"};
+        for (int i = 0; i < KITCHEN_CATEGORIES.length; i++) {
+            String category = KITCHEN_CATEGORIES[i];
+            boolean active = category.equals(activeCategory);
+            LinearLayout tab = buildKitchenFooterTab(icons[i], category, active);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+            if (i > 0) lp.setMargins(dp(6), 0, 0, 0);
+            tab.setLayoutParams(lp);
+            tab.setOnClickListener(v -> showKitchen(category));
+            footer.addView(tab);
+        }
+        return footer;
+    }
+
+    private LinearLayout buildKitchenFooterTab(String iconText, String label, boolean active) {
+        LinearLayout tab = new LinearLayout(this);
+        tab.setOrientation(LinearLayout.VERTICAL);
+        tab.setGravity(Gravity.CENTER);
+        tab.setPadding(dp(8), dp(6), dp(8), dp(6));
+        int bgColor = active ? Color.rgb(238, 241, 245) : Color.WHITE;
+        int stroke = active ? Color.rgb(210, 218, 226) : Color.TRANSPARENT;
+        tab.setBackground(bg(bgColor, 18, stroke));
+
+        TextView icon = text(iconText, 17, active ? TEXT : MUTED, false);
+        icon.setGravity(Gravity.CENTER);
+        tab.addView(icon, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)));
+
+        TextView title = text(label, 14, active ? TEXT : MUTED, true);
+        title.setGravity(Gravity.CENTER);
+        tab.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(24)));
+        return tab;
+    }
+
+    private void renderKitchenTickets(LinearLayout host, JSONArray tickets, String category) {
+        host.removeAllViews();
+        boolean showReady = "Hazırdır".equals(category);
+        int visible = 0;
+        boolean clearedSetChanged = false;
+        for (int i = 0; i < tickets.length(); i++) {
+            JSONObject t = tickets.optJSONObject(i);
+            if (t == null) continue;
+            boolean isReady = "ready".equalsIgnoreCase(t.optString("status", ""));
+            if (showReady != isReady) continue;
+
+            int id = t.optInt("id", 0);
+            boolean fullyRemoved = isKitchenTicketFullyRemoved(t);
+            if (id > 0 && kitchenClearedTicketIds.contains(id)) {
+                if (fullyRemoved) {
+                    continue;
+                }
+                // Eyni ticket sonradan yenidən aktiv məhsul alarsa lokal gizlətmə ləğv edilir.
+                kitchenClearedTicketIds.remove(id);
+                clearedSetChanged = true;
+            }
+            visible++;
+
+            LinearLayout c = card();
+            LinearLayout row = new LinearLayout(this);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.addView(text(t.optString("station_name", ""), 18, BLUE, true), new LinearLayout.LayoutParams(0, dp(40), 1f));
+            String statusLabel = fullyRemoved ? "Ləğv edilib" : t.optString("status_label", showReady ? "Hazırdır" : "Hazırlanır");
+            int statusColor = fullyRemoved ? Color.rgb(180, 52, 52) : (isReady ? GREEN : BLUE);
+            row.addView(text(statusLabel, 14, statusColor, true), new LinearLayout.LayoutParams(dp(110), dp(40)));
+            c.addView(row);
+            c.addView(text(t.optString("created_at_text", "") + "  •  " + t.optInt("total_qty", 0) + " məhsul", 12, MUTED, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
+
+            JSONArray items = t.optJSONArray("items");
+            if (items != null) {
+                for (int j = 0; j < items.length(); j++) {
+                    JSONObject it = items.optJSONObject(j);
+                    if (it == null) continue;
+                    String itemName = it.optString("name", "");
+                    int orderedQty = Math.max(0, it.optInt("ordered_qty", it.optInt("qty", 1)));
+                    int removedQty = Math.max(0, it.optInt("removed_qty", 0));
+                    int activeQty = it.has("active_qty")
+                            ? Math.max(0, it.optInt("active_qty", 0))
+                            : Math.max(0, orderedQty - removedQty);
+
+                    if (activeQty > 0) {
+                        TextView activeLine = text("• " + itemName + " x" + activeQty, 15, TEXT, true);
+                        c.addView(activeLine, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
+                    }
+                    if (removedQty > 0) {
+                        TextView removedLine = text("• " + itemName + " x" + removedQty, 15, Color.rgb(180, 52, 52), true);
+                        removedLine.setPaintFlags(removedLine.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+                        removedLine.setAlpha(0.82f);
+                        c.addView(removedLine, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
+                    }
+                }
+            }
+
+            LinearLayout a = new LinearLayout(this);
+            a.setOrientation(LinearLayout.HORIZONTAL);
+            if (fullyRemoved) {
+                Button clearButton = button("Təmizlə", Color.rgb(246, 239, 239), Color.rgb(150, 55, 55));
+                a.addView(clearButton, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
+                clearButton.setOnClickListener(v -> {
+                    markKitchenTicketClearedLocally(id);
+                    // Yalnız mobil görünüşdən təmizlənir. PC/server API-yə heç bir status cavabı göndərilmir.
+                    renderKitchenTickets(host, tickets, category);
+                });
+            } else if (showReady) {
+                Button undo = button("Geri al", Color.rgb(238, 246, 255), BLUE);
+                a.addView(undo, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
+                undo.setOnClickListener(v -> updateKitchen(id, "preparing", category));
+            } else {
+                Button ready = button("Hazırdır", Color.rgb(234, 247, 241), GREEN);
+                a.addView(ready, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
+                ready.setOnClickListener(v -> updateKitchen(id, "ready", category));
+            }
+            c.addView(a);
+            host.addView(c);
+        }
+        if (clearedSetChanged) persistKitchenClearedTicketIds();
+        if (visible == 0) host.addView(empty(showReady ? "Hazırdır sifarişi yoxdur." : "Hazırlanır sifarişi yoxdur."));
+    }
+
+    private void updateKitchen(int ticketId,String status,String refreshCategory){JSONObject p=new JSONObject();try{p.put("ticket_id",ticketId);p.put("status",status);if("ready".equals(status))p.put("active_only",true);}catch(Exception ignored){}postJson("/api/mobile/kitchen/ticket/update",p,r->showKitchen(refreshCategory));}
+
+    private void logout() {
+        stopKitchenAutoRefresh();
+        stopKitchenBackgroundService(true);
+        currentBackAction = null;
+        sessionPassword = "";
+        canHall = false;
+        canKitchen = false;
+        canAdmin = false;
+        orderCarts.clear();
+        prefs.edit().putBoolean(KEY_AUTO_LOGIN, false).apply();
+        if (sessionToken.isEmpty()) { showLogin(); return; }
+        String old=sessionToken; sessionToken=""; io.execute(()->{try{request(serverBase,"/api/mobile/logout","POST",new JSONObject(),old);}catch(Exception ignored){}runOnUiThread(this::showLogin);});
+    }
+
+    private TextView empty(String msg) { TextView e=text(msg,14,MUTED,true);e.setGravity(Gravity.CENTER);e.setBackground(bg(CARD,16,BORDER));e.setPadding(dp(12),dp(20),dp(12),dp(20));return e; }
+    private void spacer(LinearLayout l,int h){View v=new View(this);l.addView(v,new LinearLayout.LayoutParams(1,dp(h)));}
+    private void toast(String s){runOnUiThread(()->Toast.makeText(this,s,Toast.LENGTH_LONG).show());}
+    private String urlEncode(String s){try{return java.net.URLEncoder.encode(s,"UTF-8");}catch(Exception e){return s;}}
+
+    private interface JsonConsumer { void accept(JSONObject object); }
+    private interface StringConsumer { void accept(String value); }
+
+    private void loadRentalJsonOnce(String path, JsonConsumer success, StringConsumer failure) {
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject r = request(serverBase, path, "GET", null, sessionToken);
+                if (r.has("ok") && !r.optBoolean("ok", true)) {
+                    String message = r.optString("message", r.optString("error", "İcarə məlumatı alınmadı."));
+                    throw new Exception(message);
+                }
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    success.accept(r);
+                });
+            } catch (Exception ex) {
+                String message = ex.getMessage() == null ? "Bağlantı xətası" : ex.getMessage();
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    if (message.contains("401") || message.toLowerCase(Locale.ROOT).contains("sessiya")) {
+                        sessionToken = "";
+                        toast("Sessiya bitib. Yenidən daxil olun.");
+                        showLogin();
+                    } else if (failure != null) {
+                        failure.accept(message);
+                    } else {
+                        toast(message);
+                    }
+                });
+            }
+        });
+    }
+
+    private void loadRentalJson(String path, int retries, JsonConsumer success, StringConsumer failure) {
+        setBusy(true);
+        loadRentalJsonAttempt(path, Math.max(0, retries), success, failure);
+    }
+
+    private void loadRentalJsonAttempt(String path, int retries, JsonConsumer success, StringConsumer failure) {
+        io.execute(() -> {
+            try {
+                JSONObject r = request(serverBase, path, "GET", null, sessionToken);
+                if (r.has("ok") && !r.optBoolean("ok", true)) {
+                    String message = r.optString("message", r.optString("error", "İcarə məlumatı alınmadı."));
+                    throw new Exception(message);
+                }
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    success.accept(r);
+                });
+            } catch (Exception ex) {
+                String message = ex.getMessage() == null ? "Bağlantı xətası" : ex.getMessage();
+                if (retries > 0 && !(message.contains("401") || message.toLowerCase(Locale.ROOT).contains("sessiya"))) {
+                    kitchenRefreshHandler.postDelayed(() -> loadRentalJsonAttempt(path, retries - 1, success, failure), 900L);
+                    return;
+                }
+                runOnUiThread(() -> {
+                    setBusy(false);
+                    if (message.contains("401") || message.toLowerCase(Locale.ROOT).contains("sessiya")) {
+                        sessionToken = "";
+                        toast("Sessiya bitib. Yenidən daxil olun.");
+                        showLogin();
+                    } else if (failure != null) {
+                        failure.accept(message);
+                    } else {
+                        toast(message);
+                    }
+                });
+            }
+        });
+    }
+
+    private void loadJson(String path, JsonConsumer success) {
+        setBusy(true); io.execute(()->{try{JSONObject r=request(serverBase,path,"GET",null,sessionToken);runOnUiThread(()->success.accept(r));}catch(Exception ex){handleApiError(ex);}finally{setBusy(false);}});
+    }
+    private void postJson(String path, JSONObject payload, JsonConsumer success) {
+        setBusy(true); io.execute(()->{try{JSONObject r=request(serverBase,path,"POST",payload,sessionToken);runOnUiThread(()->success.accept(r));}catch(Exception ex){handleApiError(ex);}finally{setBusy(false);}});
+    }
+    private void postJson(String path, JSONObject payload, JsonConsumer success, java.util.function.Consumer<Exception> failure) {
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject r = request(serverBase, path, "POST", payload, sessionToken);
+                runOnUiThread(() -> success.accept(r));
+            } catch (Exception ex) {
+                if (failure != null) runOnUiThread(() -> failure.accept(ex));
+                else handleApiError(ex);
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+    private void handleApiError(Exception ex){String m=ex.getMessage()==null?"Bağlantı xətası":ex.getMessage();if(m.contains("401")||m.toLowerCase(Locale.ROOT).contains("sessiya")){sessionToken="";runOnUiThread(()->{toast("Sessiya bitib. Yenidən daxil olun.");showLogin();});}else showError(ex);}
+    private void showError(Exception ex){toast(ex.getMessage()==null?ex.toString():ex.getMessage());}
+
+    private JSONObject request(String base, String path, String method, JSONObject payload, String token) throws Exception {
+        URL url=new URL(base+path); HttpURLConnection c=(HttpURLConnection)url.openConnection(); c.setConnectTimeout(7000);c.setReadTimeout(25000);c.setRequestMethod(method);c.setRequestProperty("Accept","application/json"); if(token!=null&&!token.isEmpty())c.setRequestProperty("X-Session-Token",token);
+        if(payload!=null&&method.equals("POST")){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");byte[] bytes=payload.toString().getBytes(StandardCharsets.UTF_8);try(OutputStream os=c.getOutputStream()){os.write(bytes);}}
+        int code=c.getResponseCode();InputStream is=(code>=200&&code<300)?c.getInputStream():c.getErrorStream();StringBuilder sb=new StringBuilder();if(is!=null)try(BufferedReader br=new BufferedReader(new InputStreamReader(is,StandardCharsets.UTF_8))){String line;while((line=br.readLine())!=null)sb.append(line);}String raw=sb.toString();JSONObject obj=raw.isEmpty()?new JSONObject():new JSONObject(raw);if(code<200||code>=300){String err=obj.optString("error","HTTP "+code);throw new Exception(code+": "+err);}return obj;
+    }
+
+    private static class OrderCartItem {
+        final String barcode;
+        String name;
+        double price;
+        int qty;
+
+        OrderCartItem(String barcode, String name, double price, int qty) {
+            this.barcode = barcode == null ? "" : barcode;
+            this.name = name == null ? "" : name;
+            this.price = price;
+            this.qty = qty;
+        }
+    }
+
+    private static class SimpleTextWatcher implements android.text.TextWatcher {
+        private final Runnable action; SimpleTextWatcher(Runnable action){this.action=action;}
+        public void beforeTextChanged(CharSequence s,int start,int count,int after){}
+        public void onTextChanged(CharSequence s,int start,int before,int count){action.run();}
+        public void afterTextChanged(android.text.Editable s){}
+    }
+}

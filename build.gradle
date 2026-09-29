@@ -1,3 +1,46 @@
 plugins {
-    id 'com.android.application' version '8.7.3' apply false
+    id 'com.android.application'
+}
+
+android {
+    namespace 'az.marakana.mobile'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'az.marakana.mobile'
+        minSdk 26
+        targetSdk 35
+        versionCode 122
+        versionName '3.4.86-native-v122'
+    }
+
+    signingConfigs {
+        release {
+            def ksPath = System.getenv("MARAKANA_KEYSTORE_PATH")
+            if (ksPath != null && !ksPath.isEmpty()) {
+                storeFile file(ksPath)
+                storePassword System.getenv("MARAKANA_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("MARAKANA_KEY_ALIAS")
+                keyPassword System.getenv("MARAKANA_KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+    implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
 }

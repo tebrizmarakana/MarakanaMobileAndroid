@@ -1,7 +1,7 @@
-# Marakana Mobile v121 — Yeni hesab konsolsuz / Sat-İcarə zamanı konsol
+# Marakana Mobile v122 — Hesab Satışı növləri / Online e-mail guard
 
-- `versionCode 121`
-- `versionName 3.4.85-native-v121`
+- `versionCode 122`
+- `versionName 3.4.85-native-v122`
 
 ## Dəyişikliklər
 - `Yeni hesab yarat` formasından Konsol seçimi çıxarıldı. Yeni hesab stokda `Satılmayıb` kimi konsolsuz yaradılır.
