@@ -112,7 +112,8 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
     // v120: Hazırdır göndəriləndə üstündən xətt çəkilmiş/silinmiş məhsullar PC-yə hazır cavab kimi göndərilmir; yalnız aktiv məhsullar hazır sayılır.
-    // v121: Yeni hesabda konsol seçimi yoxdur; konsol yalnız Sat / İcarə ver axınında seçilir. Offline adı Universal PS4 oldu.
+    // v122: Hesab növləri Online / Universal PS4 / Universal PS5 oldu; eyni e-mail üzrə Online artıq varsa yeni hesabda Online seçimi gizlənir.
+    // v122: Yeni hesabda konsol seçimi yoxdur; konsol yalnız Sat / İcarə ver axınında seçilir. Offline adı Universal PS4 oldu.
     // v118: Mətbəx sifarişində terminaldan çıxarılan və ya azaldılan məhsullar üstündən xətt çəkilmiş göstərilir.
 // v117: Hesablar axtarışında yazılan e-mail Yeni hesab yarat formasına avtomatik ötürülür.
     // v116: Hesablar bölməsində istifadəçinin sabitlədiyi hesab ID-ləri lokal saxlanılır.
@@ -122,6 +123,7 @@ public class MainActivity extends Activity {
     private static final String[] ACCOUNT_SALES_SECTIONS = {"accounts", "sold", "unsold", "rental", "customers", "settings"};
     private JSONArray accountSalesGameChoices = new JSONArray();
     private JSONArray accountSalesCustomerChoices = new JSONArray();
+    private JSONArray accountSalesOnlineEmails = new JSONArray();
     // v111: Müştəri detalında hesab düzəlişindən sonra eyni səhifəyə qayıtmaq üçün kontekst.
     private JSONObject accountSalesCustomerDetailContext = null;
 
@@ -3470,6 +3472,8 @@ public class MainActivity extends Activity {
             JSONArray customerChoices = result.optJSONArray("customers");
             accountSalesGameChoices = gameChoices == null ? new JSONArray() : gameChoices;
             accountSalesCustomerChoices = customerChoices == null ? new JSONArray() : customerChoices;
+            JSONArray onlineEmails = result.optJSONArray("online_emails");
+            accountSalesOnlineEmails = onlineEmails == null ? new JSONArray() : onlineEmails;
             JSONObject finalSettings = settings;
             add.setEnabled(true);
             add.setOnClickListener(v -> {
@@ -4827,7 +4831,7 @@ public class MainActivity extends Activity {
         EditText secretCodeField = null;
         if (editing) {
             // Məxfi kod bu konkret hesab sətrinə/ID-yə aiddir. Eyni e-maildəki başqa
-            // Online / Universal / Universal PS4 və kopyalanmış hesabların koduna toxunmur.
+            // Online / Universal PS4 / Universal PS5 və kopyalanmış hesabların koduna toxunmur.
             secretCodeField = accountField(body, "Məxfi kod", "Məsələn: şifrə və ya giriş kodu", record.optString("secret_code", ""), InputType.TYPE_CLASS_TEXT);
         }
         // Lambda daxilində istifadə olunduğu üçün final istinad saxlayırıq.
@@ -4841,10 +4845,12 @@ public class MainActivity extends Activity {
             JSONArray loadedCustomers = result.optJSONArray("customers");
             accountSalesGameChoices = loadedGames == null ? new JSONArray() : loadedGames;
             accountSalesCustomerChoices = loadedCustomers == null ? new JSONArray() : loadedCustomers;
+            JSONArray onlineEmails = result.optJSONArray("online_emails");
+            accountSalesOnlineEmails = onlineEmails == null ? new JSONArray() : onlineEmails;
         });
 
         if (!editing) {
-            TextView note = text("Hesab növlərini seçəndə hər Online / Universal / Universal PS4 üçün Məxfi kod ayrıca yazılır. Kodlar bir-birindən müstəqildir və boş qala bilər. Konsol Sat və ya İcarə ver zamanı seçilir.", 12, MUTED, false);
+            TextView note = text("Hesab növlərini seçəndə hər Online / Universal PS4 / Universal PS5 üçün Məxfi kod ayrıca yazılır. Kodlar bir-birindən müstəqildir və boş qala bilər. Konsol Sat və ya İcarə ver zamanı seçilir.", 12, MUTED, false);
             note.setPadding(dp(4), dp(4), dp(4), dp(10));
             body.addView(note);
 
@@ -4861,7 +4867,8 @@ public class MainActivity extends Activity {
 
         String editingAccountType = record.optString("account_type", "Online");
         if ("Offline".equalsIgnoreCase(editingAccountType)) editingAccountType = "Universal PS4";
-        Spinner type = accountSpinnerField(body, "Növ *", new String[]{"Online", "Universal", "Universal PS4"}, editingAccountType);
+        if ("Universal".equalsIgnoreCase(editingAccountType)) editingAccountType = "Universal PS5";
+        Spinner type = accountSpinnerField(body, "Növ *", new String[]{"Online", "Universal PS4", "Universal PS5"}, editingAccountType);
         EditText customer = accountField(body, "Ad soyad", "Kliklə müştəri seç və ya axtar", record.optString("customer_name", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         EditText phone = accountField(body, "Telefon", "0705603030", record.optString("phone", ""), InputType.TYPE_CLASS_PHONE);
         customer.setFocusable(false);
@@ -4992,6 +4999,16 @@ public class MainActivity extends Activity {
         });
     }
 
+    private boolean accountSalesEmailHasOnline(String email) {
+        String target = email == null ? "" : email.trim();
+        if (target.isEmpty()) return false;
+        for (int i = 0; i < accountSalesOnlineEmails.length(); i++) {
+            String existing = accountSalesOnlineEmails.optString(i, "").trim();
+            if (!existing.isEmpty() && existing.equalsIgnoreCase(target)) return true;
+        }
+        return false;
+    }
+
     private void showAccountSalesCreateTypeDialog(String gameName, String email, String price, String sourceSection) {
         String game = gameName == null ? "" : gameName.trim();
         String mail = email == null ? "" : email.trim();
@@ -5009,9 +5026,10 @@ public class MainActivity extends Activity {
             return;
         }
 
-        final String[] types = {"Online", "Universal", "Universal PS4"};
+        final String[] types = {"Online", "Universal PS4", "Universal PS5"};
         final CheckBox[] checks = new CheckBox[types.length];
         final EditText[] secretFields = new EditText[types.length];
+        final boolean onlineAlreadyExists = accountSalesEmailHasOnline(mail);
 
         ScrollView dialogScroll = new ScrollView(this);
         LinearLayout box = new LinearLayout(this);
@@ -5021,13 +5039,20 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         TextView info = text(
-                "Hər seçilən hesab növünün Məxfi kodu ayrıdır. İstəsən boş saxlaya bilərsən.",
+                onlineAlreadyExists
+                        ? "Bu e-mail üçün Online hesab artıq yaradılıb. Universal PS4 və ya Universal PS5 seçə bilərsən."
+                        : "Hər seçilən hesab növünün Məxfi kodu ayrıdır. İstəsən boş saxlaya bilərsən.",
                 13, MUTED, false);
         info.setPadding(0, 0, 0, dp(10));
         box.addView(info);
 
         for (int i = 0; i < types.length; i++) {
             final int index = i;
+            if (onlineAlreadyExists && "Online".equals(types[i])) {
+                checks[i] = null;
+                secretFields[i] = null;
+                continue;
+            }
             CheckBox check = new CheckBox(this);
             check.setText(types[i]);
             check.setTextSize(15);
@@ -5066,8 +5091,8 @@ public class MainActivity extends Activity {
             String firstSelectedSecret = "";
             boolean firstSecretSet = false;
             for (int i = 0; i < types.length; i++) {
-                if (!checks[i].isChecked()) continue;
-                String value = secretFields[i].getText().toString().trim();
+                if (checks[i] == null || !checks[i].isChecked()) continue;
+                String value = secretFields[i] == null ? "" : secretFields[i].getText().toString().trim();
                 selectedTypes.put(types[i]);
                 try { secretCodes.put(types[i], value); } catch (Exception ignored) {}
                 if (!firstSecretSet) {
@@ -5372,6 +5397,8 @@ public class MainActivity extends Activity {
             loadAccountSalesJson("/overview?section=settings", result -> {
                 JSONArray loadedGames = result.optJSONArray("game_names");
                 accountSalesGameChoices = loadedGames == null ? new JSONArray() : loadedGames;
+                JSONArray onlineEmails = result.optJSONArray("online_emails");
+                accountSalesOnlineEmails = onlineEmails == null ? new JSONArray() : onlineEmails;
                 renderHolder[0].run();
             });
         });
