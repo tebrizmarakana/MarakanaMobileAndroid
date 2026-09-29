@@ -1,0 +1,8 @@
+Marakana Mobile v125 - SAME EMAIL ONLINE GAME LOCK
+
+PASS - Eyni e-mail üzrə Online hesab varsa yeni hesab formasında oyun sahəsi Online hesabın oyun/Bundle siyahısına kilidlənir.
+PASS - Kilidli vəziyyətdə oyun picker açılmır və fərqli oyun seçilə bilmir.
+PASS - Universal PS4 / Universal PS5 yaradılarkən game_name və game_ids Online hesabdan götürülür.
+PASS - Online hesab olmayan e-mail üçün oyun/Bundle seçimi əvvəlki kimi sərbəstdir.
+PASS - Online seçimi mövcud e-mail üçün əvvəlki kimi gizli qalır.
+PASS - versionCode 125 / versionName 3.4.89-native-v125.

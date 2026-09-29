@@ -113,6 +113,7 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
     // v120: Hazırdır göndəriləndə üstündən xətt çəkilmiş/silinmiş məhsullar PC-yə hazır cavab kimi göndərilmir; yalnız aktiv məhsullar hazır sayılır.
     // v123: Hesab Satışı axtarış mətni bölmələr arasında saxlanılır; Düzənlə / Sat / İcarə ver sonrası istifadəçi gəldiyi bölmədə qalır.
+    // v125: Eyni e-mail üzrə Online artıq varsa yeni Universal PS4/PS5 hesabları Online hesabın eyni oyun/Bundle siyahısına kilidlənir; fərqli oyun seçilə bilmir.
     // v124: Sat əməliyyatında Universal PS4 -> PS4, Universal PS5 -> PS5 avtomatik/fiks; Online manual qalır. Konsol seçimindən PS4/PS5 kombinə seçimi çıxarıldı.
     // v122: Hesab növləri Online / Universal PS4 / Universal PS5 oldu; eyni e-mail üzrə Online artıq varsa yeni hesabda Online seçimi gizlənir.
     // v122: Yeni hesabda konsol seçimi yoxdur; konsol yalnız Sat / İcarə ver axınında seçilir. Offline adı Universal PS4 oldu.
@@ -126,6 +127,8 @@ public class MainActivity extends Activity {
     private JSONArray accountSalesGameChoices = new JSONArray();
     private JSONArray accountSalesCustomerChoices = new JSONArray();
     private JSONArray accountSalesOnlineEmails = new JSONArray();
+    // v125: Online hesabın e-mail -> oyun/Bundle məlumatı; yeni Universal variantlarda oyun mənbəyi budur.
+    private JSONArray accountSalesOnlineAccounts = new JSONArray();
     // v123: Hesab Satışı bölmələri arasında istifadəçi özü silməyənədək axtarış mətni qorunur.
     private String accountSalesSearchQuery = "";
     // v123: Düzənlə / Sat / İcarə ver əməliyyatlarından sonra dəqiq gəlinən bölməyə qayıtmaq üçün son aktiv bölmə.
@@ -3498,6 +3501,8 @@ public class MainActivity extends Activity {
             accountSalesCustomerChoices = customerChoices == null ? new JSONArray() : customerChoices;
             JSONArray onlineEmails = result.optJSONArray("online_emails");
             accountSalesOnlineEmails = onlineEmails == null ? new JSONArray() : onlineEmails;
+            JSONArray onlineAccounts = result.optJSONArray("online_accounts");
+            accountSalesOnlineAccounts = onlineAccounts == null ? new JSONArray() : onlineAccounts;
             JSONObject finalSettings = settings;
             add.setEnabled(true);
             add.setOnClickListener(v -> {
@@ -4878,6 +4883,40 @@ public class MainActivity extends Activity {
         final EditText secretCode = secretCodeField;
         EditText price = accountField(body, "Qiymət *", editing ? "35.50" : "", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
 
+        // v125: Eyni e-mail üzrə Online artıq varsa yeni Universal PS4/PS5 variantlarının
+        // oyun seçimi həmin Online hesabın oyun/Bundle siyahısına məcburi bağlanır.
+        TextView onlineGameLockNote = text("", 12, MUTED, false);
+        onlineGameLockNote.setPadding(dp(4), 0, dp(4), dp(8));
+        onlineGameLockNote.setVisibility(View.GONE);
+        if (!editing) body.addView(onlineGameLockNote);
+        final boolean[] onlineGameLocked = {false};
+        final String[] gameBeforeOnlineLock = {game.getText().toString()};
+        Runnable syncOnlineGameLock = () -> {
+            if (editing) return;
+            JSONObject linkedOnline = accountSalesOnlineAccountForEmail(email.getText().toString());
+            String linkedGame = linkedOnline == null ? "" : linkedOnline.optString("game_name", "").trim();
+            if (!linkedGame.isEmpty()) {
+                if (!onlineGameLocked[0]) gameBeforeOnlineLock[0] = game.getText().toString();
+                onlineGameLocked[0] = true;
+                if (!linkedGame.equals(game.getText().toString())) game.setText(linkedGame);
+                game.setClickable(false);
+                game.setAlpha(0.68f);
+                onlineGameLockNote.setText("Bu e-mailin Online hesabı bu oyun/Bundle ilə yaradılıb. Universal PS4 və Universal PS5 də eyni oyunla yaradılacaq: " + linkedGame);
+                onlineGameLockNote.setVisibility(View.VISIBLE);
+            } else {
+                if (onlineGameLocked[0]) {
+                    onlineGameLocked[0] = false;
+                    game.setText(gameBeforeOnlineLock[0] == null ? "" : gameBeforeOnlineLock[0]);
+                }
+                game.setClickable(true);
+                game.setAlpha(1f);
+                onlineGameLockNote.setVisibility(View.GONE);
+            }
+        };
+        if (!editing) {
+            email.addTextChangedListener(new SimpleTextWatcher(syncOnlineGameLock));
+        }
+
         // Server həmişə əsas mənbədir: form açılarkən köhnə in-memory oyun/müştəri siyahısını yenilə.
         loadAccountSalesJson("/overview?section=settings", result -> {
             JSONArray loadedGames = result.optJSONArray("game_names");
@@ -4886,6 +4925,9 @@ public class MainActivity extends Activity {
             accountSalesCustomerChoices = loadedCustomers == null ? new JSONArray() : loadedCustomers;
             JSONArray onlineEmails = result.optJSONArray("online_emails");
             accountSalesOnlineEmails = onlineEmails == null ? new JSONArray() : onlineEmails;
+            JSONArray onlineAccounts = result.optJSONArray("online_accounts");
+            accountSalesOnlineAccounts = onlineAccounts == null ? new JSONArray() : onlineAccounts;
+            if (!editing) syncOnlineGameLock.run();
         });
 
         if (!editing) {
@@ -5056,10 +5098,27 @@ public class MainActivity extends Activity {
         return false;
     }
 
+    // v125: Online hesabın dəqiq oyun/Bundle məlumatını e-mail üzrə tapır.
+    private JSONObject accountSalesOnlineAccountForEmail(String email) {
+        String target = email == null ? "" : email.trim();
+        if (target.isEmpty()) return null;
+        for (int i = 0; i < accountSalesOnlineAccounts.length(); i++) {
+            JSONObject row = accountSalesOnlineAccounts.optJSONObject(i);
+            if (row == null) continue;
+            String existing = row.optString("email", "").trim();
+            if (!existing.isEmpty() && existing.equalsIgnoreCase(target)) return row;
+        }
+        return null;
+    }
+
     private void showAccountSalesCreateTypeDialog(String gameName, String email, String price, String sourceSection) {
-        String game = gameName == null ? "" : gameName.trim();
+        String requestedGame = gameName == null ? "" : gameName.trim();
         String mail = email == null ? "" : email.trim();
         String amount = price == null ? "" : price.trim();
+        JSONObject linkedOnlineAccount = accountSalesOnlineAccountForEmail(mail);
+        String lockedOnlineGame = linkedOnlineAccount == null ? "" : linkedOnlineAccount.optString("game_name", "").trim();
+        final String game = lockedOnlineGame.isEmpty() ? requestedGame : lockedOnlineGame;
+        final JSONArray lockedOnlineGameIds = linkedOnlineAccount == null ? null : linkedOnlineAccount.optJSONArray("game_ids");
         if (game.isEmpty()) {
             toast("Oyunun adını daxil et.");
             return;
@@ -5087,7 +5146,7 @@ public class MainActivity extends Activity {
 
         TextView info = text(
                 onlineAlreadyExists
-                        ? "Bu e-mail üçün Online hesab artıq yaradılıb. Universal PS4 və ya Universal PS5 seçə bilərsən."
+                        ? "Bu e-mail üçün Online hesab artıq yaradılıb. Universal PS4 və ya Universal PS5 seçə bilərsən. Oyun seçimi Online hesabla eynidir və dəyişdirilə bilməz: " + game
                         : "Hər seçilən hesab növünün Məxfi kodu ayrıdır. İstəsən boş saxlaya bilərsən.",
                 13, MUTED, false);
         info.setPadding(0, 0, 0, dp(10));
@@ -5155,7 +5214,9 @@ public class MainActivity extends Activity {
             JSONObject payload = new JSONObject();
             try {
                 payload.put("game_name", game);
-                payload.put("game_ids", accountSalesGameIdsForSelection(game));
+                payload.put("game_ids", (lockedOnlineGameIds != null && lockedOnlineGameIds.length() > 0)
+                        ? lockedOnlineGameIds
+                        : accountSalesGameIdsForSelection(game));
                 payload.put("email", mail);
                 // v106 server hər növ üçün secret_codes xəritəsini istifadə edir.
                 // secret_code yalnız geriyə uyğunluq üçündür; birdən çox növ seçiləndə
@@ -5446,6 +5507,8 @@ public class MainActivity extends Activity {
                 accountSalesGameChoices = loadedGames == null ? new JSONArray() : loadedGames;
                 JSONArray onlineEmails = result.optJSONArray("online_emails");
                 accountSalesOnlineEmails = onlineEmails == null ? new JSONArray() : onlineEmails;
+                JSONArray onlineAccounts = result.optJSONArray("online_accounts");
+                accountSalesOnlineAccounts = onlineAccounts == null ? new JSONArray() : onlineAccounts;
                 renderHolder[0].run();
             });
         });

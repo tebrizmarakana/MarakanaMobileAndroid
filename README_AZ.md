@@ -16,3 +16,5 @@
 - Hesab Satışı > Sat: Universal PS4 -> PS4 avtomatik və fiks; Universal PS5 -> PS5 avtomatik və fiks. Online hesabda konsol seçimi manual qalır.
 - Konsol seçimlərindən PS4/PS5 kombinə variantı çıxarıldı; yalnız PS4 və PS5 qaldı.
 
+
+- v125: Eyni e-mail üzrə Online hesab varsa Universal PS4/PS5 yeni hesabları Online hesabın eyni oyun/Bundle siyahısına kilidlənir; fərqli oyun seçmək olmur.
