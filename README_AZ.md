@@ -1,3 +1,5 @@
+Marakana Mobile v127
+
 # Marakana Mobile v122 — Hesab Satışı növləri / Online e-mail guard
 
 - `versionCode 122`

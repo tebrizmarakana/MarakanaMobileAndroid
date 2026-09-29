@@ -6568,15 +6568,21 @@ public class MainActivity extends Activity {
         host.removeAllViews();
         String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         double total = 0;
+        double totalSalary = 0;
         for (int i = 0; i < records.length(); i++) {
             JSONObject r = records.optJSONObject(i);
             if (r == null) continue;
             total += r.optDouble("total_debt", 0);
+            if ("İşçi".equals(category)) totalSalary += r.optDouble("salary_balance", 0);
         }
 
         LinearLayout sum = card();
         sum.addView(text("Toplam borc", 13, MUTED, true));
         sum.addView(text(money(total), 22, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
+        if ("İşçi".equals(category)) {
+            TextView salaryTotal = text("Toplanan aylıq əmək haqqı: " + money(totalSalary), 14, BLUE, true);
+            sum.addView(salaryTotal, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
+        }
         host.addView(sum);
 
         for (int i = 0; i < records.length(); i++) {
@@ -6597,6 +6603,11 @@ public class MainActivity extends Activity {
 
             c.addView(text(r.optString("phone", "") + "  •  ID: " + r.optString("id", "") + "  •  " + r.optString("last_change", ""), 12, MUTED, true),
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36)));
+            if ("İşçi".equals(category)) {
+                double salaryBalance = r.optDouble("salary_balance", 0);
+                TextView salaryLine = text("Aylıq əmək haqqı: " + money(salaryBalance), 13, salaryBalance > 0.001 ? BLUE : MUTED, true);
+                c.addView(salaryLine, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
+            }
 
             c.setClickable(true);
             c.setFocusable(true);
@@ -6612,6 +6623,12 @@ public class MainActivity extends Activity {
 
         TextView balance = text("Cari borc: " + money(record.optDouble("total_debt", 0)), 15, GREEN, true);
         box.addView(balance, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
+        final boolean employeeCategory = "İşçi".equals(category);
+        final double salaryBalance = record.optDouble("salary_balance", 0);
+        if (employeeCategory) {
+            TextView salary = text("Toplanan aylıq əmək haqqı: " + money(salaryBalance), 15, salaryBalance > 0.001 ? BLUE : MUTED, true);
+            box.addView(salary, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
+        }
 
         Button increase = button("Borcu artır", Color.rgb(234, 247, 241), GREEN);
         box.addView(increase, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
@@ -6620,6 +6637,16 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams decreaseLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
         decreaseLp.setMargins(0, dp(8), 0, 0);
         box.addView(decrease, decreaseLp);
+
+        Button monthlySalary = null;
+        if (employeeCategory) {
+            monthlySalary = button("Aylıq əmək haqqı", Color.rgb(238, 246, 255), BLUE);
+            LinearLayout.LayoutParams salaryLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+            salaryLp.setMargins(0, dp(8), 0, 0);
+            box.addView(monthlySalary, salaryLp);
+            monthlySalary.setEnabled(salaryBalance > 0.001);
+            monthlySalary.setAlpha(salaryBalance > 0.001 ? 1f : 0.45f);
+        }
 
         Button history = button("Tarixçə", Color.rgb(238, 246, 255), BLUE);
         LinearLayout.LayoutParams historyLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
@@ -6650,6 +6677,13 @@ public class MainActivity extends Activity {
             dialog.dismiss();
             debtChangeDialog(category, record, "decrease");
         });
+        if (monthlySalary != null) {
+            final Button salaryButton = monthlySalary;
+            salaryButton.setOnClickListener(v -> {
+                dialog.dismiss();
+                showDebtMonthlySalaryDialog(record);
+            });
+        }
         history.setOnClickListener(v -> {
             dialog.dismiss();
             showDebtHistory(record);
@@ -6662,6 +6696,68 @@ public class MainActivity extends Activity {
             dialog.dismiss();
             callDebtContact(record);
         });
+        dialog.show();
+    }
+
+    private void showDebtMonthlySalaryDialog(JSONObject record) {
+        double salary = Math.max(0, record.optDouble("salary_balance", 0));
+        double debt = Math.max(0, record.optDouble("total_debt", 0));
+        if (salary <= 0.001) {
+            toast("Bu işçinin toplanan aylıq əmək haqqı yoxdur.");
+            return;
+        }
+        double debtOffset = Math.min(salary, debt);
+        double employeeAmount = Math.max(0, salary - debtOffset);
+        double debtRemaining = Math.max(0, debt - debtOffset);
+        String employeeName = record.optString("full_name", "İşçi").trim();
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(6), dp(18), dp(4));
+        box.addView(text("Toplanan aylıq əmək haqqı: " + money(salary), 15, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
+        box.addView(text("Borc Dəftərində borc: " + money(debt), 14, MUTED, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
+        box.addView(text("Borca silinəcək: " + money(debtOffset), 14, ORANGE, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
+        box.addView(text("İşçiyə qalan: " + money(employeeAmount), 14, GREEN, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
+        box.addView(text("Hesablaşmadan sonra borc: " + money(debtRemaining), 14, MUTED, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
+        TextView note = text("Bu əməliyyat Borc Dəftərindəki aylıq əmək haqqı balansını bağlayır. Kassa Hesabatından avtomatik pul çıxılmır.", 12, MUTED, false);
+        note.setPadding(0, dp(6), 0, 0);
+        box.addView(note);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(employeeName + " • Aylıq əmək haqqı")
+                .setView(box)
+                .setNegativeButton("Ləğv", null)
+                .setPositiveButton("Əmək haqqını ver", null)
+                .create();
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+            JSONObject payload = new JSONObject();
+            try {
+                payload.put("debt_id", record.optString("id", ""));
+                payload.put("expected_salary", salary);
+                payload.put("note", "Mobil aylıq əmək haqqı hesablaşması");
+            } catch (Exception ignored) {}
+            postJson("/api/mobile/debt/salary/settle", payload, result -> {
+                dialog.dismiss();
+                JSONObject settlement = result.optJSONObject("settlement");
+                double paidSalary = settlement == null ? salary : settlement.optDouble("salary", salary);
+                double paidDebt = settlement == null ? debtOffset : settlement.optDouble("debt_deduction", debtOffset);
+                double paidEmployee = settlement == null ? employeeAmount : settlement.optDouble("employee_amount", employeeAmount);
+                double leftDebt = settlement == null ? debtRemaining : settlement.optDouble("debt_remaining", debtRemaining);
+                new AlertDialog.Builder(this)
+                        .setTitle("Aylıq əmək haqqı verildi")
+                        .setMessage("Toplanan əmək haqqı: " + money(paidSalary)
+                                + "\nBorca silindi: " + money(paidDebt)
+                                + "\nİşçiyə qalan: " + money(paidEmployee)
+                                + "\nQalan borc: " + money(leftDebt))
+                        .setPositiveButton("Bağla", null)
+                        .setOnDismissListener(x -> showDebt("İşçi"))
+                        .show();
+            }, ex -> {
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                handleApiError(ex);
+            });
+        }));
         dialog.show();
     }
 
