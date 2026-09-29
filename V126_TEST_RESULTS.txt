@@ -1,0 +1,9 @@
+Marakana Mobile v126 - SAME EMAIL ONLINE GAME HARD LOCK
+
+PASS - Eyni e-mail üzrə Online hesab tapıldıqda oyun sahəsi avtomatik Online hesabın oyun/Bundle məlumatı ilə doldurulur.
+PASS - Kilid aktiv olanda oyun sahəsi disabled olur və picker açıla bilmir.
+PASS - Klaviatura ilə silmək/yazmaq/paste etmək bloklanır.
+PASS - Long-press selection/copy-paste redaktə yolu bloklanır.
+PASS - E-mail başqa hesaba dəyişəndə oyun sahəsi yenidən aktivləşir və picker işləyir.
+PASS - Server v1.0.92 səviyyəsində eyni oyun məcburiyyəti ayrıca qorunur.
+PASS - versionCode 126 / versionName 3.4.90-native-v126.

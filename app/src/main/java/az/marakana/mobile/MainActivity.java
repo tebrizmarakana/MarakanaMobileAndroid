@@ -113,7 +113,7 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
     // v120: Hazırdır göndəriləndə üstündən xətt çəkilmiş/silinmiş məhsullar PC-yə hazır cavab kimi göndərilmir; yalnız aktiv məhsullar hazır sayılır.
     // v123: Hesab Satışı axtarış mətni bölmələr arasında saxlanılır; Düzənlə / Sat / İcarə ver sonrası istifadəçi gəldiyi bölmədə qalır.
-    // v125: Eyni e-mail üzrə Online artıq varsa yeni Universal PS4/PS5 hesabları Online hesabın eyni oyun/Bundle siyahısına kilidlənir; fərqli oyun seçilə bilmir.
+    // v126: Eyni e-mail üzrə Online hesab tapıldıqda oyun sahəsi tam read-only/disabled kilidlənir; silmək, yazmaq və fərqli oyun seçmək mümkün deyil.\n    // v125: Eyni e-mail üzrə Online artıq varsa yeni Universal PS4/PS5 hesabları Online hesabın eyni oyun/Bundle siyahısına kilidlənir; fərqli oyun seçilə bilmir.
     // v124: Sat əməliyyatında Universal PS4 -> PS4, Universal PS5 -> PS5 avtomatik/fiks; Online manual qalır. Konsol seçimindən PS4/PS5 kombinə seçimi çıxarıldı.
     // v122: Hesab növləri Online / Universal PS4 / Universal PS5 oldu; eyni e-mail üzrə Online artıq varsa yeni hesabda Online seçimi gizlənir.
     // v122: Yeni hesabda konsol seçimi yoxdur; konsol yalnız Sat / İcarə ver axınında seçilir. Offline adı Universal PS4 oldu.
@@ -4865,7 +4865,14 @@ public class MainActivity extends Activity {
         LinearLayout body = scrollBody(sv);
 
         EditText game = accountField(body, "Oyunun adı *", "Kliklə seç və ya axtar", editing ? record.optString("game_name", "") : "", InputType.TYPE_CLASS_TEXT);
+        // v126: Oyun xanası klaviatura ilə redaktə olunmur; oyun yalnız picker-dən seçilir.
+        // Eyni e-mail üzrə Online hesab tapılıb kilid aktivləşəndə isə field tam deaktiv edilir.
+        game.setKeyListener(null);
+        game.setLongClickable(false);
+        game.setTextIsSelectable(false);
+        game.setCursorVisible(false);
         game.setFocusable(false);
+        game.setFocusableInTouchMode(false);
         game.setClickable(true);
         game.setOnClickListener(v -> showAccountSalesGamePicker(game, true));
         String initialEmail = editing
@@ -4899,7 +4906,13 @@ public class MainActivity extends Activity {
                 if (!onlineGameLocked[0]) gameBeforeOnlineLock[0] = game.getText().toString();
                 onlineGameLocked[0] = true;
                 if (!linkedGame.equals(game.getText().toString())) game.setText(linkedGame);
+                // v126: Online oyunu tapıldıqda oyun sahəsi tam kilidlənir:
+                // toxunmaq, silmək, paste etmək və picker açmaq mümkün deyil.
                 game.setClickable(false);
+                game.setEnabled(false);
+                game.setLongClickable(false);
+                game.setTextIsSelectable(false);
+                game.setCursorVisible(false);
                 game.setAlpha(0.68f);
                 onlineGameLockNote.setText("Bu e-mailin Online hesabı bu oyun/Bundle ilə yaradılıb. Universal PS4 və Universal PS5 də eyni oyunla yaradılacaq: " + linkedGame);
                 onlineGameLockNote.setVisibility(View.VISIBLE);
@@ -4908,7 +4921,13 @@ public class MainActivity extends Activity {
                     onlineGameLocked[0] = false;
                     game.setText(gameBeforeOnlineLock[0] == null ? "" : gameBeforeOnlineLock[0]);
                 }
+                game.setEnabled(true);
+                game.setFocusable(false);
+                game.setFocusableInTouchMode(false);
                 game.setClickable(true);
+                game.setLongClickable(false);
+                game.setTextIsSelectable(false);
+                game.setCursorVisible(false);
                 game.setAlpha(1f);
                 onlineGameLockNote.setVisibility(View.GONE);
             }
