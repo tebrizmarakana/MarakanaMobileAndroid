@@ -6564,16 +6564,19 @@ public class MainActivity extends Activity {
         return tab;
     }
 
-    // v129: PC həm AZN, həm də integer cents göndərir. Cents varsa onu əsas götürürük.
-    // Beləliklə qalıq əmək haqqısı serverdə müsbət olduğu halda Android-də 0.00 görünmür.
+    // v130: PC həm AZN, həm də integer cents göndərir. İki sahə arasında uyğunsuzluq
+    // yaranarsa müsbət olan real dəyəri itirməmək üçün hər ikisini oxuyub böyük olanı götürürük.
+    // Normal cavabda bu iki dəyər eynidir; bu fallback köhnə/stale 0 sahəsinə qarşıdır.
     private double debtSalaryBalance(JSONObject record) {
         if (record == null) return 0;
+        double azn = Math.max(0, record.optDouble("salary_balance", 0));
+        double cents = 0;
         try {
             if (record.has("salary_balance_cents") && !record.isNull("salary_balance_cents")) {
-                return Math.max(0, record.optLong("salary_balance_cents", 0) / 100.0);
+                cents = Math.max(0, record.optLong("salary_balance_cents", 0) / 100.0);
             }
         } catch (Exception ignored) {}
-        return Math.max(0, record.optDouble("salary_balance", 0));
+        return Math.max(azn, cents);
     }
 
     private void renderDebtRecords(LinearLayout host, JSONArray records, String category, String query) {
