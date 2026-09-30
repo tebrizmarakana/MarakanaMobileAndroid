@@ -6564,6 +6564,18 @@ public class MainActivity extends Activity {
         return tab;
     }
 
+    // v129: PC həm AZN, həm də integer cents göndərir. Cents varsa onu əsas götürürük.
+    // Beləliklə qalıq əmək haqqısı serverdə müsbət olduğu halda Android-də 0.00 görünmür.
+    private double debtSalaryBalance(JSONObject record) {
+        if (record == null) return 0;
+        try {
+            if (record.has("salary_balance_cents") && !record.isNull("salary_balance_cents")) {
+                return Math.max(0, record.optLong("salary_balance_cents", 0) / 100.0);
+            }
+        } catch (Exception ignored) {}
+        return Math.max(0, record.optDouble("salary_balance", 0));
+    }
+
     private void renderDebtRecords(LinearLayout host, JSONArray records, String category, String query) {
         host.removeAllViews();
         String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
@@ -6573,7 +6585,7 @@ public class MainActivity extends Activity {
             JSONObject r = records.optJSONObject(i);
             if (r == null) continue;
             total += r.optDouble("total_debt", 0);
-            if ("İşçi".equals(category)) totalSalary += r.optDouble("salary_balance", 0);
+            if ("İşçi".equals(category)) totalSalary += debtSalaryBalance(r);
         }
 
         LinearLayout sum = card();
@@ -6604,7 +6616,7 @@ public class MainActivity extends Activity {
             c.addView(text(r.optString("phone", "") + "  •  ID: " + r.optString("id", "") + "  •  " + r.optString("last_change", ""), 12, MUTED, true),
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36)));
             if ("İşçi".equals(category)) {
-                double salaryBalance = r.optDouble("salary_balance", 0);
+                double salaryBalance = debtSalaryBalance(r);
                 TextView salaryLine = text("Qalıq əmək haqqı: " + money(salaryBalance), 13, salaryBalance > 0.001 ? BLUE : MUTED, true);
                 c.addView(salaryLine, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
             }
@@ -6624,7 +6636,7 @@ public class MainActivity extends Activity {
         TextView balance = text("Cari borc: " + money(record.optDouble("total_debt", 0)), 15, GREEN, true);
         box.addView(balance, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
         final boolean employeeCategory = "İşçi".equals(category);
-        final double salaryBalance = record.optDouble("salary_balance", 0);
+        final double salaryBalance = debtSalaryBalance(record);
         if (employeeCategory) {
             TextView salary = text("Qalıq əmək haqqı: " + money(salaryBalance), 15, salaryBalance > 0.001 ? BLUE : MUTED, true);
             box.addView(salary, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
@@ -6700,7 +6712,7 @@ public class MainActivity extends Activity {
     }
 
     private void showDebtMonthlySalaryDialog(JSONObject record) {
-        final double salary = Math.max(0, record.optDouble("salary_balance", 0));
+        final double salary = debtSalaryBalance(record);
         final double debt = Math.max(0, record.optDouble("total_debt", 0));
         if (salary <= 0.001) {
             toast("Bu işçinin qalıq əmək haqqı yoxdur.");
@@ -6745,10 +6757,6 @@ public class MainActivity extends Activity {
             }
         };
         takeAmount.addTextChangedListener(new SimpleTextWatcher(updateRemaining));
-
-        TextView note = text("Borc varsa əvvəlcə avtomatik qalıq əmək haqqından silinir. Götürmədiyiniz hissə qalıq əmək haqqı kimi saxlanılır.", 12, MUTED, false);
-        note.setPadding(0, dp(6), 0, 0);
-        box.addView(note);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle(employeeName + " • Əmək haqqı ver")
