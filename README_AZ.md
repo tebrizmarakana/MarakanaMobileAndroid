@@ -1,4 +1,12 @@
-Marakana Mobile v127
+Marakana Mobile v128
+
+## v128 — Borc Dəftəri / hissə-hissə əmək haqqı
+- İşçi kartında Qalıq əmək haqqı görünür.
+- İşçi əməliyyatlarında Əmək haqqı ver düyməsi var.
+- Borc varsa əvvəl maaşdan avtomatik silinir.
+- Götürüləcək əmək haqqı ayrıca yazılır; götürülməyən hissə Qalıq əmək haqqı kimi qalır.
+- Mobile server payload expected_salary, expected_debt və employee_amount göndərir.
+- `versionCode 128`, `versionName 3.4.92-native-v128`.
 
 # Marakana Mobile v122 — Hesab Satışı növləri / Online e-mail guard
 

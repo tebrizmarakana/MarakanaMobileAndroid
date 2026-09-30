@@ -6580,7 +6580,7 @@ public class MainActivity extends Activity {
         sum.addView(text("Toplam borc", 13, MUTED, true));
         sum.addView(text(money(total), 22, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40)));
         if ("İşçi".equals(category)) {
-            TextView salaryTotal = text("Toplanan aylıq əmək haqqı: " + money(totalSalary), 14, BLUE, true);
+            TextView salaryTotal = text("Toplam qalıq əmək haqqı: " + money(totalSalary), 14, BLUE, true);
             sum.addView(salaryTotal, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
         }
         host.addView(sum);
@@ -6605,7 +6605,7 @@ public class MainActivity extends Activity {
                     new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(36)));
             if ("İşçi".equals(category)) {
                 double salaryBalance = r.optDouble("salary_balance", 0);
-                TextView salaryLine = text("Aylıq əmək haqqı: " + money(salaryBalance), 13, salaryBalance > 0.001 ? BLUE : MUTED, true);
+                TextView salaryLine = text("Qalıq əmək haqqı: " + money(salaryBalance), 13, salaryBalance > 0.001 ? BLUE : MUTED, true);
                 c.addView(salaryLine, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
             }
 
@@ -6626,7 +6626,7 @@ public class MainActivity extends Activity {
         final boolean employeeCategory = "İşçi".equals(category);
         final double salaryBalance = record.optDouble("salary_balance", 0);
         if (employeeCategory) {
-            TextView salary = text("Toplanan aylıq əmək haqqı: " + money(salaryBalance), 15, salaryBalance > 0.001 ? BLUE : MUTED, true);
+            TextView salary = text("Qalıq əmək haqqı: " + money(salaryBalance), 15, salaryBalance > 0.001 ? BLUE : MUTED, true);
             box.addView(salary, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
         }
 
@@ -6640,7 +6640,7 @@ public class MainActivity extends Activity {
 
         Button monthlySalary = null;
         if (employeeCategory) {
-            monthlySalary = button("Aylıq əmək haqqı", Color.rgb(238, 246, 255), BLUE);
+            monthlySalary = button("Əmək haqqı ver", Color.rgb(238, 246, 255), BLUE);
             LinearLayout.LayoutParams salaryLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
             salaryLp.setMargins(0, dp(8), 0, 0);
             box.addView(monthlySalary, salaryLp);
@@ -6700,55 +6700,110 @@ public class MainActivity extends Activity {
     }
 
     private void showDebtMonthlySalaryDialog(JSONObject record) {
-        double salary = Math.max(0, record.optDouble("salary_balance", 0));
-        double debt = Math.max(0, record.optDouble("total_debt", 0));
+        final double salary = Math.max(0, record.optDouble("salary_balance", 0));
+        final double debt = Math.max(0, record.optDouble("total_debt", 0));
         if (salary <= 0.001) {
-            toast("Bu işçinin toplanan aylıq əmək haqqı yoxdur.");
+            toast("Bu işçinin qalıq əmək haqqı yoxdur.");
             return;
         }
-        double debtOffset = Math.min(salary, debt);
-        double employeeAmount = Math.max(0, salary - debtOffset);
-        double debtRemaining = Math.max(0, debt - debtOffset);
-        String employeeName = record.optString("full_name", "İşçi").trim();
+        final double debtOffset = Math.min(salary, debt);
+        final double availableAfterDebt = Math.max(0, salary - debtOffset);
+        final double debtRemaining = Math.max(0, debt - debtOffset);
+        final String employeeName = record.optString("full_name", "İşçi").trim();
 
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(18), dp(6), dp(18), dp(4));
-        box.addView(text("Toplanan aylıq əmək haqqı: " + money(salary), 15, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
+        box.addView(text("Toplam qalıq əmək haqqı: " + money(salary), 15, TEXT, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
         box.addView(text("Borc Dəftərində borc: " + money(debt), 14, MUTED, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
         box.addView(text("Borca silinəcək: " + money(debtOffset), 14, ORANGE, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
-        box.addView(text("İşçiyə qalan: " + money(employeeAmount), 14, GREEN, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
-        box.addView(text("Hesablaşmadan sonra borc: " + money(debtRemaining), 14, MUTED, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
-        TextView note = text("Bu əməliyyat Borc Dəftərindəki aylıq əmək haqqı balansını bağlayır. Kassa Hesabatından avtomatik pul çıxılmır.", 12, MUTED, false);
+        box.addView(text("Qalıq əmək haqqı: " + money(availableAfterDebt), 14, BLUE, true), new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(38)));
+
+        EditText takeAmount = input("Götürüləcək əmək haqqı");
+        takeAmount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        LinearLayout.LayoutParams takeLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
+        takeLp.setMargins(0, dp(8), 0, 0);
+        box.addView(takeAmount, takeLp);
+
+        TextView remainingPreview = text("Yadda saxlandıqdan sonra qalıq əmək haqqı: " + money(availableAfterDebt), 13, BLUE, true);
+        LinearLayout.LayoutParams remainingLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(40));
+        remainingLp.setMargins(0, dp(4), 0, 0);
+        box.addView(remainingPreview, remainingLp);
+
+        Runnable updateRemaining = () -> {
+            double amount = 0;
+            try {
+                String raw = takeAmount.getText() == null ? "" : takeAmount.getText().toString().trim().replace(',', '.');
+                if (!raw.isEmpty()) amount = Math.max(0, Double.parseDouble(raw));
+            } catch (Exception ignored) {}
+            double remaining = Math.max(0, availableAfterDebt - Math.min(amount, availableAfterDebt));
+            remainingPreview.setText("Yadda saxlandıqdan sonra qalıq əmək haqqı: " + money(remaining));
+            if (amount > availableAfterDebt + 0.001) {
+                takeAmount.setBackground(bg(Color.rgb(255, 247, 247), 14, Color.rgb(239, 68, 68)));
+            } else {
+                takeAmount.setBackground(bg(CARD, 14, BORDER));
+            }
+        };
+        takeAmount.addTextChangedListener(new SimpleTextWatcher(updateRemaining));
+
+        TextView note = text("Borc varsa əvvəlcə avtomatik qalıq əmək haqqından silinir. Götürmədiyiniz hissə qalıq əmək haqqı kimi saxlanılır.", 12, MUTED, false);
         note.setPadding(0, dp(6), 0, 0);
         box.addView(note);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(employeeName + " • Aylıq əmək haqqı")
+                .setTitle(employeeName + " • Əmək haqqı ver")
                 .setView(box)
                 .setNegativeButton("Ləğv", null)
-                .setPositiveButton("Əmək haqqını ver", null)
+                .setPositiveButton("Yadda saxla", null)
                 .create();
         dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            double employeeAmount = 0;
+            try {
+                String raw = takeAmount.getText() == null ? "" : takeAmount.getText().toString().trim().replace(',', '.');
+                if (!raw.isEmpty()) employeeAmount = Math.max(0, Double.parseDouble(raw));
+            } catch (Exception ignored) {}
+
+            if (employeeAmount > availableAfterDebt + 0.001) {
+                toast("Götürüləcək əmək haqqı " + money(availableAfterDebt) + "-dən çox ola bilməz.");
+                takeAmount.requestFocus();
+                takeAmount.selectAll();
+                return;
+            }
+            if (employeeAmount <= 0.001 && debtOffset <= 0.001) {
+                toast("Götürüləcək əmək haqqını daxil edin.");
+                takeAmount.requestFocus();
+                return;
+            }
+
+            final double requestedEmployeeAmount = Math.round(employeeAmount * 100.0) / 100.0;
+            final double salaryRemaining = Math.max(0, availableAfterDebt - requestedEmployeeAmount);
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
             JSONObject payload = new JSONObject();
             try {
                 payload.put("debt_id", record.optString("id", ""));
                 payload.put("expected_salary", salary);
-                payload.put("note", "Mobil aylıq əmək haqqı hesablaşması");
+                payload.put("expected_debt", debt);
+                payload.put("employee_amount", requestedEmployeeAmount);
+                payload.put("note", "Mobil əmək haqqı hesablaşması • Toplam qalıq: " + money(salary)
+                        + " • Borca avtomatik silindi: " + money(debtOffset)
+                        + " • Götürüldü: " + money(requestedEmployeeAmount)
+                        + " • Qalıq əmək haqqı: " + money(salaryRemaining)
+                        + " • Qalan borc: " + money(debtRemaining));
             } catch (Exception ignored) {}
             postJson("/api/mobile/debt/salary/settle", payload, result -> {
                 dialog.dismiss();
                 JSONObject settlement = result.optJSONObject("settlement");
-                double paidSalary = settlement == null ? salary : settlement.optDouble("salary", salary);
+                double beforeSalary = settlement == null ? salary : settlement.optDouble("salary", salary);
                 double paidDebt = settlement == null ? debtOffset : settlement.optDouble("debt_deduction", debtOffset);
-                double paidEmployee = settlement == null ? employeeAmount : settlement.optDouble("employee_amount", employeeAmount);
+                double paidEmployee = settlement == null ? requestedEmployeeAmount : settlement.optDouble("employee_amount", requestedEmployeeAmount);
+                double leftSalary = settlement == null ? salaryRemaining : settlement.optDouble("salary_remaining", salaryRemaining);
                 double leftDebt = settlement == null ? debtRemaining : settlement.optDouble("debt_remaining", debtRemaining);
                 new AlertDialog.Builder(this)
-                        .setTitle("Aylıq əmək haqqı verildi")
-                        .setMessage("Toplanan əmək haqqı: " + money(paidSalary)
+                        .setTitle("Əmək haqqı yadda saxlanıldı")
+                        .setMessage("Toplam qalıq əmək haqqı: " + money(beforeSalary)
                                 + "\nBorca silindi: " + money(paidDebt)
-                                + "\nİşçiyə qalan: " + money(paidEmployee)
+                                + "\nGötürüldü: " + money(paidEmployee)
+                                + "\nQalıq əmək haqqı: " + money(leftSalary)
                                 + "\nQalan borc: " + money(leftDebt))
                         .setPositiveButton("Bağla", null)
                         .setOnDismissListener(x -> showDebt("İşçi"))
