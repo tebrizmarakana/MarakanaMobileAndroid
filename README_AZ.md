@@ -1,6 +1,6 @@
-# Marakana Mobile v132 — Local IP + Online filiallar
+# Marakana Mobile v133 — Local IP + Online filiallar
 
-## v132 dəyişiklikləri
+## v133 dəyişiklikləri
 - Mövcud **Local IP** sistemi saxlanılıb; əvvəlki QR/manual server bağlantısı dəyişdirilməyib.
 - Yeni **Online filiallar** rejimi əlavə edilib. Online rejim `https://marakana.az` üzərindəki Marakana Remote Gateway ilə işləyir.
 - Bağlantı ayarında `Local IP` və `Online filiallar` seçimi var.
@@ -11,7 +11,7 @@
 - Mətbəx background servisi də Local/Online bağlantı rejimini dəstəkləyir.
 - Local və Online parametrləri ayrı saxlanır; Online rejim Local IP ünvanını silmir.
 - Routerdə port açmaq və statik public IP tələb olunmur; filial PC-si serverə outbound HTTPS sorğuları edir.
-- `versionCode 132`, `versionName 3.4.94-native-v132`.
+- `versionCode 133`, `versionName 3.4.95-native-v133`.
 
 ## Online rejim üçün tələb olunanlar
 1. `Marakana Remote Gateway v1.1.0` WordPress pluginini `marakana.az` saytında aktiv edin.

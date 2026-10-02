@@ -88,6 +88,9 @@ import java.time.LocalDate;
  * communicates with the existing Marakana PC mobile REST API.
  */
 public class MainActivity extends Activity {
+    // v133: Online Remote Gateway rejimində mətbəx fon xidməti foreground mətbəx ekranı ilə eyni anda serveri yükləməsin.
+    public static volatile boolean APP_FOREGROUND = false;
+    public static volatile boolean KITCHEN_FOREGROUND_ACTIVE = false;
     private static final String PREFS = "marakana_native_mobile";
     private static final String KEY_SERVER = "server_base";
     private static final String KEY_LOCAL_SERVER = "local_server_base";
@@ -121,6 +124,7 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_SITE = "account_sales_site";
     private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
+    // v133: Online relay sürət düzəlişi: login rol probe-ları cache ilə ləğv edildi, mətbəx foreground/background dublikat poll dayandırıldı, result long-poll istifadə olunur.
     // v132: Eyni APK həm Local IP, həm də marakana.az Remote Gateway üzərindən filial seçimi ilə işləyir.
     // v120: Hazırdır göndəriləndə üstündən xətt çəkilmiş/silinmiş məhsullar PC-yə hazır cavab kimi göndərilmir; yalnız aktiv məhsullar hazır sayılır.
     // v123: Hesab Satışı axtarış mətni bölmələr arasında saxlanılır; Düzənlə / Sat / İcarə ver sonrası istifadəçi gəldiyi bölmədə qalır.
@@ -178,6 +182,8 @@ public class MainActivity extends Activity {
     // v50: Kamera/deep-link/HTTP Admin QR keçidini login tamamlanana qədər saxla.
     private String pendingAdminApprovalDeepLink = "";
     private final Map<String, LinkedHashMap<String, OrderCartItem>> orderCarts = new HashMap<>();
+    // v133: Login ekranındakı /users cavabından rol icazələrini cache edib Online girişdə əlavə login/logout probe-larını aradan qaldırırıq.
+    private final Map<String, Set<String>> loginUserRoleCache = new java.util.concurrent.ConcurrentHashMap<>();
     private FrameLayout activeOrderCartButton = null;
     private String activeOrderCartStation = "";
     private Runnable currentBackAction = null;
@@ -198,6 +204,7 @@ public class MainActivity extends Activity {
     private static final String[] DEBT_CATEGORIES = {"İşçi", "Müştəri", "Firma"};
     private static final String[] KITCHEN_CATEGORIES = {"Hazırlanır", "Hazırdır"};
     private static final long KITCHEN_LIVE_REFRESH_MS = 750L;
+    private static final long ONLINE_KITCHEN_LIVE_REFRESH_MS = 2500L;
     private final Handler kitchenRefreshHandler = new Handler(Looper.getMainLooper());
     private Runnable kitchenRefreshRunnable = null;
     private boolean kitchenAutoRefreshActive = false;
@@ -348,6 +355,7 @@ public class MainActivity extends Activity {
     protected void onStart() {
         super.onStart();
         activityVisible = true;
+        APP_FOREGROUND = true;
         if (kitchenAutoRefreshActive && kitchenRefreshRunnable != null) {
             kitchenRefreshHandler.removeCallbacks(kitchenRefreshRunnable);
             kitchenRefreshHandler.post(kitchenRefreshRunnable);
@@ -357,6 +365,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onStop() {
         activityVisible = false;
+        APP_FOREGROUND = false;
         if (kitchenRefreshRunnable != null) {
             kitchenRefreshHandler.removeCallbacks(kitchenRefreshRunnable);
         }
@@ -365,6 +374,8 @@ public class MainActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        APP_FOREGROUND = false;
+        KITCHEN_FOREGROUND_ACTIVE = false;
         stopKitchenAutoRefresh();
         super.onDestroy();
         io.shutdownNow();
@@ -1360,7 +1371,18 @@ public class MainActivity extends Activity {
                 roleLabel = result.optString("role_label", role);
                 adminDebtOnly = role.equals("admin") && debtOnly && preferredRole.equals("admin");
                 sessionPassword = p;
-                refreshAllowedMobileRoles(username, p, role);
+                if (isOnlineMode()) {
+                    // Online rejimdə hər rol üçün ayrıca login+logout etmək 4-5 relay dövrəsi yaradırdı.
+                    // Login ekranında artıq alınmış /users rol cache-i ilə menyunu dərhal açırıq.
+                    if (!applyCachedAllowedMobileRoles(username, role)) {
+                        canHall = "hall".equals(role);
+                        canKitchen = "kitchen".equals(role);
+                        canAdmin = "admin".equals(role);
+                        refreshAllowedMobileRolesOnlineAsync(username, role);
+                    }
+                } else {
+                    refreshAllowedMobileRoles(username, p, role);
+                }
                 SharedPreferences.Editor editor = prefs.edit()
                         .putString(KEY_USERNAME, username)
                         .putString(KEY_ROLE, role)
@@ -1387,6 +1409,51 @@ public class MainActivity extends Activity {
                 }
             } finally {
                 setBusy(false);
+            }
+        });
+    }
+
+    private void cacheAllowedRolesFromUsers(JSONArray usersArray) {
+        if (usersArray == null) return;
+        for (int i = 0; i < usersArray.length(); i++) {
+            JSONObject item = usersArray.optJSONObject(i);
+            if (item == null) continue;
+            String user = item.optString("username", "").trim().toLowerCase(Locale.ROOT);
+            if (user.isEmpty()) continue;
+            Set<String> roles = new HashSet<>();
+            JSONArray roleArray = item.optJSONArray("roles");
+            if (roleArray != null) {
+                for (int j = 0; j < roleArray.length(); j++) {
+                    String r = roleArray.optString(j, "").trim().toLowerCase(Locale.ROOT);
+                    if (r.equals("hall") || r.equals("kitchen") || r.equals("admin")) roles.add(r);
+                }
+            }
+            loginUserRoleCache.put(user, roles);
+        }
+    }
+
+    private boolean applyCachedAllowedMobileRoles(String loginUser, String activeRole) {
+        String key = loginUser == null ? "" : loginUser.trim().toLowerCase(Locale.ROOT);
+        Set<String> roles = loginUserRoleCache.get(key);
+        if (roles == null) return false;
+        canHall = roles.contains("hall");
+        canKitchen = roles.contains("kitchen");
+        canAdmin = roles.contains("admin");
+        String active = activeRole == null ? "" : activeRole.trim().toLowerCase(Locale.ROOT);
+        if (active.equals("hall")) canHall = true;
+        else if (active.equals("kitchen")) canKitchen = true;
+        else if (active.equals("admin")) canAdmin = true;
+        return true;
+    }
+
+    private void refreshAllowedMobileRolesOnlineAsync(String loginUser, String activeRole) {
+        io.execute(() -> {
+            try {
+                JSONObject usersResult = request(serverBase, "/api/mobile/users", "GET", null, "");
+                cacheAllowedRolesFromUsers(usersResult.optJSONArray("users"));
+                runOnUiThread(() -> applyCachedAllowedMobileRoles(loginUser, activeRole));
+            } catch (Exception ignored) {
+                // Aktiv rol işləyirsə giriş dayandırılmır; siyahı növbəti girişdə yenilənəcək.
             }
         });
     }
@@ -1461,9 +1528,20 @@ public class MainActivity extends Activity {
                 roleLabel = result.optString("role_label", role);
                 adminDebtOnly = "admin".equals(role) && debtOnly;
                 prefs.edit().putString(KEY_ROLE, role).putBoolean(KEY_ADMIN_DEBT_ONLY, adminDebtOnly).apply();
+                if (isOnlineMode()) applyCachedAllowedMobileRoles(username, role);
                 if (!oldToken.isEmpty() && !oldToken.equals(newToken)) {
-                    try { request(serverBase, "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
-                    catch (Exception ignored) {}
+                    if (isOnlineMode()) {
+                        final String tokenToLogout = oldToken;
+                        final String baseToLogout = serverBase;
+                        // v133: Online rol keçidində köhnə sessiyanın logout cavabını gözləmək UI-ni lazımsız gecikdirirdi.
+                        io.execute(() -> {
+                            try { request(baseToLogout, "/api/mobile/logout", "POST", new JSONObject(), tokenToLogout); }
+                            catch (Exception ignored) {}
+                        });
+                    } else {
+                        try { request(serverBase, "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
+                        catch (Exception ignored) {}
+                    }
                 }
                 runOnUiThread(() -> {
                     updateKitchenBackgroundServiceForRole(passwordToUse);
@@ -2062,6 +2140,7 @@ public class MainActivity extends Activity {
             try {
                 JSONObject usersResult = request(serverBase, "/api/mobile/users", "GET", null, "");
                 JSONArray usersArray = usersResult.optJSONArray("users");
+                cacheAllowedRolesFromUsers(usersArray);
                 List<String> loadedUsernames = new ArrayList<>();
                 List<String> loadedLabels = new ArrayList<>();
                 if (usersArray != null) {
@@ -7494,6 +7573,7 @@ public class MainActivity extends Activity {
     private void startKitchenAutoRefresh(LinearLayout recordsHost, String category) {
         stopKitchenAutoRefresh();
         kitchenAutoRefreshActive = true;
+        KITCHEN_FOREGROUND_ACTIVE = true;
         kitchenLiveRecordsHost = recordsHost;
         kitchenLiveCategory = category;
         kitchenLastTicketsSignature = "";
@@ -7550,11 +7630,13 @@ public class MainActivity extends Activity {
         if (!activityVisible || !kitchenAutoRefreshActive || generation != kitchenRefreshGeneration) return;
         if (kitchenRefreshRunnable == null) return;
         kitchenRefreshHandler.removeCallbacks(kitchenRefreshRunnable);
-        kitchenRefreshHandler.postDelayed(kitchenRefreshRunnable, KITCHEN_LIVE_REFRESH_MS);
+        long refreshDelay = isOnlineMode() ? ONLINE_KITCHEN_LIVE_REFRESH_MS : KITCHEN_LIVE_REFRESH_MS;
+        kitchenRefreshHandler.postDelayed(kitchenRefreshRunnable, refreshDelay);
     }
 
     private void stopKitchenAutoRefresh() {
         kitchenAutoRefreshActive = false;
+        KITCHEN_FOREGROUND_ACTIVE = false;
         kitchenRefreshGeneration++;
         if (kitchenRefreshRunnable != null) {
             kitchenRefreshHandler.removeCallbacks(kitchenRefreshRunnable);
@@ -8086,7 +8168,9 @@ public class MainActivity extends Activity {
 
         long deadline = System.currentTimeMillis() + 30000L;
         while (System.currentTimeMillis() < deadline) {
-            JSONObject result = remoteGatewayCall("GET", REMOTE_GATEWAY_API + "/result?request_id=" + urlEncode(requestId), null, remoteToken, 12000);
+            long resultStartedAt = System.currentTimeMillis();
+            JSONObject result = remoteGatewayCall("GET", REMOTE_GATEWAY_API + "/result?request_id=" + urlEncode(requestId) + "&wait_ms=2500", null, remoteToken, 7000);
+            long resultElapsedMs = System.currentTimeMillis() - resultStartedAt;
             String status = result.optString("status", "pending").trim().toLowerCase(Locale.ROOT);
             if ("done".equals(status)) {
                 int httpCode = result.optInt("http_code", 200);
@@ -8101,7 +8185,8 @@ public class MainActivity extends Activity {
             if ("error".equals(status)) {
                 throw new Exception(result.optString("message", "Remote sorğu icra edilmədi."));
             }
-            try { Thread.sleep(180L); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new Exception("Remote sorğu dayandırıldı."); }
+            long pendingDelayMs = resultElapsedMs < 450L ? Math.max(80L, 450L - resultElapsedMs) : 80L;
+            try { Thread.sleep(pendingDelayMs); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new Exception("Remote sorğu dayandırıldı."); }
         }
         throw new Exception("Remote filial sorğusu vaxt aşımına düşdü.");
     }

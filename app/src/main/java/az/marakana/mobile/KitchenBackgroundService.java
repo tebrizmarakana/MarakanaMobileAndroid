@@ -60,6 +60,7 @@ public class KitchenBackgroundService extends Service {
     private static final String KEYSTORE_ALIAS = "marakana_mobile_login_key";
     private static final int SERVICE_NOTIFICATION_ID = 32001;
     private static final long POLL_DELAY_MS = 1000L;
+    private static final long ONLINE_POLL_DELAY_MS = 3000L;
     private static final long RETRY_DELAY_MS = 3000L;
 
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
@@ -120,12 +121,18 @@ public class KitchenBackgroundService extends Service {
             }
 
             try {
+                // v133: Online rejimdə mətbəx ekranı foreground-da canlı poll edirsə fon xidməti
+                // eyni endpoint-i paralel relay etməsin. Bu, shared host queue yükünü ciddi azaldır.
+                if (onlineMode && MainActivity.APP_FOREGROUND && MainActivity.KITCHEN_FOREGROUND_ACTIVE) {
+                    sleep(700L);
+                    continue;
+                }
                 if (sessionToken.isEmpty()) sessionToken = login(serverBase, username, password);
                 JSONObject result = request(serverBase, "/api/mobile/kitchen/tickets", "GET", null, sessionToken);
                 JSONArray tickets = result.optJSONArray("tickets");
                 if (tickets == null) tickets = new JSONArray();
                 processTickets(tickets);
-                sleep(POLL_DELAY_MS);
+                sleep(onlineMode ? ONLINE_POLL_DELAY_MS : POLL_DELAY_MS);
             } catch (Exception ex) {
                 String message = ex.getMessage() == null ? "" : ex.getMessage().toLowerCase(Locale.ROOT);
                 if (message.contains("401") || message.contains("sessiya") || message.contains("token")) {
@@ -428,7 +435,9 @@ public class KitchenBackgroundService extends Service {
         long deadline = System.currentTimeMillis() + 30000L;
         while (running && System.currentTimeMillis() < deadline) {
             String encoded = java.net.URLEncoder.encode(requestId, "UTF-8");
-            JSONObject result = remoteGatewayCall("GET", REMOTE_GATEWAY_API + "/result?request_id=" + encoded, null, remoteToken, 12000);
+            long resultStartedAt = System.currentTimeMillis();
+            JSONObject result = remoteGatewayCall("GET", REMOTE_GATEWAY_API + "/result?request_id=" + encoded + "&wait_ms=2500", null, remoteToken, 7000);
+            long resultElapsedMs = System.currentTimeMillis() - resultStartedAt;
             String status = result.optString("status", "pending").trim().toLowerCase(Locale.ROOT);
             if ("done".equals(status)) {
                 int httpCode = result.optInt("http_code", 200);
@@ -438,7 +447,7 @@ public class KitchenBackgroundService extends Service {
                 return body;
             }
             if ("error".equals(status)) throw new RuntimeException(result.optString("message", "Remote sorğu icra edilmədi."));
-            sleep(180L);
+            sleep(resultElapsedMs < 450L ? Math.max(80L, 450L - resultElapsedMs) : 80L);
         }
         throw new RuntimeException("Remote filial sorğusu vaxt aşımına düşdü.");
     }
