@@ -931,6 +931,7 @@ public class MainActivity extends Activity {
             addDrawerItem(panel, "Borc Dəftəri", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", true, () -> showDebt("İşçi")); });
             addDrawerItem(panel, "İcarə Paneli", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, () -> showRental("active")); });
             addDrawerItem(panel, "Hesab Satışı", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, () -> showAccountSales("accounts")); });
+            addDrawerItem(panel, "Mesaj qutusu", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, this::showBranchMessages); });
             addDrawerItem(panel, "Admin QR təsdiqi", () -> {
                 dismissNavigationMenuImmediate();
                 if ("admin".equals(role)) startAdminApprovalQrScanner();
@@ -3400,6 +3401,162 @@ public class MainActivity extends Activity {
             body.addView(cancel);
             cancel.setOnClickListener(v -> showAccountSales("accounts"));
         }
+    }
+
+    private void showBranchMessages() {
+        if (!canAdmin && !"admin".equals(role)) {
+            toast("Mesaj qutusu yalnız Admin üçün açıqdır.");
+            return;
+        }
+        currentBackAction = null;
+        clear();
+
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setPadding(dp(8), dp(10), dp(8), 0);
+        content.addView(shell, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        shell.addView(buildMainHeader("Mesaj qutusu", false, null));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        installGlobalDrawerSwipe(scroll);
+        addPullToRefreshContent(shell, scroll, this::showBranchMessages);
+        LinearLayout body = scrollBody(scroll);
+        body.setPadding(0, dp(4), 0, dp(92));
+        body.addView(text("Mesajlar yüklənir...", 14, MUTED, true));
+
+        loadJson("/api/mobile/messages", result -> renderBranchMessages(body, result));
+    }
+
+    private void renderBranchMessages(LinearLayout body, JSONObject result) {
+        body.removeAllViews();
+        boolean canSend = result.optBoolean("can_send", result.optBoolean("is_master", false));
+
+        Button send = button("＋ Yeni mesaj göndər", canSend ? BLUE : Color.rgb(230, 235, 240), canSend ? Color.WHITE : MUTED);
+        body.addView(send, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+        send.setOnClickListener(v -> {
+            if (!canSend) {
+                toast("Yeni mesaj göndərmək üçün Master Token bağlı PC-yə qoşulun.");
+                return;
+            }
+            composeBranchMessage();
+        });
+        spacer(body, 12);
+
+        JSONArray messages = result.optJSONArray("messages");
+        if (messages == null || messages.length() == 0) {
+            body.addView(empty("Mesaj yoxdur."));
+            return;
+        }
+
+        boolean masterView = result.optBoolean("is_master", false);
+        JSONArray branches = result.optJSONArray("branches");
+        for (int i = 0; i < messages.length(); i++) {
+            JSONObject row = messages.optJSONObject(i);
+            if (row == null) continue;
+
+            LinearLayout card = new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(dp(14), dp(13), dp(14), dp(13));
+            card.setBackground(bg(CARD, 16, BORDER));
+
+            String created = row.optString("created_at", "").trim();
+            if (!created.isEmpty()) card.addView(text(created, 12, MUTED, true));
+            TextView sender = text("Göndərən: Rəhbərlik", 13, MUTED, true);
+            card.addView(sender);
+            spacer(card, 7);
+
+            TextView message = text(row.optString("message", ""), 16, TEXT, false);
+            message.setGravity(Gravity.START);
+            message.setPadding(0, 0, 0, dp(4));
+            card.addView(message, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+            if (masterView) {
+                JSONArray acks = row.optJSONArray("acks");
+                Set<Integer> acceptedIds = new HashSet<>();
+                ArrayList<String> acceptedNames = new ArrayList<>();
+                if (acks != null) {
+                    for (int a = 0; a < acks.length(); a++) {
+                        JSONObject ack = acks.optJSONObject(a);
+                        if (ack == null) continue;
+                        int branchId = ack.optInt("branch_id", 0);
+                        if (branchId > 0) acceptedIds.add(branchId);
+                        String name = ack.optString("branch_name", "").trim();
+                        if (!name.isEmpty()) acceptedNames.add(name);
+                    }
+                }
+                ArrayList<String> waitingNames = new ArrayList<>();
+                if (branches != null) {
+                    for (int b = 0; b < branches.length(); b++) {
+                        JSONObject branch = branches.optJSONObject(b);
+                        if (branch == null) continue;
+                        int branchId = branch.optInt("id", 0);
+                        String name = branch.optString("name", "").trim();
+                        if (branchId > 0 && !acceptedIds.contains(branchId) && !name.isEmpty()) waitingNames.add(name);
+                    }
+                }
+                spacer(card, 8);
+                card.addView(text("Qəbul edən: " + (acceptedNames.isEmpty() ? "—" : String.join(", ", acceptedNames)), 12, GREEN, true));
+                card.addView(text("Gözləyən: " + (waitingNames.isEmpty() ? "—" : String.join(", ", waitingNames)), 12, MUTED, true));
+            } else {
+                spacer(card, 8);
+                boolean acknowledged = row.optBoolean("acknowledged", false);
+                card.addView(text(acknowledged ? "Status: Qəbul edildi" : "Status: Gözləyir", 12, acknowledged ? GREEN : Color.rgb(185, 121, 0), true));
+            }
+
+            LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            cardLp.setMargins(0, 0, 0, dp(10));
+            body.addView(card, cardLp);
+        }
+    }
+
+    private void composeBranchMessage() {
+        if (!canAdmin && !"admin".equals(role)) {
+            toast("Mesaj göndərmək yalnız Admin üçün açıqdır.");
+            return;
+        }
+        EditText field = new EditText(this);
+        field.setHint("Mesaj mətnini yazın");
+        field.setTextColor(TEXT);
+        field.setHintTextColor(Color.rgb(145, 159, 174));
+        field.setTextSize(16);
+        field.setMinLines(4);
+        field.setMaxLines(10);
+        field.setGravity(Gravity.TOP | Gravity.START);
+        field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+        field.setPadding(dp(14), dp(12), dp(14), dp(12));
+        field.setBackground(bg(CARD, 14, BORDER));
+
+        int pad = dp(18);
+        FrameLayout holder = new FrameLayout(this);
+        holder.setPadding(pad, dp(8), pad, 0);
+        holder.addView(field, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(150)));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Yeni mesaj")
+                .setView(holder)
+                .setNegativeButton("Ləğv", null)
+                .setPositiveButton("Göndər", null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String message = field.getText().toString().trim();
+            if (message.isEmpty()) {
+                toast("Mesaj mətnini yazın.");
+                return;
+            }
+            JSONObject payload = new JSONObject();
+            try { payload.put("message", message); } catch (Exception ignoredEx) {}
+            dialog.dismiss();
+            postJson("/api/mobile/messages", payload, result -> {
+                if (!result.optBoolean("ok", true)) {
+                    toast(result.optString("message", "Mesaj göndərilmədi."));
+                    return;
+                }
+                toast("Mesaj filiallara göndərildi.");
+                showBranchMessages();
+            });
+        }));
+        dialog.show();
     }
 
     private void showAccountSales(String requestedSection) {
