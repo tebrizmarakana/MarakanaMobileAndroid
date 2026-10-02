@@ -39,6 +39,14 @@ import javax.crypto.spec.GCMParameterSpec;
 public class KitchenBackgroundService extends Service {
     private static final String PREFS = "marakana_native_mobile";
     private static final String KEY_SERVER = "server_base";
+    private static final String KEY_LOCAL_SERVER = "local_server_base";
+    private static final String KEY_CONNECTION_MODE = "connection_mode";
+    private static final String CONNECTION_MODE_ONLINE = "online";
+    private static final String KEY_REMOTE_TOKEN_ENC = "remote_master_token_enc";
+    private static final String KEY_REMOTE_TOKEN_IV = "remote_master_token_iv";
+    private static final String KEY_REMOTE_BRANCH_ID = "remote_branch_id";
+    private static final String REMOTE_GATEWAY_BASE = "https://marakana.az";
+    private static final String REMOTE_GATEWAY_API = "/wp-json/marakana-remote/v1";
     private static final String KEY_USERNAME = "username";
     private static final String KEY_ROLE = "role";
     private static final String KEY_KITCHEN_BG_PASSWORD_ENC = "kitchen_bg_password_enc";
@@ -98,10 +106,15 @@ public class KitchenBackgroundService extends Service {
                 return;
             }
 
-            String serverBase = normalizeServerBase(prefs.getString(KEY_SERVER, ""));
+            boolean onlineMode = CONNECTION_MODE_ONLINE.equalsIgnoreCase(prefs.getString(KEY_CONNECTION_MODE, ""));
+            String serverBase = onlineMode ? REMOTE_GATEWAY_BASE : normalizeServerBase(prefs.getString(KEY_LOCAL_SERVER, prefs.getString(KEY_SERVER, "")));
             String username = prefs.getString(KEY_USERNAME, "").trim();
             String password = loadKitchenBackgroundPassword();
             if (serverBase.isEmpty() || username.isEmpty() || password.isEmpty()) {
+                sleep(RETRY_DELAY_MS);
+                continue;
+            }
+            if (onlineMode && (prefs.getInt(KEY_REMOTE_BRANCH_ID, 0) <= 0 || loadRemoteTokenSecurely().isEmpty())) {
                 sleep(RETRY_DELAY_MS);
                 continue;
             }
@@ -338,6 +351,25 @@ public class KitchenBackgroundService extends Service {
         }
     }
 
+    private String loadRemoteTokenSecurely() {
+        String enc = prefs.getString(KEY_REMOTE_TOKEN_ENC, "");
+        String iv = prefs.getString(KEY_REMOTE_TOKEN_IV, "");
+        if (enc.isEmpty() || iv.isEmpty()) return "";
+        try {
+            KeyStore keyStore = KeyStore.getInstance("AndroidKeyStore");
+            keyStore.load(null);
+            if (!keyStore.containsAlias(KEYSTORE_ALIAS)) return "";
+            SecretKey key = ((KeyStore.SecretKeyEntry) keyStore.getEntry(KEYSTORE_ALIAS, null)).getSecretKey();
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec spec = new GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP));
+            cipher.init(Cipher.DECRYPT_MODE, key, spec);
+            byte[] raw = cipher.doFinal(Base64.decode(enc, Base64.NO_WRAP));
+            return new String(raw, StandardCharsets.UTF_8).trim();
+        } catch (Exception ex) {
+            return "";
+        }
+    }
+
     private String normalizeServerBase(String raw) {
         String value = raw == null ? "" : raw.trim();
         if (value.isEmpty()) return "";
@@ -346,7 +378,72 @@ public class KitchenBackgroundService extends Service {
         return value;
     }
 
-    private JSONObject request(String serverBase, String path, String method, JSONObject payload, String token) throws Exception {
+    private JSONObject remoteGatewayCall(String method, String endpoint, JSONObject payload, String remoteToken, int readTimeoutMs) throws Exception {
+        HttpURLConnection connection = null;
+        try {
+            URL url = new URL(REMOTE_GATEWAY_BASE + endpoint);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod(method);
+            connection.setConnectTimeout(7000);
+            connection.setReadTimeout(Math.max(7000, readTimeoutMs));
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            connection.setRequestProperty("Authorization", "Bearer " + remoteToken);
+            connection.setRequestProperty("X-Marakana-Branch-Token", remoteToken);
+            connection.setRequestProperty("X-Marakana-Master-Token", remoteToken);
+            connection.setRequestProperty("Cache-Control", "no-cache");
+            if (payload != null && !"GET".equalsIgnoreCase(method)) {
+                connection.setDoOutput(true);
+                byte[] raw = payload.toString().getBytes(StandardCharsets.UTF_8);
+                try (OutputStream os = connection.getOutputStream()) { os.write(raw); }
+            }
+            int code = connection.getResponseCode();
+            InputStream stream = code >= 200 && code < 300 ? connection.getInputStream() : connection.getErrorStream();
+            String body = readAll(stream);
+            JSONObject obj = body.trim().isEmpty() ? new JSONObject() : new JSONObject(body);
+            if (code < 200 || code >= 300 || (obj.has("ok") && !obj.optBoolean("ok", true))) {
+                throw new RuntimeException(code + ": " + obj.optString("message", obj.optString("error", "HTTP " + code)));
+            }
+            return obj;
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    private JSONObject remoteMobileRequest(String path, String method, JSONObject payload, String sessionTokenForRequest) throws Exception {
+        String remoteToken = loadRemoteTokenSecurely();
+        int branchId = prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
+        if (remoteToken.isEmpty() || branchId <= 0) throw new RuntimeException("Online filial bağlantısı qurulmayıb.");
+
+        JSONObject envelope = new JSONObject();
+        envelope.put("branch_id", branchId);
+        envelope.put("method", method);
+        envelope.put("path", path);
+        envelope.put("session_token", sessionTokenForRequest == null ? "" : sessionTokenForRequest);
+        if (payload != null) envelope.put("payload", payload);
+        JSONObject queued = remoteGatewayCall("POST", REMOTE_GATEWAY_API + "/request", envelope, remoteToken, 12000);
+        String requestId = queued.optString("request_id", "").trim();
+        if (requestId.isEmpty()) throw new RuntimeException("Remote sorğu nömrəsi alınmadı.");
+
+        long deadline = System.currentTimeMillis() + 30000L;
+        while (running && System.currentTimeMillis() < deadline) {
+            String encoded = java.net.URLEncoder.encode(requestId, "UTF-8");
+            JSONObject result = remoteGatewayCall("GET", REMOTE_GATEWAY_API + "/result?request_id=" + encoded, null, remoteToken, 12000);
+            String status = result.optString("status", "pending").trim().toLowerCase(Locale.ROOT);
+            if ("done".equals(status)) {
+                int httpCode = result.optInt("http_code", 200);
+                JSONObject body = result.optJSONObject("body");
+                if (body == null) body = new JSONObject();
+                if (httpCode < 200 || httpCode >= 300) throw new RuntimeException(httpCode + ": " + body.optString("error", body.optString("message", "HTTP " + httpCode)));
+                return body;
+            }
+            if ("error".equals(status)) throw new RuntimeException(result.optString("message", "Remote sorğu icra edilmədi."));
+            sleep(180L);
+        }
+        throw new RuntimeException("Remote filial sorğusu vaxt aşımına düşdü.");
+    }
+
+    private JSONObject directRequest(String serverBase, String path, String method, JSONObject payload, String token) throws Exception {
         HttpURLConnection connection = null;
         try {
             URL url = new URL(serverBase + path);
@@ -372,6 +469,14 @@ public class KitchenBackgroundService extends Service {
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    private JSONObject request(String serverBase, String path, String method, JSONObject payload, String token) throws Exception {
+        boolean onlineMode = CONNECTION_MODE_ONLINE.equalsIgnoreCase(prefs.getString(KEY_CONNECTION_MODE, ""));
+        if (onlineMode && path != null && path.startsWith("/api/mobile/")) {
+            return remoteMobileRequest(path, method, payload, token);
+        }
+        return directRequest(serverBase, path, method, payload, token);
     }
 
     private String readAll(InputStream input) throws Exception {

@@ -90,6 +90,16 @@ import java.time.LocalDate;
 public class MainActivity extends Activity {
     private static final String PREFS = "marakana_native_mobile";
     private static final String KEY_SERVER = "server_base";
+    private static final String KEY_LOCAL_SERVER = "local_server_base";
+    private static final String KEY_CONNECTION_MODE = "connection_mode";
+    private static final String CONNECTION_MODE_LOCAL = "local";
+    private static final String CONNECTION_MODE_ONLINE = "online";
+    private static final String KEY_REMOTE_TOKEN_ENC = "remote_master_token_enc";
+    private static final String KEY_REMOTE_TOKEN_IV = "remote_master_token_iv";
+    private static final String KEY_REMOTE_BRANCH_ID = "remote_branch_id";
+    private static final String KEY_REMOTE_BRANCH_NAME = "remote_branch_name";
+    private static final String REMOTE_GATEWAY_BASE = "https://marakana.az";
+    private static final String REMOTE_GATEWAY_API = "/wp-json/marakana-remote/v1";
     private static final String KEY_USERNAME = "username";
     private static final String KEY_ROLE = "role";
     private static final String KEY_ADMIN_DEBT_ONLY = "admin_debt_only";
@@ -111,6 +121,7 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_SITE = "account_sales_site";
     private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
+    // v132: Eyni APK həm Local IP, həm də marakana.az Remote Gateway üzərindən filial seçimi ilə işləyir.
     // v120: Hazırdır göndəriləndə üstündən xətt çəkilmiş/silinmiş məhsullar PC-yə hazır cavab kimi göndərilmir; yalnız aktiv məhsullar hazır sayılır.
     // v123: Hesab Satışı axtarış mətni bölmələr arasında saxlanılır; Düzənlə / Sat / İcarə ver sonrası istifadəçi gəldiyi bölmədə qalır.
     // v126: Eyni e-mail üzrə Online hesab tapıldıqda oyun sahəsi tam read-only/disabled kilidlənir; silmək, yazmaq və fərqli oyun seçmək mümkün deyil.\n    // v125: Eyni e-mail üzrə Online artıq varsa yeni Universal PS4/PS5 hesabları Online hesabın eyni oyun/Bundle siyahısına kilidlənir; fərqli oyun seçilə bilmir.
@@ -153,6 +164,7 @@ public class MainActivity extends Activity {
     private ProgressBar busy;
     private EditText serverAddressInput = null;
 
+    private String connectionMode = CONNECTION_MODE_LOCAL;
     private String serverBase = "";
     private String sessionToken = "";
     private String username = "";
@@ -204,7 +216,14 @@ public class MainActivity extends Activity {
         super.onCreate(savedInstanceState);
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         prefs = getSharedPreferences(PREFS, MODE_PRIVATE);
-        serverBase = normalizeServerBase(prefs.getString(KEY_SERVER, ""));
+        String storedMode = normalizeConnectionMode(prefs.getString(KEY_CONNECTION_MODE, ""));
+        if (storedMode.isEmpty()) {
+            // v131 və daha köhnə quraşdırmalar avtomatik əvvəlki Local IP rejimində qalır.
+            storedMode = CONNECTION_MODE_LOCAL;
+        }
+        connectionMode = storedMode;
+        String storedLocalServer = prefs.getString(KEY_LOCAL_SERVER, prefs.getString(KEY_SERVER, ""));
+        serverBase = isOnlineMode() ? REMOTE_GATEWAY_BASE : normalizeServerBase(storedLocalServer);
         loadKitchenClearedTicketIds();
         username = prefs.getString(KEY_USERNAME, "");
         role = prefs.getString(KEY_ROLE, "hall");
@@ -218,7 +237,7 @@ public class MainActivity extends Activity {
             startKitchenBackgroundService();
         }
         buildRoot();
-        if (serverBase.isEmpty()) {
+        if (!hasConfiguredConnection()) {
             showServerSetup();
         } else if (openKitchenFromNotification && "kitchen".equals(role) && !username.isEmpty()) {
             String kitchenPassword = loadKitchenBackgroundPassword();
@@ -314,8 +333,7 @@ public class MainActivity extends Activity {
         if (target.isEmpty()) return;
         String current = normalizeServerBase(serverBase);
         if (target.equalsIgnoreCase(current)) return;
-        serverBase = target;
-        prefs.edit().putString(KEY_SERVER, target).apply();
+        activateLocalConnection(target);
     }
 
     @Override
@@ -1048,6 +1066,55 @@ public class MainActivity extends Activity {
         return v;
     }
 
+    private String normalizeConnectionMode(String raw) {
+        String value = raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
+        if (CONNECTION_MODE_ONLINE.equals(value)) return CONNECTION_MODE_ONLINE;
+        if (CONNECTION_MODE_LOCAL.equals(value)) return CONNECTION_MODE_LOCAL;
+        return "";
+    }
+
+    private boolean isOnlineMode() {
+        return CONNECTION_MODE_ONLINE.equals(connectionMode);
+    }
+
+    private boolean hasConfiguredConnection() {
+        if (isOnlineMode()) {
+            return prefs.getInt(KEY_REMOTE_BRANCH_ID, 0) > 0 && !loadRemoteTokenSecurely().isEmpty();
+        }
+        return !normalizeServerBase(serverBase).isEmpty();
+    }
+
+    private void activateLocalConnection(String base) {
+        connectionMode = CONNECTION_MODE_LOCAL;
+        serverBase = normalizeServerBase(base);
+        prefs.edit()
+                .putString(KEY_CONNECTION_MODE, CONNECTION_MODE_LOCAL)
+                .putString(KEY_LOCAL_SERVER, serverBase)
+                .putString(KEY_SERVER, serverBase)
+                .apply();
+    }
+
+    private void activateOnlineConnection(String token, int branchId, String branchName) {
+        saveRemoteTokenSecurely(token);
+        connectionMode = CONNECTION_MODE_ONLINE;
+        serverBase = REMOTE_GATEWAY_BASE;
+        prefs.edit()
+                .putString(KEY_CONNECTION_MODE, CONNECTION_MODE_ONLINE)
+                .putInt(KEY_REMOTE_BRANCH_ID, Math.max(0, branchId))
+                .putString(KEY_REMOTE_BRANCH_NAME, branchName == null ? "" : branchName.trim())
+                .apply();
+    }
+
+    private String currentConnectionLabel() {
+        if (isOnlineMode()) {
+            String branchName = prefs.getString(KEY_REMOTE_BRANCH_NAME, "").trim();
+            if (branchName.isEmpty()) branchName = "Filial #" + prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
+            return "Online • " + branchName;
+        }
+        String local = normalizeServerBase(serverBase);
+        return local.isEmpty() ? "Local IP" : "Local • " + local;
+    }
+
     private String extractServerBaseFromQr(String raw) {
         String value = raw == null ? "" : raw.trim();
         if (value.isEmpty()) return "";
@@ -1131,6 +1198,40 @@ public class MainActivity extends Activity {
 
     private void clearSavedPassword() {
         prefs.edit().remove(KEY_PASSWORD_ENC).remove(KEY_PASSWORD_IV).putBoolean(KEY_AUTO_LOGIN, false).apply();
+    }
+
+    private void saveRemoteTokenSecurely(String token) {
+        try {
+            String value = token == null ? "" : token.trim();
+            if (value.isEmpty()) {
+                prefs.edit().remove(KEY_REMOTE_TOKEN_ENC).remove(KEY_REMOTE_TOKEN_IV).apply();
+                return;
+            }
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.ENCRYPT_MODE, getOrCreateLoginKey());
+            byte[] encrypted = cipher.doFinal(value.getBytes(StandardCharsets.UTF_8));
+            prefs.edit()
+                    .putString(KEY_REMOTE_TOKEN_ENC, Base64.encodeToString(encrypted, Base64.NO_WRAP))
+                    .putString(KEY_REMOTE_TOKEN_IV, Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP))
+                    .apply();
+        } catch (Exception ex) {
+            prefs.edit().remove(KEY_REMOTE_TOKEN_ENC).remove(KEY_REMOTE_TOKEN_IV).apply();
+        }
+    }
+
+    private String loadRemoteTokenSecurely() {
+        String enc = prefs.getString(KEY_REMOTE_TOKEN_ENC, "");
+        String iv = prefs.getString(KEY_REMOTE_TOKEN_IV, "");
+        if (enc.isEmpty() || iv.isEmpty()) return "";
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            GCMParameterSpec spec = new GCMParameterSpec(128, Base64.decode(iv, Base64.NO_WRAP));
+            cipher.init(Cipher.DECRYPT_MODE, getOrCreateLoginKey(), spec);
+            byte[] raw = cipher.doFinal(Base64.decode(enc, Base64.NO_WRAP));
+            return new String(raw, StandardCharsets.UTF_8).trim();
+        } catch (Exception ex) {
+            return "";
+        }
     }
 
     private void saveKitchenBackgroundPassword(String password) {
@@ -1588,7 +1689,7 @@ public class MainActivity extends Activity {
             String newRoleLabel = loginResult.optString("role_label", newRole);
 
             // Yeni filial sessiyası uğurla yaranandan sonra cari bağlantını atomik dəyiş.
-            serverBase = target;
+            activateLocalConnection(target);
             sessionToken = newToken;
             username = newUsername;
             role = newRole;
@@ -1596,7 +1697,6 @@ public class MainActivity extends Activity {
             sessionPassword = loginPassword;
             adminDebtOnly = "admin".equals(role) && adminDebtOnly;
             prefs.edit()
-                    .putString(KEY_SERVER, target)
                     .putString(KEY_USERNAME, username)
                     .putString(KEY_ROLE, role)
                     .putBoolean(KEY_ADMIN_DEBT_ONLY, adminDebtOnly)
@@ -1647,8 +1747,7 @@ public class MainActivity extends Activity {
     }
 
     private void moveToApprovalServerForManualLogin(String target, String rawApproval, String oldServer, String oldToken) {
-        serverBase = normalizeServerBase(target);
-        prefs.edit().putString(KEY_SERVER, serverBase).apply();
+        activateLocalConnection(target);
         pendingAdminApprovalDeepLink = rawApproval == null ? "" : rawApproval.trim();
         sessionToken = "";
         sessionPassword = "";
@@ -1701,8 +1800,7 @@ public class MainActivity extends Activity {
         io.execute(() -> {
             try {
                 request(value, "/api/mobile/ping", "GET", null, "");
-                serverBase = value;
-                prefs.edit().putString(KEY_SERVER, value).apply();
+                activateLocalConnection(value);
                 runOnUiThread(() -> {
                     toast("QR kodla serverə qoşuldu.");
                     showLogin();
@@ -1726,21 +1824,60 @@ public class MainActivity extends Activity {
         nativeBadge.setBackground(bg(Color.rgb(232, 243, 255), 12, Color.rgb(183, 215, 250)));
         body.addView(nativeBadge, new LinearLayout.LayoutParams(dp(170), dp(38)));
 
-        TextView title = text("Server bağlantısı", 27, TEXT, true);
+        TextView title = text("Bağlantı növü", 27, TEXT, true);
         title.setGravity(Gravity.CENTER);
         LinearLayout.LayoutParams tlp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64));
         tlp.setMargins(0, dp(20), 0, 0);
         body.addView(title, tlp);
 
-        TextView hint = text("Bu ünvan yalnız API bağlantısı üçündür. Tətbiqin ekranı sayt deyil və WebView istifadə etmir.", 14, MUTED, false);
+        TextView hint = text("Eyni tətbiqdən salon daxilində Local IP, kənardan isə marakana.az üzərindən Online filial bağlantısı istifadə edə bilərsiniz.", 14, MUTED, false);
         hint.setGravity(Gravity.CENTER);
         hint.setPadding(dp(8), 0, dp(8), dp(20));
         body.addView(hint);
 
+        Button local = button("🏠  Local IP", isOnlineMode() ? CARD : BLUE, isOnlineMode() ? TEXT : Color.WHITE);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(58));
+        lp.setMargins(0, dp(8), 0, 0);
+        local.setLayoutParams(lp);
+        body.addView(local);
+        local.setOnClickListener(v -> showLocalServerSetup());
+
+        Button online = button("🌐  Online filiallar", isOnlineMode() ? BLUE : CARD, isOnlineMode() ? Color.WHITE : TEXT);
+        LinearLayout.LayoutParams op = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(58));
+        op.setMargins(0, dp(12), 0, 0);
+        online.setLayoutParams(op);
+        body.addView(online);
+        online.setOnClickListener(v -> showOnlineServerSetup());
+
+        if (hasConfiguredConnection()) {
+            TextView current = text("Cari: " + currentConnectionLabel(), 13, MUTED, true);
+            current.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46));
+            cp.setMargins(0, dp(18), 0, 0);
+            body.addView(current, cp);
+            Button back = button("Girişə qayıt", CARD, TEXT);
+            back.setOnClickListener(v -> showLogin());
+            body.addView(back, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+        }
+    }
+
+    private void showLocalServerSetup() {
+        ScrollView sv = screenWithBody("Local IP bağlantısı", true, this::showServerSetup);
+        LinearLayout body = scrollBody(sv);
+        body.setGravity(Gravity.CENTER_HORIZONTAL);
+
+        TextView hint = text("Telefon və PC eyni şəbəkədədirsə indiki Local IP sistemi əvvəlki kimi işləyir.", 14, MUTED, false);
+        hint.setGravity(Gravity.CENTER);
+        hint.setPadding(dp(8), dp(8), dp(8), dp(18));
+        body.addView(hint);
+
         serverAddressInput = input("192.168.1.20:8765 və ya server domeni");
-        serverAddressInput.setText(serverBase);
+        String localStored = normalizeServerBase(prefs.getString(KEY_LOCAL_SERVER, prefs.getString(KEY_SERVER, "")));
+        if (REMOTE_GATEWAY_BASE.equalsIgnoreCase(localStored)) localStored = "";
+        serverAddressInput.setText(localStored);
         body.addView(serverAddressInput);
-        Button connect = button("Serverə qoşul", BLUE, Color.WHITE);
+
+        Button connect = button("Local serverə qoşul", BLUE, Color.WHITE);
         LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
         cp.setMargins(0, dp(12), 0, 0);
         connect.setLayoutParams(cp);
@@ -1759,14 +1896,124 @@ public class MainActivity extends Activity {
             setBusy(true);
             io.execute(() -> {
                 try {
-                    request(value, "/api/mobile/ping", "GET", null, "");
-                    serverBase = value;
-                    prefs.edit().putString(KEY_SERVER, value).apply();
+                    JSONObject ping = directHttpRequest(value, "/api/mobile/ping", "GET", null, "", 7000, 12000);
+                    if (ping.has("ok") && !ping.optBoolean("ok", true)) throw new RuntimeException(ping.optString("message", "Server cavab vermədi."));
+                    activateLocalConnection(value);
                     runOnUiThread(this::showLogin);
                 } catch (Exception ex) { showError(ex); }
                 finally { setBusy(false); }
             });
         });
+    }
+
+    private void showOnlineServerSetup() {
+        ScrollView sv = screenWithBody("Online filiallar", true, this::showServerSetup);
+        LinearLayout body = scrollBody(sv);
+        body.setGravity(Gravity.CENTER_HORIZONTAL);
+
+        TextView hint = text("Online rejim marakana.az Remote Gateway vasitəsilə işləyir. Routerdə port açmaq və statik public IP lazım deyil.", 14, MUTED, false);
+        hint.setGravity(Gravity.CENTER);
+        hint.setPadding(dp(8), dp(8), dp(8), dp(18));
+        body.addView(hint);
+
+        EditText tokenInput = input("Master Token");
+        tokenInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        String savedToken = loadRemoteTokenSecurely();
+        if (!savedToken.isEmpty()) tokenInput.setText(savedToken);
+        body.addView(tokenInput);
+
+        Button loadBranches = button("Filialları yüklə", BLUE, Color.WHITE);
+        LinearLayout.LayoutParams lbp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
+        lbp.setMargins(0, dp(10), 0, 0);
+        loadBranches.setLayoutParams(lbp);
+        body.addView(loadBranches);
+
+        Spinner branchSpin = new Spinner(this);
+        branchSpin.setBackground(bg(CARD, 14, BORDER));
+        List<Integer> branchIds = new ArrayList<>();
+        List<String> branchNames = new ArrayList<>();
+        List<Boolean> branchOnline = new ArrayList<>();
+        List<String> branchLabels = new ArrayList<>();
+        branchLabels.add("Filialları yükləyin…");
+        ArrayAdapter<String> branchAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_dropdown_item, branchLabels);
+        branchSpin.setAdapter(branchAdapter);
+        LinearLayout.LayoutParams bsp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
+        bsp.setMargins(0, dp(12), 0, 0);
+        branchSpin.setLayoutParams(bsp);
+        body.addView(branchSpin);
+
+        TextView branchHint = text("PC proqramı online olduqda filialın yanında ● Online görünəcək.", 12, MUTED, false);
+        LinearLayout.LayoutParams bhp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46));
+        bhp.setMargins(dp(4), dp(4), 0, 0);
+        body.addView(branchHint, bhp);
+
+        Button connect = button("Seçilmiş filiala qoşul", GREEN, Color.WHITE);
+        LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(56));
+        cp.setMargins(0, dp(10), 0, 0);
+        connect.setLayoutParams(cp);
+        body.addView(connect);
+
+        Runnable loader = () -> {
+            String token = tokenInput.getText().toString().trim();
+            if (token.isEmpty()) { toast("Master Token yazın."); return; }
+            setBusy(true);
+            io.execute(() -> {
+                try {
+                    JSONObject result = remoteGatewayCall("GET", REMOTE_GATEWAY_API + "/branches", null, token, 12000);
+                    JSONArray branches = result.optJSONArray("branches");
+                    List<Integer> ids = new ArrayList<>();
+                    List<String> names = new ArrayList<>();
+                    List<Boolean> states = new ArrayList<>();
+                    List<String> labels = new ArrayList<>();
+                    if (branches != null) {
+                        for (int i = 0; i < branches.length(); i++) {
+                            JSONObject item = branches.optJSONObject(i);
+                            if (item == null) continue;
+                            int id = item.optInt("id", 0);
+                            if (id <= 0) continue;
+                            String name = item.optString("name", item.optString("branch_name", "Filial #" + id)).trim();
+                            String address = item.optString("address", "").trim();
+                            boolean onlineState = item.optBoolean("online", false);
+                            ids.add(id);
+                            names.add(name);
+                            states.add(onlineState);
+                            String label = (onlineState ? "● Online  •  " : "○ Offline  •  ") + name;
+                            if (!address.isEmpty()) label += " (" + address + ")";
+                            labels.add(label);
+                        }
+                    }
+                    runOnUiThread(() -> {
+                        branchIds.clear(); branchIds.addAll(ids);
+                        branchNames.clear(); branchNames.addAll(names);
+                        branchOnline.clear(); branchOnline.addAll(states);
+                        branchLabels.clear();
+                        if (labels.isEmpty()) branchLabels.add("Filial tapılmadı"); else branchLabels.addAll(labels);
+                        branchAdapter.notifyDataSetChanged();
+                        int savedId = prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
+                        for (int i = 0; i < branchIds.size(); i++) if (branchIds.get(i) == savedId) { branchSpin.setSelection(i); break; }
+                        branchHint.setText(labels.isEmpty() ? "Filial siyahısı boşdur." : "Filial seçin. Offline filial saxlanıla bilər, amma PC online olmadan sorğular işləməyəcək.");
+                    });
+                } catch (Exception ex) { showError(ex); }
+                finally { setBusy(false); }
+            });
+        };
+
+        loadBranches.setOnClickListener(v -> loader.run());
+        connect.setOnClickListener(v -> {
+            String token = tokenInput.getText().toString().trim();
+            int pos = branchSpin.getSelectedItemPosition();
+            if (token.isEmpty()) { toast("Master Token yazın."); return; }
+            if (pos < 0 || pos >= branchIds.size()) { toast("Filialı seçin."); return; }
+            int branchId = branchIds.get(pos);
+            String branchName = branchNames.get(pos);
+            boolean onlineState = pos < branchOnline.size() && branchOnline.get(pos);
+            activateOnlineConnection(token, branchId, branchName);
+            sessionToken = "";
+            if (!onlineState) toast("Filial hazırda Offline görünür. PC online olduqda avtomatik işləyəcək.");
+            showLogin();
+        });
+
+        if (!savedToken.isEmpty()) loader.run();
     }
 
     private void showLogin() {
@@ -1783,6 +2030,12 @@ public class MainActivity extends Activity {
         badge.setGravity(Gravity.CENTER);
         badge.setBackground(bg(Color.rgb(232, 248, 240), 12, Color.rgb(185, 226, 207)));
         body.addView(badge, new LinearLayout.LayoutParams(dp(110), dp(36)));
+
+        TextView connection = text(currentConnectionLabel(), 13, isOnlineMode() ? BLUE : GREEN, true);
+        connection.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34));
+        clp.setMargins(0, dp(6), 0, 0);
+        body.addView(connection, clp);
 
         TextView t = text("Giriş", 28, TEXT, true);
         t.setGravity(Gravity.CENTER);
@@ -1879,7 +2132,7 @@ public class MainActivity extends Activity {
         login.setLayoutParams(lp);
         body.addView(login);
 
-        Button server = button("Server ayarı", CARD, TEXT);
+        Button server = button("Bağlantı ayarı", CARD, TEXT);
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
         sp.setMargins(0, dp(10), 0, 0);
         server.setLayoutParams(sp);
@@ -7774,10 +8027,117 @@ public class MainActivity extends Activity {
     private void handleApiError(Exception ex){String m=ex.getMessage()==null?"Bağlantı xətası":ex.getMessage();if(m.contains("401")||m.toLowerCase(Locale.ROOT).contains("sessiya")){sessionToken="";runOnUiThread(()->{toast("Sessiya bitib. Yenidən daxil olun.");showLogin();});}else showError(ex);}
     private void showError(Exception ex){toast(ex.getMessage()==null?ex.toString():ex.getMessage());}
 
+    private boolean shouldUseRemoteRelay(String base, String path) {
+        if (!isOnlineMode()) return false;
+        if (path == null || !path.startsWith("/api/mobile/")) return false;
+        String normalized = normalizeServerBase(base);
+        return normalized.isEmpty() || REMOTE_GATEWAY_BASE.equalsIgnoreCase(normalized);
+    }
+
+    private JSONObject remoteGatewayCall(String method, String endpoint, JSONObject payload, String remoteToken, int readTimeoutMs) throws Exception {
+        String tokenValue = remoteToken == null ? "" : remoteToken.trim();
+        if (tokenValue.isEmpty()) throw new Exception("Master Token yoxdur.");
+        URL url = new URL(REMOTE_GATEWAY_BASE + endpoint);
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(7000);
+        c.setReadTimeout(Math.max(7000, readTimeoutMs));
+        c.setRequestMethod(method == null ? "GET" : method.toUpperCase(Locale.ROOT));
+        c.setRequestProperty("Accept", "application/json");
+        c.setRequestProperty("Authorization", "Bearer " + tokenValue);
+        c.setRequestProperty("X-Marakana-Branch-Token", tokenValue);
+        c.setRequestProperty("X-Marakana-Master-Token", tokenValue);
+        c.setRequestProperty("Cache-Control", "no-cache");
+        if (payload != null && !"GET".equalsIgnoreCase(method)) {
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
+            try (OutputStream os = c.getOutputStream()) { os.write(bytes); }
+        }
+        int code = c.getResponseCode();
+        InputStream is = (code >= 200 && code < 300) ? c.getInputStream() : c.getErrorStream();
+        StringBuilder sb = new StringBuilder();
+        if (is != null) try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            String line; while ((line = br.readLine()) != null) sb.append(line);
+        }
+        String raw = sb.toString();
+        JSONObject obj = raw.isEmpty() ? new JSONObject() : new JSONObject(raw);
+        if (code < 200 || code >= 300 || (obj.has("ok") && !obj.optBoolean("ok", true))) {
+            String err = obj.optString("message", obj.optString("error", "HTTP " + code));
+            throw new Exception(code + ": " + err);
+        }
+        return obj;
+    }
+
+    private JSONObject remoteMobileRequest(String path, String method, JSONObject payload, String sessionTokenForRequest) throws Exception {
+        String remoteToken = loadRemoteTokenSecurely();
+        int branchId = prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
+        if (remoteToken.isEmpty() || branchId <= 0) throw new Exception("Online filial bağlantısı qurulmayıb.");
+
+        JSONObject envelope = new JSONObject();
+        envelope.put("branch_id", branchId);
+        envelope.put("method", method == null ? "GET" : method.toUpperCase(Locale.ROOT));
+        envelope.put("path", path == null ? "" : path);
+        envelope.put("session_token", sessionTokenForRequest == null ? "" : sessionTokenForRequest);
+        if (payload != null) envelope.put("payload", payload);
+
+        JSONObject queued = remoteGatewayCall("POST", REMOTE_GATEWAY_API + "/request", envelope, remoteToken, 12000);
+        String requestId = queued.optString("request_id", "").trim();
+        if (requestId.isEmpty()) throw new Exception("Remote sorğu nömrəsi alınmadı.");
+
+        long deadline = System.currentTimeMillis() + 30000L;
+        while (System.currentTimeMillis() < deadline) {
+            JSONObject result = remoteGatewayCall("GET", REMOTE_GATEWAY_API + "/result?request_id=" + urlEncode(requestId), null, remoteToken, 12000);
+            String status = result.optString("status", "pending").trim().toLowerCase(Locale.ROOT);
+            if ("done".equals(status)) {
+                int httpCode = result.optInt("http_code", 200);
+                JSONObject body = result.optJSONObject("body");
+                if (body == null) body = new JSONObject();
+                if (httpCode < 200 || httpCode >= 300) {
+                    String err = body.optString("error", body.optString("message", "HTTP " + httpCode));
+                    throw new Exception(httpCode + ": " + err);
+                }
+                return body;
+            }
+            if ("error".equals(status)) {
+                throw new Exception(result.optString("message", "Remote sorğu icra edilmədi."));
+            }
+            try { Thread.sleep(180L); } catch (InterruptedException interrupted) { Thread.currentThread().interrupt(); throw new Exception("Remote sorğu dayandırıldı."); }
+        }
+        throw new Exception("Remote filial sorğusu vaxt aşımına düşdü.");
+    }
+
+    private JSONObject directHttpRequest(String base, String path, String method, JSONObject payload, String token, int connectTimeoutMs, int readTimeoutMs) throws Exception {
+        URL url = new URL(base + path);
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(connectTimeoutMs);
+        c.setReadTimeout(readTimeoutMs);
+        c.setRequestMethod(method);
+        c.setRequestProperty("Accept", "application/json");
+        if (token != null && !token.isEmpty()) c.setRequestProperty("X-Session-Token", token);
+        if (payload != null && "POST".equalsIgnoreCase(method)) {
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
+            try (OutputStream os = c.getOutputStream()) { os.write(bytes); }
+        }
+        int code = c.getResponseCode();
+        InputStream is = (code >= 200 && code < 300) ? c.getInputStream() : c.getErrorStream();
+        StringBuilder sb = new StringBuilder();
+        if (is != null) try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            String line; while ((line = br.readLine()) != null) sb.append(line);
+        }
+        String raw = sb.toString();
+        JSONObject obj = raw.isEmpty() ? new JSONObject() : new JSONObject(raw);
+        if (code < 200 || code >= 300) {
+            String err = obj.optString("error", obj.optString("message", "HTTP " + code));
+            throw new Exception(code + ": " + err);
+        }
+        return obj;
+    }
+
     private JSONObject request(String base, String path, String method, JSONObject payload, String token) throws Exception {
-        URL url=new URL(base+path); HttpURLConnection c=(HttpURLConnection)url.openConnection(); c.setConnectTimeout(7000);c.setReadTimeout(25000);c.setRequestMethod(method);c.setRequestProperty("Accept","application/json"); if(token!=null&&!token.isEmpty())c.setRequestProperty("X-Session-Token",token);
-        if(payload!=null&&method.equals("POST")){c.setDoOutput(true);c.setRequestProperty("Content-Type","application/json; charset=utf-8");byte[] bytes=payload.toString().getBytes(StandardCharsets.UTF_8);try(OutputStream os=c.getOutputStream()){os.write(bytes);}}
-        int code=c.getResponseCode();InputStream is=(code>=200&&code<300)?c.getInputStream():c.getErrorStream();StringBuilder sb=new StringBuilder();if(is!=null)try(BufferedReader br=new BufferedReader(new InputStreamReader(is,StandardCharsets.UTF_8))){String line;while((line=br.readLine())!=null)sb.append(line);}String raw=sb.toString();JSONObject obj=raw.isEmpty()?new JSONObject():new JSONObject(raw);if(code<200||code>=300){String err=obj.optString("error","HTTP "+code);throw new Exception(code+": "+err);}return obj;
+        if (shouldUseRemoteRelay(base, path)) return remoteMobileRequest(path, method, payload, token);
+        return directHttpRequest(base, path, method, payload, token, 7000, 25000);
     }
 
     private static class OrderCartItem {
