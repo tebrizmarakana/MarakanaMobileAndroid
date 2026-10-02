@@ -1,9 +1,19 @@
-Marakana Mobile v122 GitHub upload
+Marakana Mobile v134 GitHub upload
 
-1) Daimi signing üçün əvvəlcədən yaratdığın GitHub Secret-lər olduğu kimi qalır.
+1) Daimi signing üçün mövcud GitHub Secret-lər olduğu kimi qalır.
 2) Bu TAM layihənin içindəkiləri repo kökünə yüklə və köhnə faylların üstünə yaz.
 3) Commit changes et.
-4) Actions -> Build Marakana Mobile Native v122 RELEASE APK -> Run workflow.
-5) Artifact: MarakanaMobile-v122-permanent-update-apk
+4) Actions -> Build Marakana Mobile Native v134 RELEASE APK -> Run workflow.
+5) Artifact: MarakanaMobile-v134-permanent-update-apk
 
-Qeyd: Hesab Satışı companion WordPress pluginini də v1.0.89-a normal update et.
+v134 əsas dəyişiklik:
+- Online rejimdə sol paneldə Filiallar bölməsi görünür.
+- Filiallar Online / Offline statusu ilə siyahılanır.
+- Online filiala toxunanda çıxış etmədən, cari istifadəçi və aktiv sessiya şifrəsi ilə həmin filiala avtomatik giriş edilir.
+- Cari filial ✓ ilə işarələnir.
+- Offline filiala keçid 30 saniyəlik relay timeout yaratmamaq üçün bloklanır və status göstərilir.
+- Local IP rejiminə toxunulmayıb.
+
+Uyğun server tərəfi:
+- Marakana Remote Gateway v1.2.0 SPEED FIX
+- Marakana PC v1555 MOBILE REMOTE GATEWAY RELAY

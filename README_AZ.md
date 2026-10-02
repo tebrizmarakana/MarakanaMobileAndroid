@@ -1,30 +1,24 @@
-# Marakana Mobile v133 — Local IP + Online filiallar
+# Marakana Mobile v134 — Sol paneldən filial keçidi
 
-## v133 dəyişiklikləri
-- Mövcud **Local IP** sistemi saxlanılıb; əvvəlki QR/manual server bağlantısı dəyişdirilməyib.
-- Yeni **Online filiallar** rejimi əlavə edilib. Online rejim `https://marakana.az` üzərindəki Marakana Remote Gateway ilə işləyir.
-- Bağlantı ayarında `Local IP` və `Online filiallar` seçimi var.
-- Online rejimdə Master Token Android Keystore AES/GCM ilə cihazda şifrəli saxlanılır.
-- Master Token ilə filial siyahısı yüklənir, filialın `Online / Offline` statusu görünür və filial seçilir.
-- Seçilmiş filialın mövcud `/api/mobile/*` funksiyaları Remote Gateway vasitəsilə həmin filial PC-sinin lokal mobil serverinə relay olunur.
-- Mobil istifadəçi giriş şifrələri, rolları və session token məntiqi əvvəlki PC mobil API-si ilə eyni qalır.
-- Mətbəx background servisi də Local/Online bağlantı rejimini dəstəkləyir.
-- Local və Online parametrləri ayrı saxlanır; Online rejim Local IP ünvanını silmir.
-- Routerdə port açmaq və statik public IP tələb olunmur; filial PC-si serverə outbound HTTPS sorğuları edir.
-- `versionCode 133`, `versionName 3.4.95-native-v133`.
+## v134 dəyişiklikləri
+- Online rejimdə sol panelə **FİLİALLAR** bölməsi əlavə edildi.
+- Filiallar `● Online` / `○ Offline` statusu ilə birbaşa sol paneldə görünür.
+- Cari filial `✓` işarəsi ilə seçilmiş göstərilir.
+- Başqa Online filiala toxunanda tətbiqdən **Çıxış etmək lazım deyil**.
+- Tətbiq cari istifadəçi və aktiv sessiya şifrəsi ilə yeni filialda avtomatik sessiya yaradır.
+- Köhnə filial sessiyasının logout-u arxa planda edilir; filial keçid ekranını bloklamır.
+- Yeni filialda cari rol mümkün olduqda saxlanır; həmin rol icazəli deyilsə mövcud digər mobil rola keçid yoxlanılır.
+- Offline filiala toxunanda uzun relay timeout gözlənilmir; istifadəçiyə filialın Offline olduğu bildirilir.
+- Sol panelin menyu hissəsi scroll oldu; filial sayı artsa da `Bildiriş səsi` və `Çıxış` aşağıda sabit qalır.
+- Local IP rejimi əvvəlki kimi saxlanılıb və bu filial siyahısı yalnız Online rejimdə görünür.
+- `versionCode 134`, `versionName 3.4.96-native-v134`.
 
-## Online rejim üçün tələb olunanlar
-1. `Marakana Remote Gateway v1.1.0` WordPress pluginini `marakana.az` saytında aktiv edin.
-2. Hər filial PC proqramını `Marakana v1555` və ya uyğun yeni versiyaya yeniləyin.
-3. Filial PC-də mövcud `Filial / Master Token` bağlantısı aktiv olmalıdır.
-4. Mobil tətbiqdə `Bağlantı ayarı -> Online filiallar` bölməsindən Master Token yazıb filialı seçin.
+## Uyğunluq
+1. WordPress: `Marakana_Remote_Gateway_v1.2.0_SPEED_FIX.zip`
+2. Filial PC: `Marakana_v1555_MOBILE_REMOTE_GATEWAY_RELAY.zip`
+3. Mobil: bu v134 layihə
 
-## Təhlükəsizlik
-- Remote Gateway yalnız `/api/mobile/*` yollarını relay edir.
-- PC gələn yolu yenidən yoxlayır və sorğunu yalnız `127.0.0.1` üzərindəki öz lokal mobil serverinə göndərir.
-- Arbitrary URL/host relay edilmir.
-- WordPress gateway Master Token ilə mobil sorğunu, Filial/Master Token ilə PC polling/result sorğularını təsdiqləyir.
-- Local IP rejimi internet relay-dən asılı deyil.
+PC və WordPress tərəfdə v134 üçün əlavə dəyişiklik tələb olunmur.
 
 ---
 

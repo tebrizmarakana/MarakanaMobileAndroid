@@ -88,6 +88,7 @@ import java.time.LocalDate;
  * communicates with the existing Marakana PC mobile REST API.
  */
 public class MainActivity extends Activity {
+    // v134: Online rejimdə sol panelə filial siyahısı və çıxış etmədən filiallararası avtomatik sessiya keçidi əlavə edildi.
     // v133: Online Remote Gateway rejimində mətbəx fon xidməti foreground mətbəx ekranı ilə eyni anda serveri yükləməsin.
     public static volatile boolean APP_FOREGROUND = false;
     public static volatile boolean KITCHEN_FOREGROUND_ACTIVE = false;
@@ -124,6 +125,7 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_SITE = "account_sales_site";
     private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
+    // v134: Sol drawer daxilində filiallar Online/Offline statusu ilə görünür; Online filiala toxunanda cari istifadəçi/şifrə ilə həmin filiala avtomatik yenidən giriş edilir.
     // v133: Online relay sürət düzəlişi: login rol probe-ları cache ilə ləğv edildi, mətbəx foreground/background dublikat poll dayandırıldı, result long-poll istifadə olunur.
     // v132: Eyni APK həm Local IP, həm də marakana.az Remote Gateway üzərindən filial seçimi ilə işləyir.
     // v120: Hazırdır göndəriləndə üstündən xətt çəkilmiş/silinmiş məhsullar PC-yə hazır cavab kimi göndərilmir; yalnız aktiv məhsullar hazır sayılır.
@@ -951,25 +953,40 @@ public class MainActivity extends Activity {
         TextView appTitle = text("Marakana Mobile", 22, TEXT, true);
         panel.addView(appTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
         TextView account = text((username.isEmpty() ? "İstifadəçi" : username) + "  •  " + roleLabel, 13, MUTED, true);
-        panel.addView(account, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(34)));
-        spacer(panel, 8);
+        panel.addView(account, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30)));
 
-        if (canHall) addDrawerItem(panel, "Terminallar / Zal", () -> { dismissNavigationMenuImmediate(); switchMobileRole("hall", false, this::showTerminals); });
-        if (canKitchen) addDrawerItem(panel, "Mətbəx", () -> { dismissNavigationMenuImmediate(); switchMobileRole("kitchen", false, this::showKitchen); });
+        TextView connection = text(currentConnectionLabel(), 12, isOnlineMode() ? BLUE : GREEN, true);
+        connection.setSingleLine(true);
+        panel.addView(connection, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)));
+        spacer(panel, 6);
+
+        ScrollView menuScroll = new ScrollView(this);
+        menuScroll.setFillViewport(false);
+        menuScroll.setVerticalScrollBarEnabled(false);
+        LinearLayout menu = new LinearLayout(this);
+        menu.setOrientation(LinearLayout.VERTICAL);
+        menuScroll.addView(menu, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        panel.addView(menuScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        if (isOnlineMode() && !loadRemoteTokenSecurely().isEmpty()) {
+            addOnlineBranchDrawerSection(menu);
+            spacer(menu, 10);
+            addDrawerSectionLabel(menu, "MENYU");
+        }
+
+        if (canHall) addDrawerItem(menu, "Terminallar / Zal", () -> { dismissNavigationMenuImmediate(); switchMobileRole("hall", false, this::showTerminals); });
+        if (canKitchen) addDrawerItem(menu, "Mətbəx", () -> { dismissNavigationMenuImmediate(); switchMobileRole("kitchen", false, this::showKitchen); });
         if (canAdmin) {
-            addDrawerItem(panel, "Borc Dəftəri", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", true, () -> showDebt("İşçi")); });
-            addDrawerItem(panel, "İcarə Paneli", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, () -> showRental("active")); });
-            addDrawerItem(panel, "Hesab Satışı", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, () -> showAccountSales("accounts")); });
-            addDrawerItem(panel, "Mesaj qutusu", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, this::showBranchMessages); });
-            addDrawerItem(panel, "Admin QR təsdiqi", () -> {
+            addDrawerItem(menu, "Borc Dəftəri", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", true, () -> showDebt("İşçi")); });
+            addDrawerItem(menu, "İcarə Paneli", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, () -> showRental("active")); });
+            addDrawerItem(menu, "Hesab Satışı", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, () -> showAccountSales("accounts")); });
+            addDrawerItem(menu, "Mesaj qutusu", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, this::showBranchMessages); });
+            addDrawerItem(menu, "Admin QR təsdiqi", () -> {
                 dismissNavigationMenuImmediate();
                 if ("admin".equals(role)) startAdminApprovalQrScanner();
                 else switchMobileRole("admin", false, this::startAdminApprovalQrScanner);
             });
         }
-
-        View flex = new View(this);
-        panel.addView(flex, new LinearLayout.LayoutParams(1, 0, 1f));
 
         if ("kitchen".equals(role)) {
             LinearLayout soundItem = new LinearLayout(this);
@@ -985,7 +1002,7 @@ public class MainActivity extends Activity {
             soundItem.addView(soundTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(23)));
             soundItem.addView(soundValue, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(21)));
             LinearLayout.LayoutParams soundLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(60));
-            soundLp.setMargins(0, 0, 0, dp(8));
+            soundLp.setMargins(0, dp(8), 0, dp(8));
             panel.addView(soundItem, soundLp);
             soundItem.setOnClickListener(v -> { dismissNavigationMenuImmediate(); chooseKitchenNotificationSound(); });
         }
@@ -1058,6 +1075,112 @@ public class MainActivity extends Activity {
         panel.addView(item);
     }
 
+    private void addDrawerSectionLabel(LinearLayout panel, String label) {
+        TextView title = text(label, 11, MUTED, true);
+        title.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30));
+        lp.setMargins(dp(4), 0, 0, dp(4));
+        panel.addView(title, lp);
+    }
+
+    private void addOnlineBranchDrawerSection(LinearLayout menu) {
+        addDrawerSectionLabel(menu, "FİLİALLAR");
+
+        LinearLayout branchHost = new LinearLayout(this);
+        branchHost.setOrientation(LinearLayout.VERTICAL);
+        menu.addView(branchHost, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        int currentId = prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
+        String currentName = prefs.getString(KEY_REMOTE_BRANCH_NAME, "").trim();
+        if (currentName.isEmpty()) currentName = currentId > 0 ? "Filial #" + currentId : "Filial seçilməyib";
+
+        Button loading = button("✓ " + currentName + "  •  Filiallar yüklənir…", Color.rgb(238, 246, 255), BLUE);
+        loading.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        loading.setEnabled(false);
+        branchHost.addView(loading, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+
+        String remoteToken = loadRemoteTokenSecurely();
+        if (remoteToken.isEmpty()) return;
+
+        io.execute(() -> {
+            try {
+                JSONObject result = remoteGatewayCall("GET", REMOTE_GATEWAY_API + "/branches", null, remoteToken, 9000);
+                JSONArray branches = result.optJSONArray("branches");
+                List<Integer> ids = new ArrayList<>();
+                List<String> names = new ArrayList<>();
+                List<Boolean> states = new ArrayList<>();
+                if (branches != null) {
+                    for (int i = 0; i < branches.length(); i++) {
+                        JSONObject item = branches.optJSONObject(i);
+                        if (item == null) continue;
+                        int id = item.optInt("id", 0);
+                        if (id <= 0) continue;
+                        String name = item.optString("name", item.optString("branch_name", "Filial #" + id)).trim();
+                        boolean online = item.optBoolean("online", false);
+                        ids.add(id);
+                        names.add(name.isEmpty() ? "Filial #" + id : name);
+                        states.add(online);
+                    }
+                }
+
+                runOnUiThread(() -> {
+                    branchHost.removeAllViews();
+                    if (ids.isEmpty()) {
+                        TextView emptyBranches = text("Filial siyahısı alınmadı.", 12, MUTED, false);
+                        emptyBranches.setPadding(dp(12), dp(10), dp(12), dp(10));
+                        branchHost.addView(emptyBranches);
+                        return;
+                    }
+
+                    int selectedId = prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
+                    for (int i = 0; i < ids.size(); i++) {
+                        int id = ids.get(i);
+                        String name = names.get(i);
+                        boolean online = states.get(i);
+                        boolean selected = id == selectedId;
+
+                        String prefix = selected ? "✓ " : (online ? "● " : "○ ");
+                        String suffix = online ? "  •  Online" : "  •  Offline";
+                        int bgColor = selected ? Color.rgb(238, 246, 255) : CARD;
+                        int textColor = selected ? BLUE : (online ? TEXT : MUTED);
+
+                        Button branch = button(prefix + name + suffix, bgColor, textColor);
+                        branch.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+                        branch.setAllCaps(false);
+                        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+                        blp.setMargins(0, 0, 0, dp(6));
+                        branch.setLayoutParams(blp);
+                        branch.setOnClickListener(v -> {
+                            if (selected) {
+                                dismissNavigationMenuImmediate();
+                                toast("Hazırda " + name + " filialındasınız.");
+                                return;
+                            }
+                            if (!online) {
+                                toast(name + " hazırda Offline-dir. PC online olduqda keçid edə bilərsiniz.");
+                                return;
+                            }
+                            dismissNavigationMenuImmediate();
+                            switchOnlineBranch(id, name);
+                        });
+                        branchHost.addView(branch);
+                    }
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> {
+                    branchHost.removeAllViews();
+                    Button retry = button("Filiallar yüklənmədi • Yenidən yoxla", CARD, MUTED);
+                    retry.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+                    retry.setOnClickListener(v -> {
+                        dismissNavigationMenuImmediate();
+                        showNavigationMenu();
+                    });
+                    branchHost.addView(retry, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+                });
+            }
+        });
+    }
+
     private LinearLayout scrollBody(ScrollView scroll) {
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
@@ -1114,6 +1237,142 @@ public class MainActivity extends Activity {
                 .putInt(KEY_REMOTE_BRANCH_ID, Math.max(0, branchId))
                 .putString(KEY_REMOTE_BRANCH_NAME, branchName == null ? "" : branchName.trim())
                 .apply();
+    }
+
+    private void switchOnlineBranch(int targetBranchId, String targetBranchName) {
+        if (!isOnlineMode()) {
+            toast("Filial keçidi yalnız Online rejimdə işləyir.");
+            return;
+        }
+        int currentBranchId = prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
+        if (targetBranchId <= 0 || targetBranchId == currentBranchId) {
+            toast("Bu filial artıq seçilib.");
+            return;
+        }
+
+        String remoteToken = loadRemoteTokenSecurely();
+        if (remoteToken.isEmpty()) {
+            toast("Master Token tapılmadı.");
+            return;
+        }
+
+        String loginUser = username == null ? "" : username.trim();
+        String loginPassword = sessionPassword == null ? "" : sessionPassword;
+        if (loginPassword.isEmpty()) loginPassword = loadSavedPassword();
+        String preferredRole = role == null ? "hall" : role.trim().toLowerCase(Locale.ROOT);
+        boolean preferredDebtOnly = adminDebtOnly;
+        String oldSessionToken = sessionToken == null ? "" : sessionToken.trim();
+        int oldBranchId = currentBranchId;
+
+        stopKitchenAutoRefresh();
+        KITCHEN_FOREGROUND_ACTIVE = false;
+        stopKitchenBackgroundService(false);
+        orderCarts.clear();
+        loginUserRoleCache.clear();
+
+        activateOnlineConnection(remoteToken, targetBranchId, targetBranchName);
+        sessionToken = "";
+        canHall = false;
+        canKitchen = false;
+        canAdmin = false;
+
+        ScrollView sv = screenWithBody("Filial dəyişdirilir", false, null);
+        LinearLayout body = scrollBody(sv);
+        body.setGravity(Gravity.CENTER_HORIZONTAL);
+        TextView title = text(targetBranchName, 22, TEXT, true);
+        title.setGravity(Gravity.CENTER);
+        body.addView(title, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(64)));
+        TextView info = text("Yeni filiala qoşulur…", 14, MUTED, false);
+        info.setGravity(Gravity.CENTER);
+        body.addView(info, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
+
+        if (loginUser.isEmpty() || loginPassword.isEmpty()) {
+            showLogin();
+            toast("Filial dəyişdirildi. Bu filial üçün şifrəni daxil edin.");
+            return;
+        }
+
+        final String finalPassword = loginPassword;
+        final String finalRole = preferredRole;
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject loginResult = loginToOnlineBranch(targetBranchId, loginUser, finalPassword, finalRole);
+                String newToken = loginResult.optString("token", "").trim();
+                if (newToken.isEmpty()) throw new RuntimeException("Yeni filial sessiyası yaradılmadı.");
+
+                sessionToken = newToken;
+                username = loginResult.optString("username", loginUser).trim();
+                role = loginResult.optString("role", finalRole).trim().toLowerCase(Locale.ROOT);
+                if (role.isEmpty()) role = finalRole;
+                roleLabel = loginResult.optString("role_label", role);
+                sessionPassword = finalPassword;
+                adminDebtOnly = "admin".equals(role) && preferredDebtOnly;
+
+                prefs.edit()
+                        .putString(KEY_USERNAME, username)
+                        .putString(KEY_ROLE, role)
+                        .putBoolean(KEY_ADMIN_DEBT_ONLY, adminDebtOnly)
+                        .apply();
+
+                canHall = "hall".equals(role);
+                canKitchen = "kitchen".equals(role);
+                canAdmin = "admin".equals(role);
+                refreshAllowedMobileRolesOnlineAsync(username, role);
+
+                if (!oldSessionToken.isEmpty() && oldBranchId > 0) {
+                    final int logoutBranchId = oldBranchId;
+                    final String logoutToken = oldSessionToken;
+                    io.execute(() -> {
+                        try { remoteMobileRequestForBranch(logoutBranchId, "/api/mobile/logout", "POST", new JSONObject(), logoutToken); }
+                        catch (Exception ignored) {}
+                    });
+                }
+
+                runOnUiThread(() -> {
+                    updateKitchenBackgroundServiceForRole(finalPassword);
+                    reopenCurrentRoleHome();
+                    toast(targetBranchName + " filialına keçildi.");
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> {
+                    showLogin();
+                    toast(targetBranchName + " seçildi, amma avtomatik giriş alınmadı. Şifrəni yenidən daxil edin.");
+                });
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    private JSONObject loginToOnlineBranch(int branchId, String loginUser, String loginPassword, String preferredRole) throws Exception {
+        List<String> candidates = new ArrayList<>();
+        String normalizedRole = preferredRole == null ? "hall" : preferredRole.trim().toLowerCase(Locale.ROOT);
+        if (!normalizedRole.equals("hall") && !normalizedRole.equals("kitchen") && !normalizedRole.equals("admin")) {
+            normalizedRole = "hall";
+        }
+        candidates.add(normalizedRole);
+        for (String candidate : new String[]{"hall", "kitchen", "admin"}) {
+            if (!candidates.contains(candidate)) candidates.add(candidate);
+        }
+
+        Exception lastError = null;
+        for (String candidate : candidates) {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("username", loginUser);
+                payload.put("password", loginPassword);
+                payload.put("role", candidate);
+                JSONObject result = remoteMobileRequestForBranch(branchId, "/api/mobile/login", "POST", payload, "");
+                String token = result.optString("token", "").trim();
+                if (token.isEmpty()) throw new RuntimeException("Mobil sessiya yaradılmadı.");
+                return result;
+            } catch (Exception ex) {
+                lastError = ex;
+            }
+        }
+        if (lastError != null) throw lastError;
+        throw new RuntimeException("Bu istifadəçi üçün mobil giriş icazəsi tapılmadı.");
     }
 
     private String currentConnectionLabel() {
@@ -8151,8 +8410,12 @@ public class MainActivity extends Activity {
     }
 
     private JSONObject remoteMobileRequest(String path, String method, JSONObject payload, String sessionTokenForRequest) throws Exception {
-        String remoteToken = loadRemoteTokenSecurely();
         int branchId = prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
+        return remoteMobileRequestForBranch(branchId, path, method, payload, sessionTokenForRequest);
+    }
+
+    private JSONObject remoteMobileRequestForBranch(int branchId, String path, String method, JSONObject payload, String sessionTokenForRequest) throws Exception {
+        String remoteToken = loadRemoteTokenSecurely();
         if (remoteToken.isEmpty() || branchId <= 0) throw new Exception("Online filial bağlantısı qurulmayıb.");
 
         JSONObject envelope = new JSONObject();
