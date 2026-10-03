@@ -89,6 +89,7 @@ import java.time.LocalDate;
  */
 public class MainActivity extends Activity {
     // v136: Sol paneldə filial adları cache-dən dərhal görünür; Online/Offline statusları arxa planda yenilənir və menyu aşağı-yuxarı sürüşmür.
+    // v137: Yadda saxlanmış şifrə varsa APK update-dən və Local/Online bağlantı dəyişməsindən sonra avtomatik yenidən giriş edilir; transient auto-login xətası şifrəni silmir.
     // v135: Online rejimdə WordPress plugin-i olan modullar Gateway-i keçmədən birbaşa REST API-yə gedir; PC-live Terminallar/Mətbəx/login/QR Gateway-də qalır.
     // v134: Online rejimdə sol panelə filial siyahısı və çıxış etmədən filiallararası avtomatik sessiya keçidi əlavə edildi.
     // v133: Online Remote Gateway rejimində mətbəx fon xidməti foreground mətbəx ekranı ilə eyni anda serveri yükləməsin.
@@ -1664,6 +1665,32 @@ public class MainActivity extends Activity {
         performLogin(savedUser, savedPassword, savedRole, savedDebtOnly, true, false);
     }
 
+    // v137: Bağlantı növü/server dəyişəndə istifadəçi şifrəni əvvəldən yadda saxlayıbsa
+    // login ekranını göstərmədən həmin credential ilə yeni hədəfdə sessiya yaradırıq.
+    // Bu həm Online -> Local, həm Local -> Online, həm də QR ilə Local server keçidinə aiddir.
+    private void resumeRememberedLoginOrShowLogin(String successMessage) {
+        sessionToken = "";
+        canHall = false;
+        canKitchen = false;
+        canAdmin = false;
+
+        boolean autoLoginEnabled = prefs.getBoolean(KEY_AUTO_LOGIN, false);
+        String savedUser = username == null ? "" : username.trim();
+        if (savedUser.isEmpty()) savedUser = prefs.getString(KEY_USERNAME, "").trim();
+        String savedPassword = autoLoginEnabled ? loadSavedPassword() : "";
+        String savedRole = prefs.getString(KEY_ROLE, role == null ? "hall" : role);
+        boolean savedDebtOnly = prefs.getBoolean(KEY_ADMIN_DEBT_ONLY, adminDebtOnly);
+
+        if (autoLoginEnabled && !savedUser.isEmpty() && !savedPassword.isEmpty()) {
+            if (successMessage != null && !successMessage.trim().isEmpty()) toast(successMessage);
+            autoLogin(savedUser, savedPassword, savedRole, savedDebtOnly);
+            return;
+        }
+
+        showLogin();
+        if (successMessage != null && !successMessage.trim().isEmpty()) toast(successMessage);
+    }
+
     private void performLogin(String u, String p, String selectedRole, boolean debtOnly, boolean rememberPassword, boolean showLoginOnFailure) {
         setBusy(true);
         io.execute(() -> {
@@ -1738,10 +1765,12 @@ public class MainActivity extends Activity {
                 });
             } catch (Exception ex) {
                 if (!showLoginOnFailure) {
-                    clearSavedPassword();
+                    // v137: Gateway/şəbəkə/filial müvəqqəti əlçatmaz olduqda istifadəçinin
+                    // "Şifrəni yadda saxla" seçimini silmirik. Login ekranı şifrəni yenə
+                    // doldurur və növbəti start/bağlantı keçidində auto-login yenidən sınanır.
                     runOnUiThread(() -> {
                         showLogin();
-                        toast("Avtomatik giriş alınmadı. Şifrəni yenidən daxil edin.");
+                        toast("Avtomatik giriş alınmadı. Yadda saxlanmış şifrə silinməyib.");
                     });
                 } else {
                     showError(ex);
@@ -2198,8 +2227,7 @@ public class MainActivity extends Activity {
             });
         }
 
-        showLogin();
-        toast("Filial serveri QR-a uyğun dəyişdirildi. Bu filial üçün daxil olun; QR təsdiqi girişdən sonra davam edəcək.");
+        resumeRememberedLoginOrShowLogin("Filial serveri QR-a uyğun dəyişdirildi.");
     }
 
     private void reopenCurrentRoleHome() {
@@ -2234,10 +2262,7 @@ public class MainActivity extends Activity {
             try {
                 request(value, "/api/mobile/ping", "GET", null, "");
                 activateLocalConnection(value);
-                runOnUiThread(() -> {
-                    toast("QR kodla serverə qoşuldu.");
-                    showLogin();
-                });
+                runOnUiThread(() -> resumeRememberedLoginOrShowLogin("QR kodla Local serverə qoşuldu."));
             } catch (Exception ex) {
                 // Qoşulma alınmasa server ekranında qalır və oxunan ünvan xanada qalır.
                 runOnUiThread(() -> toast("Ünvan əlavə olundu, amma serverə avtomatik qoşulmaq alınmadı."));
@@ -2332,7 +2357,7 @@ public class MainActivity extends Activity {
                     JSONObject ping = directHttpRequest(value, "/api/mobile/ping", "GET", null, "", 7000, 12000);
                     if (ping.has("ok") && !ping.optBoolean("ok", true)) throw new RuntimeException(ping.optString("message", "Server cavab vermədi."));
                     activateLocalConnection(value);
-                    runOnUiThread(this::showLogin);
+                    runOnUiThread(() -> resumeRememberedLoginOrShowLogin("Local serverə qoşuldu."));
                 } catch (Exception ex) { showError(ex); }
                 finally { setBusy(false); }
             });
@@ -2444,7 +2469,7 @@ public class MainActivity extends Activity {
             activateOnlineConnection(token, branchId, branchName);
             sessionToken = "";
             if (!onlineState) toast("Filial hazırda Offline görünür. PC online olduqda avtomatik işləyəcək.");
-            showLogin();
+            resumeRememberedLoginOrShowLogin(branchName + " filialı seçildi.");
         });
 
         if (!savedToken.isEmpty()) loader.run();

@@ -1,7 +1,17 @@
-# Marakana Mobile v136 — Stable Drawer Branch List
+# Marakana Mobile v137 — Saved Password Auto Re-login
 
-- `versionCode 136`
-- `versionName 3.4.98-native-v136`
+- `versionCode 137`
+- `versionName 3.4.99-native-v137`
+
+## v137 — Yadda saxlanmış şifrə ilə avtomatik yenidən giriş
+
+- APK köhnə versiyanın üzərinə update ediləndə yadda saxlanmış credential qorunur və tətbiq açılışda avtomatik daxil olur.
+- Online ↔ Local bağlantı dəyişəndə şifrə yadda saxlanıbsa login ekranı tələb olunmur.
+- QR ilə Local server dəyişməsində də eyni auto-login qaydası işləyir.
+- Müvəqqəti bağlantı xətası yadda saxlanmış şifrəni silmir.
+- Manual `Çıxış` auto-login-i yenə söndürür.
+- Uninstall/reinstall Android app data və Keystore-u sildiyi üçün bu qaydaya daxil deyil.
+
 
 ## Online rejim
 WordPress-də ayrıca server-authoritative plugin-i olan mobil modullar artıq PC Remote Gateway queue-suna düşmür:
