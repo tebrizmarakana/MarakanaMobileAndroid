@@ -1,54 +1,44 @@
-# Marakana Mobile v134 — Sol paneldən filial keçidi
+# Marakana Mobile v135 — Plugin Direct Hybrid
 
-## v134 dəyişiklikləri
-- Online rejimdə sol panelə **FİLİALLAR** bölməsi əlavə edildi.
-- Filiallar `● Online` / `○ Offline` statusu ilə birbaşa sol paneldə görünür.
-- Cari filial `✓` işarəsi ilə seçilmiş göstərilir.
-- Başqa Online filiala toxunanda tətbiqdən **Çıxış etmək lazım deyil**.
-- Tətbiq cari istifadəçi və aktiv sessiya şifrəsi ilə yeni filialda avtomatik sessiya yaradır.
-- Köhnə filial sessiyasının logout-u arxa planda edilir; filial keçid ekranını bloklamır.
-- Yeni filialda cari rol mümkün olduqda saxlanır; həmin rol icazəli deyilsə mövcud digər mobil rola keçid yoxlanılır.
-- Offline filiala toxunanda uzun relay timeout gözlənilmir; istifadəçiyə filialın Offline olduğu bildirilir.
-- Sol panelin menyu hissəsi scroll oldu; filial sayı artsa da `Bildiriş səsi` və `Çıxış` aşağıda sabit qalır.
-- Local IP rejimi əvvəlki kimi saxlanılıb və bu filial siyahısı yalnız Online rejimdə görünür.
-- `versionCode 134`, `versionName 3.4.96-native-v134`.
+- `versionCode 135`
+- `versionName 3.4.97-native-v135`
 
-## Uyğunluq
-1. WordPress: `Marakana_Remote_Gateway_v1.2.0_SPEED_FIX.zip`
-2. Filial PC: `Marakana_v1555_MOBILE_REMOTE_GATEWAY_RELAY.zip`
-3. Mobil: bu v134 layihə
+## Online rejim
+WordPress-də ayrıca server-authoritative plugin-i olan mobil modullar artıq PC Remote Gateway queue-suna düşmür:
 
-PC və WordPress tərəfdə v134 üçün əlavə dəyişiklik tələb olunmur.
+- **Borc Dəftəri** → `marakana-debt/v2/mobile/*`
+- **İcarə Paneli** → `marakana-rental/v2/mobile/*`
+- **Hesab Satışı** → `marakana-account-sales/v1/*`
+- **Mesaj qutusu** → `marakana-branch-messages/v1/messages`
 
----
+Bütün direct sorğular `https://marakana.az` ünvanına HTTPS ilə gedir və APK-da saxlanılan **Master Token + seçilmiş filial ID** istifadə olunur. Online rejimdə bu 4 plugin modulunu açarkən ayrıca PC `admin` sessiyası yaratmaq üçün Gateway login-i də edilmir; buna görə modul açılışı relay gecikməsini gözləmir.
 
-Marakana Mobile v128
+## Gateway-də qalan hissələr
+PC-nin canlı lokal vəziyyətinə bağlı funksiyalar Gateway-də qalır:
 
-## v128 — Borc Dəftəri / hissə-hissə əmək haqqı
-- İşçi kartında Qalıq əmək haqqı görünür.
-- İşçi əməliyyatlarında Əmək haqqı ver düyməsi var.
-- Borc varsa əvvəl maaşdan avtomatik silinir.
-- Götürüləcək əmək haqqı ayrıca yazılır; götürülməyən hissə Qalıq əmək haqqı kimi qalır.
-- Mobile server payload expected_salary, expected_debt və employee_amount göndərir.
-- `versionCode 128`, `versionName 3.4.92-native-v128`.
+- giriş / mobil sessiya və rol keçidi
+- **Terminallar / Zal**
+- **Mətbəx** (hazırda ayrıca WordPress data plugin-i yoxdur; canlı sifariş PC-dən gəlir)
+- terminal məhsul/sifariş əməliyyatları
+- Admin QR təsdiqi
 
-# Marakana Mobile v122 — Hesab Satışı növləri / Online e-mail guard
+Bu səbəbdən Borc / İcarə / Hesab Satışı / Mesaj qutusu açılarkən PC relay poll-u gözlənmir. Terminallar və Mətbəx isə filial PC-si Online olmalıdır.
 
-- `versionCode 122`
-- `versionName 3.4.85-native-v122`
+## Local IP rejimi
+Local IP rejimi əvvəlki kimi saxlanılıb. `/api/mobile/*` çağırışları birbaşa lokal PC-yə gedir; WordPress direct mapper yalnız Online rejimdə aktivdir.
 
-## Dəyişikliklər
-- `Yeni hesab yarat` formasından Konsol seçimi çıxarıldı. Yeni hesab stokda `Satılmayıb` kimi konsolsuz yaradılır.
-- `Sat` və `İcarə ver` axınında Konsol seçimi məcburidir: `PS4`, `PS5`, `PS4/PS5`.
-- Yeni hesab növləri: `Online`, `Universal`, `Universal PS4`. Əvvəlki `Offline` adı `Universal PS4` ilə əvəz olundu.
-- Hər hesab növünün ayrıca Məxfi kod axını saxlanılıb.
-- v120 Mətbəx qaydası saxlanılıb: `Hazırdır` yalnız aktiv məhsulları PC-yə göndərir; tam ləğvdə yalnız lokal `Təmizlə` qalır.
+## WordPress uyğunluğu
+v135 üçün:
 
-## Server uyğunluğu
-- Hesab Satışı companion WordPress pluginini `v1.0.89` versiyasına yenilə. Bu versiya Satılmayıb hesabın konsolsuz yaradılmasını və `Universal PS4` hesab növünü dəstəkləyir.
-## v124
-- Hesab Satışı > Sat: Universal PS4 -> PS4 avtomatik və fiks; Universal PS5 -> PS5 avtomatik və fiks. Online hesabda konsol seçimi manual qalır.
-- Konsol seçimlərindən PS4/PS5 kombinə variantı çıxarıldı; yalnız PS4 və PS5 qaldı.
+1. **Marakana Filiallar v1.0.2+** — Master Token və filial scope.
+2. **Marakana Borc Dəftəri V2 v2.0.20** — yeni `/mobile/*` direct compatibility endpoint-ləri.
+3. **Marakana İcarə Paneli V2 v0.17.14** — yeni `/mobile/*` direct compatibility endpoint-ləri.
+4. **Marakana Hesab Satışı v1.0.92** — artıq Master Token-i qəbul edir, dəyişiklik tələb etmir.
+5. **Marakana Filial Mesajları v1.0.2** — artıq Master Token-i qəbul edir, dəyişiklik tələb etmir.
+6. **Marakana Remote Gateway v1.2.0** — yalnız PC-live hissələr üçün qalır.
 
+## PC uyğunluğu
+`Marakana_v1555_MOBILE_REMOTE_GATEWAY_RELAY.zip` olduğu kimi qala bilər. v135 üçün PC update tələb olunmur.
 
-- v125: Eyni e-mail üzrə Online hesab varsa Universal PS4/PS5 yeni hesabları Online hesabın eyni oyun/Bundle siyahısına kilidlənir; fərqli oyun seçmək olmur.
+## Filial keçidi
+v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial dəyişəndə direct WordPress sorğularının `X-Marakana-Branch-Id` header-i də avtomatik yeni filiala keçir.

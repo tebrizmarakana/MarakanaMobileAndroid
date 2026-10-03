@@ -88,6 +88,7 @@ import java.time.LocalDate;
  * communicates with the existing Marakana PC mobile REST API.
  */
 public class MainActivity extends Activity {
+    // v135: Online rejimdə WordPress plugin-i olan modullar Gateway-i keçmədən birbaşa REST API-yə gedir; PC-live Terminallar/Mətbəx/login/QR Gateway-də qalır.
     // v134: Online rejimdə sol panelə filial siyahısı və çıxış etmədən filiallararası avtomatik sessiya keçidi əlavə edildi.
     // v133: Online Remote Gateway rejimində mətbəx fon xidməti foreground mətbəx ekranı ilə eyni anda serveri yükləməsin.
     public static volatile boolean APP_FOREGROUND = false;
@@ -104,6 +105,9 @@ public class MainActivity extends Activity {
     private static final String KEY_REMOTE_BRANCH_NAME = "remote_branch_name";
     private static final String REMOTE_GATEWAY_BASE = "https://marakana.az";
     private static final String REMOTE_GATEWAY_API = "/wp-json/marakana-remote/v1";
+    private static final String DIRECT_DEBT_MOBILE_API = "/wp-json/marakana-debt/v2/mobile";
+    private static final String DIRECT_RENTAL_MOBILE_API = "/wp-json/marakana-rental/v2/mobile";
+    private static final String DIRECT_BRANCH_MESSAGES_API = "/wp-json/marakana-branch-messages/v1";
     private static final String KEY_USERNAME = "username";
     private static final String KEY_ROLE = "role";
     private static final String KEY_ADMIN_DEBT_ONLY = "admin_debt_only";
@@ -977,10 +981,10 @@ public class MainActivity extends Activity {
         if (canHall) addDrawerItem(menu, "Terminallar / Zal", () -> { dismissNavigationMenuImmediate(); switchMobileRole("hall", false, this::showTerminals); });
         if (canKitchen) addDrawerItem(menu, "Mətbəx", () -> { dismissNavigationMenuImmediate(); switchMobileRole("kitchen", false, this::showKitchen); });
         if (canAdmin) {
-            addDrawerItem(menu, "Borc Dəftəri", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", true, () -> showDebt("İşçi")); });
-            addDrawerItem(menu, "İcarə Paneli", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, () -> showRental("active")); });
-            addDrawerItem(menu, "Hesab Satışı", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, () -> showAccountSales("accounts")); });
-            addDrawerItem(menu, "Mesaj qutusu", () -> { dismissNavigationMenuImmediate(); switchMobileRole("admin", false, this::showBranchMessages); });
+            addDrawerItem(menu, "Borc Dəftəri", () -> { dismissNavigationMenuImmediate(); openAdminPluginModule(true, () -> showDebt("İşçi")); });
+            addDrawerItem(menu, "İcarə Paneli", () -> { dismissNavigationMenuImmediate(); openAdminPluginModule(false, () -> showRental("active")); });
+            addDrawerItem(menu, "Hesab Satışı", () -> { dismissNavigationMenuImmediate(); openAdminPluginModule(false, () -> showAccountSales("accounts")); });
+            addDrawerItem(menu, "Mesaj qutusu", () -> { dismissNavigationMenuImmediate(); openAdminPluginModule(false, this::showBranchMessages); });
             addDrawerItem(menu, "Admin QR təsdiqi", () -> {
                 dismissNavigationMenuImmediate();
                 if ("admin".equals(role)) startAdminApprovalQrScanner();
@@ -1746,6 +1750,22 @@ public class MainActivity extends Activity {
                 }
             }
         }
+    }
+
+    // v135: WordPress direct modullarında Online rejimdə PC-də ayrıca admin sessiyası
+    // yaratmaq lazım deyil. İstifadəçinin login zamanı alınmış canAdmin icazəsi UI gate-dir,
+    // server auth isə Master Token + filial scope-dur. Local rejim köhnə rol-switch axınını saxlayır.
+    private void openAdminPluginModule(boolean debtOnly, Runnable openTarget) {
+        if (isOnlineMode()) {
+            if (!canAdmin && !"admin".equals(role)) {
+                toast("Bu bölmə üçün Admin icazəsi yoxdur.");
+                return;
+            }
+            adminDebtOnly = debtOnly;
+            if (openTarget != null) openTarget.run();
+            return;
+        }
+        switchMobileRole("admin", debtOnly, openTarget);
     }
 
     private void switchMobileRole(String targetRole, boolean debtOnly, Runnable openTarget) {
@@ -3892,11 +3912,18 @@ public class MainActivity extends Activity {
     }
 
     private String getAccountSalesSite() {
+        // v135: Online filial rejimində Hesab Satışı da seçilmiş filial konteksti ilə
+        // birbaşa marakana.az WordPress REST API-sinə gedir. Local rejimdə köhnə
+        // ayrıca sayt/API-key ayarı olduğu kimi qalır.
+        if (isOnlineMode()) return REMOTE_GATEWAY_BASE;
         String site = normalizeWordPressBase(prefs.getString(KEY_ACCOUNT_SALES_SITE, ACCOUNT_SALES_DEFAULT_SITE));
         return site.isEmpty() ? ACCOUNT_SALES_DEFAULT_SITE : site;
     }
 
     private boolean hasAccountSalesConnection() {
+        if (isOnlineMode()) {
+            return !loadRemoteTokenSecurely().isEmpty() && prefs.getInt(KEY_REMOTE_BRANCH_ID, 0) > 0;
+        }
         return !getAccountSalesSite().isEmpty() && !loadAccountSalesApiKey().isEmpty();
     }
 
@@ -4394,7 +4421,8 @@ public class MainActivity extends Activity {
         if (row == null) return "";
         String id = row.optString("id", "").trim();
         if (id.isEmpty() || "0".equals(id)) return "";
-        return getAccountSalesSite().trim().toLowerCase(Locale.ROOT) + "|" + id;
+        String scope = isOnlineMode() ? ("branch-" + prefs.getInt(KEY_REMOTE_BRANCH_ID, 0)) : "local";
+        return getAccountSalesSite().trim().toLowerCase(Locale.ROOT) + "|" + scope + "|" + id;
     }
 
     private Set<String> getAccountSalesPinnedRecordKeys() {
@@ -7138,7 +7166,7 @@ public class MainActivity extends Activity {
 
     private String accountSalesErrorMessage(Exception ex) {
         String message = ex == null || ex.getMessage() == null ? "WordPress bağlantı xətası" : ex.getMessage();
-        if (message.contains("401")) return "Hesab Satışı API açarı yanlışdır və ya yenilənib.";
+        if (message.contains("401")) return isOnlineMode() ? "Master Token Hesab Satışı API-si tərəfindən qəbul edilmədi." : "Hesab Satışı API açarı yanlışdır və ya yenilənib.";
         if (message.contains("404")) return "WordPress-də Hesab Satışı mobil API-si tapılmadı. Pluginin mobil API versiyasını quraşdır.";
         return message;
     }
@@ -7149,12 +7177,25 @@ public class MainActivity extends Activity {
         if (!suffix.startsWith("/")) suffix = "/" + suffix;
         URL url = new URL(base + ACCOUNT_SALES_API_PATH + suffix);
         HttpURLConnection c = (HttpURLConnection) url.openConnection();
-        c.setConnectTimeout(8000);
-        c.setReadTimeout(30000);
+        c.setConnectTimeout(7000);
+        c.setReadTimeout(isOnlineMode() ? 15000 : 30000);
         c.setInstanceFollowRedirects(true);
         c.setRequestMethod(method);
         c.setRequestProperty("Accept", "application/json");
-        c.setRequestProperty("X-Marakana-Account-Key", apiKey == null ? "" : apiKey);
+        c.setRequestProperty("Cache-Control", "no-cache");
+
+        if (isOnlineMode()) {
+            String master = loadRemoteTokenSecurely();
+            int branchId = prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
+            if (master.isEmpty() || branchId <= 0) throw new Exception("Online filial bağlantısı qurulmayıb.");
+            c.setRequestProperty("Authorization", "Bearer " + master);
+            c.setRequestProperty("X-Marakana-Branch-Token", master);
+            c.setRequestProperty("X-Marakana-Master-Token", master);
+            c.setRequestProperty("X-Marakana-Branch-Id", String.valueOf(branchId));
+        } else {
+            c.setRequestProperty("X-Marakana-Account-Key", apiKey == null ? "" : apiKey);
+        }
+
         if (payload != null && "POST".equals(method)) {
             c.setDoOutput(true);
             c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
@@ -7170,7 +7211,7 @@ public class MainActivity extends Activity {
         }
         String raw = sb.toString();
         JSONObject obj = raw.isEmpty() ? new JSONObject() : new JSONObject(raw);
-        if (code < 200 || code >= 300) {
+        if (code < 200 || code >= 300 || (obj.has("ok") && !obj.optBoolean("ok", true))) {
             String error = obj.optString("message", obj.optString("error", "HTTP " + code));
             throw new Exception(code + ": " + error);
         }
@@ -8368,6 +8409,77 @@ public class MainActivity extends Activity {
     private void handleApiError(Exception ex){String m=ex.getMessage()==null?"Bağlantı xətası":ex.getMessage();if(m.contains("401")||m.toLowerCase(Locale.ROOT).contains("sessiya")){sessionToken="";runOnUiThread(()->{toast("Sessiya bitib. Yenidən daxil olun.");showLogin();});}else showError(ex);}
     private void showError(Exception ex){toast(ex.getMessage()==null?ex.toString():ex.getMessage());}
 
+    // v135: Online rejimdə server-authoritative WordPress modullarını PC relay queue-suna
+    // salmırıq. Seçilmiş filial Master Token + X-Marakana-Branch-Id ilə birbaşa
+    // həmin pluginin REST API-sinə gedir. Local IP axını bu mapper-dən keçmir.
+    private String directPluginEndpointForMobilePath(String path) {
+        if (!isOnlineMode() || path == null) return "";
+        String value = path.trim();
+        if (value.isEmpty()) return "";
+
+        if (value.startsWith("/api/mobile/debt/list")) {
+            String query = value.length() > "/api/mobile/debt/list".length() ? value.substring("/api/mobile/debt/list".length()) : "";
+            return DIRECT_DEBT_MOBILE_API + "/list" + query;
+        }
+        if (value.equals("/api/mobile/debt/update")) return DIRECT_DEBT_MOBILE_API + "/update";
+        if (value.equals("/api/mobile/debt/create")) return DIRECT_DEBT_MOBILE_API + "/create";
+        if (value.equals("/api/mobile/debt/salary/settle")) return DIRECT_DEBT_MOBILE_API + "/salary/settle";
+
+        if (value.startsWith("/api/mobile/rental/list")) {
+            String query = value.length() > "/api/mobile/rental/list".length() ? value.substring("/api/mobile/rental/list".length()) : "";
+            return DIRECT_RENTAL_MOBILE_API + "/list" + query;
+        }
+        if (value.equals("/api/mobile/rental/options")) return DIRECT_RENTAL_MOBILE_API + "/options";
+        if (value.startsWith("/api/mobile/rental/customer_detail")) {
+            String query = value.length() > "/api/mobile/rental/customer_detail".length() ? value.substring("/api/mobile/rental/customer_detail".length()) : "";
+            return DIRECT_RENTAL_MOBILE_API + "/customer-detail" + query;
+        }
+        if (value.equals("/api/mobile/rental/quote")) return DIRECT_RENTAL_MOBILE_API + "/quote";
+        if (value.equals("/api/mobile/rental/create")) return DIRECT_RENTAL_MOBILE_API + "/create";
+
+        if (value.equals("/api/mobile/messages")) return DIRECT_BRANCH_MESSAGES_API + "/messages";
+        return "";
+    }
+
+    private JSONObject directPluginRequest(String endpoint, String method, JSONObject payload) throws Exception {
+        String master = loadRemoteTokenSecurely();
+        int branchId = prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
+        if (master.isEmpty() || branchId <= 0) throw new Exception("Online filial bağlantısı qurulmayıb.");
+        if (endpoint == null || !endpoint.startsWith("/wp-json/")) throw new Exception("Plugin API ünvanı düzgün deyil.");
+
+        URL url = new URL(REMOTE_GATEWAY_BASE + endpoint);
+        HttpURLConnection c = (HttpURLConnection) url.openConnection();
+        c.setConnectTimeout(7000);
+        c.setReadTimeout(15000);
+        c.setInstanceFollowRedirects(true);
+        c.setRequestMethod(method == null ? "GET" : method.toUpperCase(Locale.ROOT));
+        c.setRequestProperty("Accept", "application/json");
+        c.setRequestProperty("Authorization", "Bearer " + master);
+        c.setRequestProperty("X-Marakana-Branch-Token", master);
+        c.setRequestProperty("X-Marakana-Master-Token", master);
+        c.setRequestProperty("X-Marakana-Branch-Id", String.valueOf(branchId));
+        c.setRequestProperty("Cache-Control", "no-cache");
+        if (payload != null && !"GET".equalsIgnoreCase(method)) {
+            c.setDoOutput(true);
+            c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            byte[] bytes = payload.toString().getBytes(StandardCharsets.UTF_8);
+            try (OutputStream os = c.getOutputStream()) { os.write(bytes); }
+        }
+        int code = c.getResponseCode();
+        InputStream is = (code >= 200 && code < 300) ? c.getInputStream() : c.getErrorStream();
+        StringBuilder sb = new StringBuilder();
+        if (is != null) try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            String line; while ((line = br.readLine()) != null) sb.append(line);
+        }
+        String raw = sb.toString();
+        JSONObject obj = raw.isEmpty() ? new JSONObject() : new JSONObject(raw);
+        if (code < 200 || code >= 300 || (obj.has("ok") && !obj.optBoolean("ok", true))) {
+            String err = obj.optString("message", obj.optString("error", "HTTP " + code));
+            throw new Exception(code + ": " + err);
+        }
+        return obj;
+    }
+
     private boolean shouldUseRemoteRelay(String base, String path) {
         if (!isOnlineMode()) return false;
         if (path == null || !path.startsWith("/api/mobile/")) return false;
@@ -8484,6 +8596,8 @@ public class MainActivity extends Activity {
     }
 
     private JSONObject request(String base, String path, String method, JSONObject payload, String token) throws Exception {
+        String directEndpoint = directPluginEndpointForMobilePath(path);
+        if (!directEndpoint.isEmpty()) return directPluginRequest(directEndpoint, method, payload);
         if (shouldUseRemoteRelay(base, path)) return remoteMobileRequest(path, method, payload, token);
         return directHttpRequest(base, path, method, payload, token, 7000, 25000);
     }
