@@ -90,6 +90,7 @@ import java.time.LocalDate;
 public class MainActivity extends Activity {
     // v136: Sol paneldə filial adları cache-dən dərhal görünür; Online/Offline statusları arxa planda yenilənir və menyu aşağı-yuxarı sürüşmür.
     // v137: Yadda saxlanmış şifrə varsa APK update-dən və Local/Online bağlantı dəyişməsindən sonra avtomatik yenidən giriş edilir; transient auto-login xətası şifrəni silmir.
+    // v138: Hesab Satışı > Yeni hesab yarat formasından qiymət çıxarıldı; yeni hesab stokda 0 qiymətlə yaranır, real qiymət yalnız Sat / İcarə ver axınında daxil edilir.
     // v135: Online rejimdə WordPress plugin-i olan modullar Gateway-i keçmədən birbaşa REST API-yə gedir; PC-live Terminallar/Mətbəx/login/QR Gateway-də qalır.
     // v134: Online rejimdə sol panelə filial siyahısı və çıxış etmədən filiallararası avtomatik sessiya keçidi əlavə edildi.
     // v133: Online Remote Gateway rejimində mətbəx fon xidməti foreground mətbəx ekranı ilə eyni anda serveri yükləməsin.
@@ -5766,7 +5767,13 @@ public class MainActivity extends Activity {
         // Lambda daxilində istifadə olunduğu üçün final istinad saxlayırıq.
         // Bu yalnız Java compile xətasını aradan qaldırır, məntiqi dəyişmir.
         final EditText secretCode = secretCodeField;
-        EditText price = accountField(body, "Qiymət *", editing ? "35.50" : "", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        // v138: Yeni hesab yaradılarkən qiymət tələb olunmur. Qiymət yalnız mövcud hesabı
+        // düzəldəndə və əsasən Sat / İcarə ver axınında təyin olunur.
+        EditText price = null;
+        if (editing) {
+            price = accountField(body, "Qiymət *", "35.50", String.valueOf(record.optDouble("price", 0)), InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        }
+        final EditText editPriceField = price;
 
         // v125: Eyni e-mail üzrə Online artıq varsa yeni Universal PS4/PS5 variantlarının
         // oyun seçimi həmin Online hesabın oyun/Bundle siyahısına məcburi bağlanır.
@@ -5837,7 +5844,6 @@ public class MainActivity extends Activity {
             save.setOnClickListener(v -> showAccountSalesCreateTypeDialog(
                     game.getText().toString(),
                     email.getText().toString(),
-                    price.getText().toString(),
                     returnSection
             ));
             return;
@@ -5948,7 +5954,7 @@ public class MainActivity extends Activity {
                 payload.put("account_type", String.valueOf(type.getSelectedItem()));
                 payload.put("email", email.getText().toString());
                 payload.put("secret_code", secretCode == null ? "" : secretCode.getText().toString());
-                payload.put("price", price.getText().toString());
+                payload.put("price", editPriceField == null ? "0" : editPriceField.getText().toString());
                 payload.put("console", "Satılmayıb".equals(selectedStatus) ? "" : selectedEditConsole);
                 // Satılmış hesab Satılmayıb statusuna qaytarılanda əvvəlki satış/müştəri izi saxlanmır.
                 // Beləliklə hesab Satılmayanlar bölməsinə tam təmiz stok kimi qayıdır.
@@ -6008,10 +6014,9 @@ public class MainActivity extends Activity {
         return null;
     }
 
-    private void showAccountSalesCreateTypeDialog(String gameName, String email, String price, String sourceSection) {
+    private void showAccountSalesCreateTypeDialog(String gameName, String email, String sourceSection) {
         String requestedGame = gameName == null ? "" : gameName.trim();
         String mail = email == null ? "" : email.trim();
-        String amount = price == null ? "" : price.trim();
         JSONObject linkedOnlineAccount = accountSalesOnlineAccountForEmail(mail);
         String lockedOnlineGame = linkedOnlineAccount == null ? "" : linkedOnlineAccount.optString("game_name", "").trim();
         final String game = lockedOnlineGame.isEmpty() ? requestedGame : lockedOnlineGame;
@@ -6024,11 +6029,6 @@ public class MainActivity extends Activity {
             toast("E-mail daxil et.");
             return;
         }
-        if (amount.isEmpty()) {
-            toast("Qiyməti daxil et.");
-            return;
-        }
-
         final String[] types = {"Online", "Universal PS4", "Universal PS5"};
         final CheckBox[] checks = new CheckBox[types.length];
         final EditText[] secretFields = new EditText[types.length];
@@ -6120,7 +6120,10 @@ public class MainActivity extends Activity {
                 // köhnə serverin eyni kodu bütün sətrlərə yaymaması üçün boş göndərilir.
                 payload.put("secret_codes", secretCodes);
                 payload.put("secret_code", selectedTypes.length() == 1 ? firstSelectedSecret : "");
-                payload.put("price", amount);
+                // v138: Yeni hesab satış/icarə qiyməti olmadan stokda yaradılır.
+                // Plugin-in mövcud schema/validasiyası ilə tam uyğunluq üçün 0 göndərilir.
+                // Real qiymət Sat və ya İcarə ver əməliyyatında ayrıca daxil edilir.
+                payload.put("price", "0");
                 payload.put("account_types", selectedTypes);
             } catch (Exception ignored) {}
             dialog.dismiss();
