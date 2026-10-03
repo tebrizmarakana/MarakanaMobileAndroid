@@ -1,12 +1,12 @@
-Marakana Mobile v135 GitHub upload
+Marakana Mobile v136 GitHub upload
 
 1) Daimi signing üçün mövcud GitHub Secret-lər olduğu kimi qalır.
 2) Bu TAM layihənin içindəkiləri repo kökünə yüklə və köhnə faylların üstünə yaz.
 3) Commit changes et.
-4) Actions -> Build Marakana Mobile Native v135 RELEASE APK -> Run workflow.
-5) Artifact: MarakanaMobile-v135-permanent-update-apk
+4) Actions -> Build Marakana Mobile Native v136 RELEASE APK -> Run workflow.
+5) Artifact: MarakanaMobile-v136-permanent-update-apk
 
-v135 əsas dəyişiklik:
+v136 əsas dəyişiklik:
 - Online rejimdə sol paneldə Filiallar bölməsi görünür.
 - Filiallar Online / Offline statusu ilə siyahılanır.
 - Online filiala toxunanda çıxış etmədən, cari istifadəçi və aktiv sessiya şifrəsi ilə həmin filiala avtomatik giriş edilir.
@@ -17,3 +17,9 @@ v135 əsas dəyişiklik:
 Uyğun server tərəfi:
 - Marakana Remote Gateway v1.2.0 SPEED FIX
 - Marakana PC v1555 MOBILE REMOTE GATEWAY RELAY
+
+
+v136 əsas dəyişiklik:
+- Sol paneldə filial adları cache-dən dərhal görünür.
+- Online/Offline statusları arxa planda ayrıca yenilənir.
+- Filial sahəsi sabit hündürlükdədir; Terminallar/Mətbəx/Borc Dəftəri və digər menyu elementləri status gələndə aşağı-yuxarı tullanmir.

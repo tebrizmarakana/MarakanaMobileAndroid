@@ -1,7 +1,7 @@
-# Marakana Mobile v135 — Plugin Direct Hybrid
+# Marakana Mobile v136 — Stable Drawer Branch List
 
-- `versionCode 135`
-- `versionName 3.4.97-native-v135`
+- `versionCode 136`
+- `versionName 3.4.98-native-v136`
 
 ## Online rejim
 WordPress-də ayrıca server-authoritative plugin-i olan mobil modullar artıq PC Remote Gateway queue-suna düşmür:
@@ -28,7 +28,7 @@ Bu səbəbdən Borc / İcarə / Hesab Satışı / Mesaj qutusu açılarkən PC r
 Local IP rejimi əvvəlki kimi saxlanılıb. `/api/mobile/*` çağırışları birbaşa lokal PC-yə gedir; WordPress direct mapper yalnız Online rejimdə aktivdir.
 
 ## WordPress uyğunluğu
-v135 üçün:
+v136 üçün:
 
 1. **Marakana Filiallar v1.0.2+** — Master Token və filial scope.
 2. **Marakana Borc Dəftəri V2 v2.0.20** — yeni `/mobile/*` direct compatibility endpoint-ləri.
@@ -42,3 +42,12 @@ v135 üçün:
 
 ## Filial keçidi
 v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial dəyişəndə direct WordPress sorğularının `X-Marakana-Branch-Id` header-i də avtomatik yeni filiala keçir.
+
+
+## v136 — Sol panel filial siyahısı
+- Filial adları əvvəlki uğurlu siyahıdan cache edilir və drawer açılan kimi dərhal göstərilir.
+- `Online / Offline` statusu sonradan arxa planda yenilənir.
+- Status gələnə qədər `Yoxlanılır…` görünür.
+- Filial sahəsi sabit 3-sətir hündürlüyündə daxili scroll sahəsidir; filiallar sonradan gəlsə belə MENYU/Terminallar/Mətbəx/Borc Dəftəri aşağı düşmür.
+- Yeni filial sayı 3-dən çox olarsa yalnız filial sahəsinin içi scroll olur.
+- Local IP və v135 Plugin Direct Hybrid marşrutları dəyişməyib.

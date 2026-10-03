@@ -88,6 +88,7 @@ import java.time.LocalDate;
  * communicates with the existing Marakana PC mobile REST API.
  */
 public class MainActivity extends Activity {
+    // v136: Sol paneldə filial adları cache-dən dərhal görünür; Online/Offline statusları arxa planda yenilənir və menyu aşağı-yuxarı sürüşmür.
     // v135: Online rejimdə WordPress plugin-i olan modullar Gateway-i keçmədən birbaşa REST API-yə gedir; PC-live Terminallar/Mətbəx/login/QR Gateway-də qalır.
     // v134: Online rejimdə sol panelə filial siyahısı və çıxış etmədən filiallararası avtomatik sessiya keçidi əlavə edildi.
     // v133: Online Remote Gateway rejimində mətbəx fon xidməti foreground mətbəx ekranı ilə eyni anda serveri yükləməsin.
@@ -103,6 +104,7 @@ public class MainActivity extends Activity {
     private static final String KEY_REMOTE_TOKEN_IV = "remote_master_token_iv";
     private static final String KEY_REMOTE_BRANCH_ID = "remote_branch_id";
     private static final String KEY_REMOTE_BRANCH_NAME = "remote_branch_name";
+    private static final String KEY_REMOTE_BRANCHES_CACHE = "remote_branches_cache";
     private static final String REMOTE_GATEWAY_BASE = "https://marakana.az";
     private static final String REMOTE_GATEWAY_API = "/wp-json/marakana-remote/v1";
     private static final String DIRECT_DEBT_MOBILE_API = "/wp-json/marakana-debt/v2/mobile";
@@ -1090,18 +1092,49 @@ public class MainActivity extends Activity {
     private void addOnlineBranchDrawerSection(LinearLayout menu) {
         addDrawerSectionLabel(menu, "FİLİALLAR");
 
+        // v136: filial sahəsinin hündürlüyü sabitdir. Statuslar gec gəlsə və ya
+        // filial sayı yenilənsə belə MENYU/Terminallar/Mətbəx aşağı-yuxarı tullanmasın.
+        ScrollView branchScroll = new ScrollView(this);
+        branchScroll.setFillViewport(false);
+        branchScroll.setVerticalScrollBarEnabled(false);
+        branchScroll.setNestedScrollingEnabled(true);
         LinearLayout branchHost = new LinearLayout(this);
         branchHost.setOrientation(LinearLayout.VERTICAL);
-        menu.addView(branchHost, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        branchScroll.addView(branchHost, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        menu.addView(branchScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(162)));
 
         int currentId = prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
         String currentName = prefs.getString(KEY_REMOTE_BRANCH_NAME, "").trim();
         if (currentName.isEmpty()) currentName = currentId > 0 ? "Filial #" + currentId : "Filial seçilməyib";
 
-        Button loading = button("✓ " + currentName + "  •  Filiallar yüklənir…", Color.rgb(238, 246, 255), BLUE);
-        loading.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-        loading.setEnabled(false);
-        branchHost.addView(loading, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+        // Əvvəlki uğurlu /branches cavabından saxlanmış adları dərhal göstəririk.
+        // Online/Offline statusu isə hər drawer açılışında ayrıca təzələnir.
+        JSONArray cachedBranches = loadRemoteBranchesCache();
+        Set<Integer> renderedIds = new HashSet<>();
+        boolean renderedAny = false;
+        if (currentId > 0) {
+            Button current = createDrawerBranchButton(currentId, currentName, null, currentId);
+            branchHost.addView(current, drawerBranchLayoutParams());
+            renderedIds.add(currentId);
+            renderedAny = true;
+        }
+        for (int i = 0; i < cachedBranches.length(); i++) {
+            JSONObject item = cachedBranches.optJSONObject(i);
+            if (item == null) continue;
+            int id = item.optInt("id", 0);
+            if (id <= 0 || renderedIds.contains(id)) continue;
+            String name = item.optString("name", "Filial #" + id).trim();
+            if (name.isEmpty()) name = "Filial #" + id;
+            Button branch = createDrawerBranchButton(id, name, null, currentId);
+            branchHost.addView(branch, drawerBranchLayoutParams());
+            renderedIds.add(id);
+            renderedAny = true;
+        }
+        if (!renderedAny) {
+            TextView waiting = text("Filial siyahısı hazırlanır…", 12, MUTED, false);
+            waiting.setPadding(dp(12), dp(10), dp(12), dp(10));
+            branchHost.addView(waiting, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+        }
 
         String remoteToken = loadRemoteTokenSecurely();
         if (remoteToken.isEmpty()) return;
@@ -1114,6 +1147,7 @@ public class MainActivity extends Activity {
                 List<String> names = new ArrayList<>();
                 List<Boolean> states = new ArrayList<>();
                 if (branches != null) {
+                    saveRemoteBranchesCache(branches);
                     for (int i = 0; i < branches.length(); i++) {
                         JSONObject item = branches.optJSONObject(i);
                         if (item == null) continue;
@@ -1128,61 +1162,103 @@ public class MainActivity extends Activity {
                 }
 
                 runOnUiThread(() -> {
+                    // Yalnız sabit filial viewport-un içini yeniləyirik; aşağıdakı menyu yerlərini dəyişmir.
                     branchHost.removeAllViews();
                     if (ids.isEmpty()) {
                         TextView emptyBranches = text("Filial siyahısı alınmadı.", 12, MUTED, false);
                         emptyBranches.setPadding(dp(12), dp(10), dp(12), dp(10));
-                        branchHost.addView(emptyBranches);
+                        branchHost.addView(emptyBranches, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
                         return;
                     }
 
                     int selectedId = prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
                     for (int i = 0; i < ids.size(); i++) {
-                        int id = ids.get(i);
-                        String name = names.get(i);
-                        boolean online = states.get(i);
-                        boolean selected = id == selectedId;
-
-                        String prefix = selected ? "✓ " : (online ? "● " : "○ ");
-                        String suffix = online ? "  •  Online" : "  •  Offline";
-                        int bgColor = selected ? Color.rgb(238, 246, 255) : CARD;
-                        int textColor = selected ? BLUE : (online ? TEXT : MUTED);
-
-                        Button branch = button(prefix + name + suffix, bgColor, textColor);
-                        branch.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-                        branch.setAllCaps(false);
-                        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
-                        blp.setMargins(0, 0, 0, dp(6));
-                        branch.setLayoutParams(blp);
-                        branch.setOnClickListener(v -> {
-                            if (selected) {
-                                dismissNavigationMenuImmediate();
-                                toast("Hazırda " + name + " filialındasınız.");
-                                return;
-                            }
-                            if (!online) {
-                                toast(name + " hazırda Offline-dir. PC online olduqda keçid edə bilərsiniz.");
-                                return;
-                            }
-                            dismissNavigationMenuImmediate();
-                            switchOnlineBranch(id, name);
-                        });
-                        branchHost.addView(branch);
+                        Button branch = createDrawerBranchButton(ids.get(i), names.get(i), states.get(i), selectedId);
+                        branchHost.addView(branch, drawerBranchLayoutParams());
                     }
                 });
             } catch (Exception ex) {
+                // Cache-dəki filial adlarını ekranda saxlayırıq. Sadəcə status yenilənmədiyini bildiririk.
                 runOnUiThread(() -> {
-                    branchHost.removeAllViews();
-                    Button retry = button("Filiallar yüklənmədi • Yenidən yoxla", CARD, MUTED);
-                    retry.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-                    retry.setOnClickListener(v -> {
-                        dismissNavigationMenuImmediate();
-                        showNavigationMenu();
-                    });
-                    branchHost.addView(retry, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+                    if (branchHost.getChildCount() == 0) {
+                        TextView retry = text("Statuslar yenilənmədi. Paneli yenidən açın.", 12, MUTED, false);
+                        retry.setPadding(dp(12), dp(10), dp(12), dp(10));
+                        branchHost.addView(retry, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48)));
+                    }
                 });
             }
         });
+    }
+
+    private LinearLayout.LayoutParams drawerBranchLayoutParams() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+        lp.setMargins(0, 0, 0, dp(6));
+        return lp;
+    }
+
+    private Button createDrawerBranchButton(int id, String rawName, Boolean onlineState, int selectedId) {
+        String name = rawName == null ? "" : rawName.trim();
+        if (name.isEmpty()) name = "Filial #" + id;
+        boolean selected = id == selectedId;
+        boolean statusKnown = onlineState != null;
+        boolean online = statusKnown && onlineState;
+
+        String prefix = selected ? "✓ " : (statusKnown ? (online ? "● " : "○ ") : "◌ ");
+        String suffix = statusKnown ? (online ? "  •  Online" : "  •  Offline") : "  •  Yoxlanılır…";
+        int bgColor = selected ? Color.rgb(238, 246, 255) : CARD;
+        int textColor = selected ? BLUE : (statusKnown ? (online ? TEXT : MUTED) : MUTED);
+
+        Button branch = button(prefix + name + suffix, bgColor, textColor);
+        branch.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        branch.setAllCaps(false);
+        final String branchName = name;
+        branch.setOnClickListener(v -> {
+            if (selected) {
+                dismissNavigationMenuImmediate();
+                toast("Hazırda " + branchName + " filialındasınız.");
+                return;
+            }
+            if (!statusKnown) {
+                toast(branchName + " filialının Online/Offline statusu yoxlanılır.");
+                return;
+            }
+            if (!online) {
+                toast(branchName + " hazırda Offline-dir. PC online olduqda keçid edə bilərsiniz.");
+                return;
+            }
+            dismissNavigationMenuImmediate();
+            switchOnlineBranch(id, branchName);
+        });
+        return branch;
+    }
+
+    private JSONArray loadRemoteBranchesCache() {
+        String raw = prefs.getString(KEY_REMOTE_BRANCHES_CACHE, "");
+        if (raw == null || raw.trim().isEmpty()) return new JSONArray();
+        try { return new JSONArray(raw); }
+        catch (Exception ignored) { return new JSONArray(); }
+    }
+
+    private void saveRemoteBranchesCache(JSONArray branches) {
+        if (branches == null) return;
+        JSONArray clean = new JSONArray();
+        Set<Integer> seen = new HashSet<>();
+        for (int i = 0; i < branches.length(); i++) {
+            JSONObject item = branches.optJSONObject(i);
+            if (item == null) continue;
+            int id = item.optInt("id", 0);
+            if (id <= 0 || seen.contains(id)) continue;
+            String name = item.optString("name", item.optString("branch_name", "Filial #" + id)).trim();
+            if (name.isEmpty()) name = "Filial #" + id;
+            try {
+                JSONObject cached = new JSONObject();
+                cached.put("id", id);
+                cached.put("name", name);
+                clean.put(cached);
+                seen.add(id);
+            } catch (Exception ignored) {}
+        }
+        if (clean.length() > 0) prefs.edit().putString(KEY_REMOTE_BRANCHES_CACHE, clean.toString()).apply();
     }
 
     private LinearLayout scrollBody(ScrollView scroll) {
@@ -2318,6 +2394,7 @@ public class MainActivity extends Activity {
                 try {
                     JSONObject result = remoteGatewayCall("GET", REMOTE_GATEWAY_API + "/branches", null, token, 12000);
                     JSONArray branches = result.optJSONArray("branches");
+                    if (branches != null) saveRemoteBranchesCache(branches);
                     List<Integer> ids = new ArrayList<>();
                     List<String> names = new ArrayList<>();
                     List<Boolean> states = new ArrayList<>();
