@@ -1,7 +1,7 @@
-# Marakana Mobile v139 — Update Safe Multi-PC Selection
+# Marakana Mobile v140 — Target Branch Messages
 
-- `versionCode 139`
-- `versionName 3.5.01-native-v139`
+- `versionCode 140`
+- `versionName 3.5.02-native-v140`
 
 ## Online rejim
 WordPress-də ayrıca server-authoritative plugin-i olan mobil modullar artıq PC Remote Gateway queue-suna düşmür:
@@ -81,3 +81,11 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - `applicationId` dəyişməyib (`az.marakana.mobile`), `versionCode=139`.
 - Release APK daimi signing məlumatları olmadan build edilmir. Bu, səhv/unsigned APK-nın update kimi quraşdırılmağa çalışılmasının qarşısını alır.
 - GitHub Actions artifact/APK adı v139-a düzəldilib və build sonrası package + versionCode ayrıca yoxlanır.
+
+
+## v140 — Mesajı filial üzrə göndərmə
+- Master Mesaj qutusunda `Yeni mesaj göndər` formunda `Hədəf filial` seçimi var.
+- `Bütün filiallar` və ya konkret filial seçilə bilər.
+- Konkret filial hədəfi yalnız server `target_branch_messages` capability qaytaranda aktiv olur.
+- Mesaj kartlarında Master görünüşündə `Hədəf` göstərilir və `Gözləyən` yalnız real hədəfə görə hesablanır.
+- Filial Mesajları plugin v1.0.3 artıq bu payload-u dəstəkləyir; yeni plugin dəyişikliyi tələb olunmur.

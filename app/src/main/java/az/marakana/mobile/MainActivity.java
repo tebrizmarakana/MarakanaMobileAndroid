@@ -98,6 +98,7 @@ import java.time.LocalDate;
  * communicates with the existing Marakana PC mobile REST API.
  */
 public class MainActivity extends Activity {
+    // v140: Mobil Mesaj qutusunda Master istifadəçi mesajı bütün filiallara və ya seçilmiş konkret filiala göndərə bilir; hədəf/status görünüşü server capability ilə qorunur.
     // v139: Bir PC tapılsa belə avtomatik qoşulmur; seçim pəncərəsi açılır və operator mütləq "Qoşul" basır.
     // Birdən çox PC tapılarsa heç biri avtomatik seçilmir; operator istədiyi PC-ni seçir.
     // v138: Local discovery artıq eyni LAN-dakı bütün Marakana PC-ləri toplayır; operator siyahıdan istədiyini seçib qoşulur.
@@ -4425,6 +4426,9 @@ public class MainActivity extends Activity {
     private void renderBranchMessages(LinearLayout body, JSONObject result) {
         body.removeAllViews();
         boolean canSend = result.optBoolean("can_send", result.optBoolean("is_master", false));
+        JSONObject capabilities = result.optJSONObject("capabilities");
+        boolean targetBranchSupported = capabilities != null && capabilities.optBoolean("target_branch_messages", false);
+        JSONArray branches = result.optJSONArray("branches");
 
         Button send = button("＋ Yeni mesaj göndər", canSend ? BLUE : Color.rgb(230, 235, 240), canSend ? Color.WHITE : MUTED);
         body.addView(send, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
@@ -4433,7 +4437,7 @@ public class MainActivity extends Activity {
                 toast("Yeni mesaj göndərmək üçün Master Token bağlı PC-yə qoşulun.");
                 return;
             }
-            composeBranchMessage();
+            composeBranchMessage(branches, targetBranchSupported);
         });
         spacer(body, 12);
 
@@ -4444,7 +4448,6 @@ public class MainActivity extends Activity {
         }
 
         boolean masterView = result.optBoolean("is_master", false);
-        JSONArray branches = result.optJSONArray("branches");
         for (int i = 0; i < messages.length(); i++) {
             JSONObject row = messages.optJSONObject(i);
             if (row == null) continue;
@@ -4458,6 +4461,13 @@ public class MainActivity extends Activity {
             if (!created.isEmpty()) card.addView(text(created, 12, MUTED, true));
             TextView sender = text("Göndərən: Rəhbərlik", 13, MUTED, true);
             card.addView(sender);
+            if (masterView) {
+                int targetBranchId = row.optInt("target_branch_id", 0);
+                String targetBranchName = row.optString("target_branch_name", "").trim();
+                if (targetBranchId <= 0) targetBranchName = "Bütün filiallar";
+                else if (targetBranchName.isEmpty()) targetBranchName = "Filial #" + targetBranchId;
+                card.addView(text("Hədəf: " + targetBranchName, 12, MUTED, true));
+            }
             spacer(card, 7);
 
             TextView message = text(row.optString("message", ""), 16, TEXT, false);
@@ -4480,7 +4490,14 @@ public class MainActivity extends Activity {
                     }
                 }
                 ArrayList<String> waitingNames = new ArrayList<>();
-                if (branches != null) {
+                int targetBranchId = row.optInt("target_branch_id", 0);
+                String targetBranchName = row.optString("target_branch_name", "").trim();
+                if (targetBranchId > 0) {
+                    if (!acceptedIds.contains(targetBranchId)) {
+                        if (targetBranchName.isEmpty()) targetBranchName = "Filial #" + targetBranchId;
+                        waitingNames.add(targetBranchName);
+                    }
+                } else if (branches != null) {
                     for (int b = 0; b < branches.length(); b++) {
                         JSONObject branch = branches.optJSONObject(b);
                         if (branch == null) continue;
@@ -4504,11 +4521,52 @@ public class MainActivity extends Activity {
         }
     }
 
-    private void composeBranchMessage() {
+    private void composeBranchMessage(JSONArray branches, boolean targetBranchSupported) {
         if (!canAdmin && !"admin".equals(role)) {
             toast("Mesaj göndərmək yalnız Admin üçün açıqdır.");
             return;
         }
+
+        ArrayList<Integer> targetIds = new ArrayList<>();
+        ArrayList<String> targetLabels = new ArrayList<>();
+        targetIds.add(0);
+        targetLabels.add("Bütün filiallar");
+        if (targetBranchSupported && branches != null) {
+            for (int i = 0; i < branches.length(); i++) {
+                JSONObject branch = branches.optJSONObject(i);
+                if (branch == null) continue;
+                int branchId = branch.optInt("id", 0);
+                String branchName = branch.optString("name", "").trim();
+                if (branchId <= 0) continue;
+                if (branchName.isEmpty()) branchName = "Filial #" + branchId;
+                targetIds.add(branchId);
+                targetLabels.add(branchName);
+            }
+        }
+
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), 0);
+
+        TextView targetTitle = text("Hədəf filial", 13, MUTED, true);
+        form.addView(targetTitle);
+        spacer(form, 6);
+
+        Spinner targetSpinner = new Spinner(this);
+        ArrayAdapter<String> targetAdapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, targetLabels);
+        targetAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        targetSpinner.setAdapter(targetAdapter);
+        targetSpinner.setEnabled(targetBranchSupported && targetIds.size() > 1);
+        targetSpinner.setBackground(bg(CARD, 14, BORDER));
+        targetSpinner.setPadding(dp(10), 0, dp(10), 0);
+        form.addView(targetSpinner, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
+
+        if (!targetBranchSupported) {
+            spacer(form, 5);
+            form.addView(text("Konkret filial seçimi üçün Filial Mesajları plugin v1.0.3 və ya daha yenisi tələb olunur. Bu serverdə yalnız bütün filiallara göndərmək mümkündür.", 11, Color.rgb(185, 121, 0), false));
+        }
+
+        spacer(form, 10);
         EditText field = new EditText(this);
         field.setHint("Mesaj mətnini yazın");
         field.setTextColor(TEXT);
@@ -4520,15 +4578,11 @@ public class MainActivity extends Activity {
         field.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         field.setPadding(dp(14), dp(12), dp(14), dp(12));
         field.setBackground(bg(CARD, 14, BORDER));
-
-        int pad = dp(18);
-        FrameLayout holder = new FrameLayout(this);
-        holder.setPadding(pad, dp(8), pad, 0);
-        holder.addView(field, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(150)));
+        form.addView(field, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(150)));
 
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Yeni mesaj")
-                .setView(holder)
+                .setView(form)
                 .setNegativeButton("Ləğv", null)
                 .setPositiveButton("Göndər", null)
                 .create();
@@ -4538,15 +4592,30 @@ public class MainActivity extends Activity {
                 toast("Mesaj mətnini yazın.");
                 return;
             }
+            int selectedPos = targetSpinner.getSelectedItemPosition();
+            if (selectedPos < 0 || selectedPos >= targetIds.size()) selectedPos = 0;
+            int targetBranchId = targetIds.get(selectedPos);
+            String targetLabel = targetLabels.get(selectedPos);
+            if (targetBranchId > 0 && !targetBranchSupported) {
+                toast("Konkret filial seçimi server tərəfindən dəstəklənmir. Plugin-i yeniləyin.");
+                return;
+            }
+
             JSONObject payload = new JSONObject();
-            try { payload.put("message", message); } catch (Exception ignoredEx) {}
+            try {
+                payload.put("message", message);
+                payload.put("target_branch_id", targetBranchId);
+            } catch (Exception ignoredEx) {}
             dialog.dismiss();
+            final int sentTargetBranchId = targetBranchId;
+            final String sentTargetLabel = targetLabel;
             postJson("/api/mobile/messages", payload, result -> {
                 if (!result.optBoolean("ok", true)) {
                     toast(result.optString("message", "Mesaj göndərilmədi."));
                     return;
                 }
-                toast("Mesaj filiallara göndərildi.");
+                if (sentTargetBranchId > 0) toast("Mesaj " + sentTargetLabel + " filialına göndərildi.");
+                else toast("Mesaj bütün filiallara göndərildi.");
                 showBranchMessages();
             });
         }));
