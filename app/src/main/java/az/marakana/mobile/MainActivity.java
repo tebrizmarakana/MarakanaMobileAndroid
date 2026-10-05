@@ -19,6 +19,11 @@ import android.graphics.Paint;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.net.Uri;
+import android.net.ConnectivityManager;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.media.AudioAttributes;
 import android.media.RingtoneManager;
 import android.os.Bundle;
@@ -60,6 +65,8 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
@@ -77,8 +84,10 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.time.LocalDate;
 
 /**
@@ -88,9 +97,8 @@ import java.time.LocalDate;
  * communicates with the existing Marakana PC mobile REST API.
  */
 public class MainActivity extends Activity {
+    // v137: Local IP ekranına eyni LAN daxilində Marakana PC-ni avtomatik tapıb qoşulan təhlükəsiz discovery əlavə edildi.
     // v136: Sol paneldə filial adları cache-dən dərhal görünür; Online/Offline statusları arxa planda yenilənir və menyu aşağı-yuxarı sürüşmür.
-    // v137: Yadda saxlanmış şifrə varsa APK update-dən və Local/Online bağlantı dəyişməsindən sonra avtomatik yenidən giriş edilir; transient auto-login xətası şifrəni silmir.
-    // v138: Hesab Satışı > Yeni hesab yarat formasından qiymət çıxarıldı; yeni hesab stokda 0 qiymətlə yaranır, real qiymət yalnız Sat / İcarə ver axınında daxil edilir.
     // v135: Online rejimdə WordPress plugin-i olan modullar Gateway-i keçmədən birbaşa REST API-yə gedir; PC-live Terminallar/Mətbəx/login/QR Gateway-də qalır.
     // v134: Online rejimdə sol panelə filial siyahısı və çıxış etmədən filiallararası avtomatik sessiya keçidi əlavə edildi.
     // v133: Online Remote Gateway rejimində mətbəx fon xidməti foreground mətbəx ekranı ilə eyni anda serveri yükləməsin.
@@ -1666,32 +1674,6 @@ public class MainActivity extends Activity {
         performLogin(savedUser, savedPassword, savedRole, savedDebtOnly, true, false);
     }
 
-    // v137: Bağlantı növü/server dəyişəndə istifadəçi şifrəni əvvəldən yadda saxlayıbsa
-    // login ekranını göstərmədən həmin credential ilə yeni hədəfdə sessiya yaradırıq.
-    // Bu həm Online -> Local, həm Local -> Online, həm də QR ilə Local server keçidinə aiddir.
-    private void resumeRememberedLoginOrShowLogin(String successMessage) {
-        sessionToken = "";
-        canHall = false;
-        canKitchen = false;
-        canAdmin = false;
-
-        boolean autoLoginEnabled = prefs.getBoolean(KEY_AUTO_LOGIN, false);
-        String savedUser = username == null ? "" : username.trim();
-        if (savedUser.isEmpty()) savedUser = prefs.getString(KEY_USERNAME, "").trim();
-        String savedPassword = autoLoginEnabled ? loadSavedPassword() : "";
-        String savedRole = prefs.getString(KEY_ROLE, role == null ? "hall" : role);
-        boolean savedDebtOnly = prefs.getBoolean(KEY_ADMIN_DEBT_ONLY, adminDebtOnly);
-
-        if (autoLoginEnabled && !savedUser.isEmpty() && !savedPassword.isEmpty()) {
-            if (successMessage != null && !successMessage.trim().isEmpty()) toast(successMessage);
-            autoLogin(savedUser, savedPassword, savedRole, savedDebtOnly);
-            return;
-        }
-
-        showLogin();
-        if (successMessage != null && !successMessage.trim().isEmpty()) toast(successMessage);
-    }
-
     private void performLogin(String u, String p, String selectedRole, boolean debtOnly, boolean rememberPassword, boolean showLoginOnFailure) {
         setBusy(true);
         io.execute(() -> {
@@ -1766,12 +1748,10 @@ public class MainActivity extends Activity {
                 });
             } catch (Exception ex) {
                 if (!showLoginOnFailure) {
-                    // v137: Gateway/şəbəkə/filial müvəqqəti əlçatmaz olduqda istifadəçinin
-                    // "Şifrəni yadda saxla" seçimini silmirik. Login ekranı şifrəni yenə
-                    // doldurur və növbəti start/bağlantı keçidində auto-login yenidən sınanır.
+                    clearSavedPassword();
                     runOnUiThread(() -> {
                         showLogin();
-                        toast("Avtomatik giriş alınmadı. Yadda saxlanmış şifrə silinməyib.");
+                        toast("Avtomatik giriş alınmadı. Şifrəni yenidən daxil edin.");
                     });
                 } else {
                     showError(ex);
@@ -2228,7 +2208,8 @@ public class MainActivity extends Activity {
             });
         }
 
-        resumeRememberedLoginOrShowLogin("Filial serveri QR-a uyğun dəyişdirildi.");
+        showLogin();
+        toast("Filial serveri QR-a uyğun dəyişdirildi. Bu filial üçün daxil olun; QR təsdiqi girişdən sonra davam edəcək.");
     }
 
     private void reopenCurrentRoleHome() {
@@ -2263,7 +2244,10 @@ public class MainActivity extends Activity {
             try {
                 request(value, "/api/mobile/ping", "GET", null, "");
                 activateLocalConnection(value);
-                runOnUiThread(() -> resumeRememberedLoginOrShowLogin("QR kodla Local serverə qoşuldu."));
+                runOnUiThread(() -> {
+                    toast("QR kodla serverə qoşuldu.");
+                    showLogin();
+                });
             } catch (Exception ex) {
                 // Qoşulma alınmasa server ekranında qalır və oxunan ünvan xanada qalır.
                 runOnUiThread(() -> toast("Ünvan əlavə olundu, amma serverə avtomatik qoşulmaq alınmadı."));
@@ -2320,6 +2304,149 @@ public class MainActivity extends Activity {
         }
     }
 
+    private List<String> localDiscoveryHostCandidates() throws Exception {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        if (cm == null) throw new Exception("Şəbəkə məlumatı alınmadı.");
+
+        // Əvvəl Wi-Fi/Ethernet interfeysini seçirik. Telefon mobil data ilə də online olsa,
+        // discovery səhvən operatorun 10.x/100.64.x ünvanını scan etməsin.
+        LinkAddress selectedLink = null;
+        Network[] networks = cm.getAllNetworks();
+        if (networks != null) {
+            for (Network network : networks) {
+                NetworkCapabilities caps = cm.getNetworkCapabilities(network);
+                if (caps == null) continue;
+                boolean localTransport = caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                        || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET);
+                if (!localTransport) continue;
+                LinkProperties props = cm.getLinkProperties(network);
+                if (props == null) continue;
+                for (LinkAddress link : props.getLinkAddresses()) {
+                    InetAddress addr = link == null ? null : link.getAddress();
+                    if (addr instanceof Inet4Address && !addr.isLoopbackAddress() && isPrivateLanIpv4((Inet4Address) addr)) {
+                        selectedLink = link;
+                        break;
+                    }
+                }
+                if (selectedLink != null) break;
+            }
+        }
+        if (selectedLink == null) {
+            Network active = cm.getActiveNetwork();
+            LinkProperties props = active == null ? null : cm.getLinkProperties(active);
+            if (props != null) {
+                for (LinkAddress link : props.getLinkAddresses()) {
+                    InetAddress addr = link == null ? null : link.getAddress();
+                    if (addr instanceof Inet4Address && !addr.isLoopbackAddress() && isPrivateLanIpv4((Inet4Address) addr)) {
+                        selectedLink = link;
+                        break;
+                    }
+                }
+            }
+        }
+        if (selectedLink == null || !(selectedLink.getAddress() instanceof Inet4Address)) {
+            throw new Exception("Telefonun Wi-Fi lokal IPv4 ünvanı tapılmadı.");
+        }
+
+        Inet4Address local = (Inet4Address) selectedLink.getAddress();
+        int prefixLength = selectedLink.getPrefixLength();
+        byte[] raw = local.getAddress();
+        long ip = ((raw[0] & 0xffL) << 24) | ((raw[1] & 0xffL) << 16) | ((raw[2] & 0xffL) << 8) | (raw[3] & 0xffL);
+        // Çox geniş korporativ subnetlərdə minlərlə IP scan etməmək üçün maksimum /23,
+        // daha geniş şəbəkədə isə telefonun olduğu /24 hissəsini yoxlayırıq.
+        int effectivePrefix = prefixLength;
+        if (effectivePrefix < 23 || effectivePrefix > 30) effectivePrefix = 24;
+        long mask = (0xffffffffL << (32 - effectivePrefix)) & 0xffffffffL;
+        long network = ip & mask;
+        long broadcast = network | (~mask & 0xffffffffL);
+        long first = network + 1L;
+        long last = broadcast - 1L;
+        if (last < first || (last - first + 1L) > 510L) {
+            mask = 0xffffff00L;
+            network = ip & mask;
+            broadcast = network | 0xffL;
+            first = network + 1L;
+            last = broadcast - 1L;
+        }
+
+        List<String> hosts = new ArrayList<>();
+        long maxDelta = Math.max(ip - first, last - ip);
+        for (long delta = 1; delta <= maxDelta; delta++) {
+            long lower = ip - delta;
+            if (lower >= first) hosts.add(ipv4FromLong(lower));
+            long upper = ip + delta;
+            if (upper <= last) hosts.add(ipv4FromLong(upper));
+        }
+        return hosts;
+    }
+
+    private boolean isPrivateLanIpv4(Inet4Address address) {
+        if (address == null) return false;
+        byte[] b = address.getAddress();
+        int a = b[0] & 0xff;
+        int c = b[1] & 0xff;
+        if (a == 10) return true;
+        if (a == 172 && c >= 16 && c <= 31) return true;
+        return a == 192 && c == 168;
+    }
+
+    private String ipv4FromLong(long value) {
+        return ((value >> 24) & 0xffL) + "." + ((value >> 16) & 0xffL) + "." + ((value >> 8) & 0xffL) + "." + (value & 0xffL);
+    }
+
+    private String probeMarakanaPc(String host, int port, int connectTimeoutMs, int readTimeoutMs) throws Exception {
+        String candidate = "http://" + host + ":" + port;
+        JSONObject ping = directHttpRequest(candidate, "/api/mobile/ping", "GET", null, "", connectTimeoutMs, readTimeoutMs);
+        if (!ping.optBoolean("ok", false)) throw new Exception("Marakana ping deyil.");
+        String status = ping.optString("status", "").trim();
+        if (!status.isEmpty() && !"mobile_panel_reachable".equalsIgnoreCase(status)) throw new Exception("Marakana mobil server deyil.");
+        String advertised = normalizeServerBase(ping.optString("server_url", ""));
+        return advertised.isEmpty() ? candidate : advertised;
+    }
+
+    private String discoverLocalMarakanaPc() throws Exception {
+        List<String> hosts = localDiscoveryHostCandidates();
+        if (hosts.isEmpty()) throw new Exception("Yoxlanacaq lokal IP tapılmadı.");
+
+        // Birinci mərhələ: normal/default port. Əksər filiallarda 8765 işləyir və bu yol çox sürətlidir.
+        String found = discoverLocalMarakanaPcOnPorts(hosts, new int[]{8765}, 350, 650, 4500);
+        if (!found.isEmpty()) return found;
+
+        // İkinci mərhələ: PC-də 8765 dolu olarsa serverin seçə bildiyi fallback portlar.
+        int[] fallbackPorts = new int[19];
+        for (int i = 0; i < fallbackPorts.length; i++) fallbackPorts[i] = 8766 + i;
+        found = discoverLocalMarakanaPcOnPorts(hosts, fallbackPorts, 180, 450, 12000);
+        if (!found.isEmpty()) return found;
+        throw new Exception("Marakana PC lokal şəbəkədə tapılmadı.");
+    }
+
+    private String discoverLocalMarakanaPcOnPorts(List<String> hosts, int[] ports, int connectTimeoutMs, int readTimeoutMs, long overallTimeoutMs) {
+        int workers = Math.max(8, Math.min(48, hosts.size()));
+        ExecutorService discoveryPool = Executors.newFixedThreadPool(workers);
+        List<Callable<String>> tasks = new ArrayList<>();
+        for (String host : hosts) {
+            tasks.add(() -> {
+                Exception last = null;
+                for (int port : ports) {
+                    if (Thread.currentThread().isInterrupted()) throw new InterruptedException("Discovery dayandırıldı.");
+                    try {
+                        return probeMarakanaPc(host, port, connectTimeoutMs, readTimeoutMs);
+                    } catch (Exception ex) {
+                        last = ex;
+                    }
+                }
+                throw (last == null ? new Exception("Server tapılmadı.") : last);
+            });
+        }
+        try {
+            return discoveryPool.invokeAny(tasks, overallTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (Exception ignored) {
+            return "";
+        } finally {
+            discoveryPool.shutdownNow();
+        }
+    }
+
     private void showLocalServerSetup() {
         ScrollView sv = screenWithBody("Local IP bağlantısı", true, this::showServerSetup);
         LinearLayout body = scrollBody(sv);
@@ -2342,12 +2469,59 @@ public class MainActivity extends Activity {
         connect.setLayoutParams(cp);
         body.addView(connect);
 
+        Button autoFind = button("🔎  PC-ni avtomatik tap", CARD, TEXT);
+        LinearLayout.LayoutParams afp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
+        afp.setMargins(0, dp(10), 0, 0);
+        autoFind.setLayoutParams(afp);
+        body.addView(autoFind);
+
         Button qrConnect = button("▦  QR kodla qoşul", CARD, TEXT);
         LinearLayout.LayoutParams qrp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54));
         qrp.setMargins(0, dp(10), 0, 0);
         qrConnect.setLayoutParams(qrp);
         body.addView(qrConnect);
         qrConnect.setOnClickListener(v -> startQrServerScanner());
+
+        autoFind.setOnClickListener(v -> {
+            autoFind.setEnabled(false);
+            connect.setEnabled(false);
+            qrConnect.setEnabled(false);
+            serverAddressInput.setEnabled(false);
+            autoFind.setText("PC axtarılır…");
+            setBusy(true);
+            io.execute(() -> {
+                boolean success = false;
+                try {
+                    String found = discoverLocalMarakanaPc();
+                    // Son dəfə normal ping ilə təsdiqlə; scan nəticəsini kor-koranə qəbul etmirik.
+                    JSONObject ping = directHttpRequest(found, "/api/mobile/ping", "GET", null, "", 2000, 4000);
+                    if (!ping.optBoolean("ok", false)) throw new Exception("Tapılan server Marakana cavabı vermədi.");
+                    activateLocalConnection(found);
+                    success = true;
+                    runOnUiThread(() -> {
+                        if (serverAddressInput != null) {
+                            serverAddressInput.setText(found);
+                            serverAddressInput.setSelection(found.length());
+                        }
+                        toast("PC tapıldı: " + found);
+                        showLogin();
+                    });
+                } catch (Exception ex) {
+                    runOnUiThread(() -> toast("PC avtomatik tapılmadı. Telefon və PC eyni lokal şəbəkədə olmalı və cihazlar arası əlaqə açıq olmalıdır."));
+                } finally {
+                    setBusy(false);
+                    if (!success) {
+                        runOnUiThread(() -> {
+                            autoFind.setText("🔎  PC-ni avtomatik tap");
+                            autoFind.setEnabled(true);
+                            connect.setEnabled(true);
+                            qrConnect.setEnabled(true);
+                            if (serverAddressInput != null) serverAddressInput.setEnabled(true);
+                        });
+                    }
+                }
+            });
+        });
 
         connect.setOnClickListener(v -> {
             String value = normalizeServerBase(serverAddressInput.getText().toString());
@@ -2358,7 +2532,7 @@ public class MainActivity extends Activity {
                     JSONObject ping = directHttpRequest(value, "/api/mobile/ping", "GET", null, "", 7000, 12000);
                     if (ping.has("ok") && !ping.optBoolean("ok", true)) throw new RuntimeException(ping.optString("message", "Server cavab vermədi."));
                     activateLocalConnection(value);
-                    runOnUiThread(() -> resumeRememberedLoginOrShowLogin("Local serverə qoşuldu."));
+                    runOnUiThread(this::showLogin);
                 } catch (Exception ex) { showError(ex); }
                 finally { setBusy(false); }
             });
@@ -2470,7 +2644,7 @@ public class MainActivity extends Activity {
             activateOnlineConnection(token, branchId, branchName);
             sessionToken = "";
             if (!onlineState) toast("Filial hazırda Offline görünür. PC online olduqda avtomatik işləyəcək.");
-            resumeRememberedLoginOrShowLogin(branchName + " filialı seçildi.");
+            showLogin();
         });
 
         if (!savedToken.isEmpty()) loader.run();
@@ -5767,13 +5941,7 @@ public class MainActivity extends Activity {
         // Lambda daxilində istifadə olunduğu üçün final istinad saxlayırıq.
         // Bu yalnız Java compile xətasını aradan qaldırır, məntiqi dəyişmir.
         final EditText secretCode = secretCodeField;
-        // v138: Yeni hesab yaradılarkən qiymət tələb olunmur. Qiymət yalnız mövcud hesabı
-        // düzəldəndə və əsasən Sat / İcarə ver axınında təyin olunur.
-        EditText price = null;
-        if (editing) {
-            price = accountField(body, "Qiymət *", "35.50", String.valueOf(record.optDouble("price", 0)), InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
-        }
-        final EditText editPriceField = price;
+        EditText price = accountField(body, "Qiymət *", editing ? "35.50" : "", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
 
         // v125: Eyni e-mail üzrə Online artıq varsa yeni Universal PS4/PS5 variantlarının
         // oyun seçimi həmin Online hesabın oyun/Bundle siyahısına məcburi bağlanır.
@@ -5844,6 +6012,7 @@ public class MainActivity extends Activity {
             save.setOnClickListener(v -> showAccountSalesCreateTypeDialog(
                     game.getText().toString(),
                     email.getText().toString(),
+                    price.getText().toString(),
                     returnSection
             ));
             return;
@@ -5954,7 +6123,7 @@ public class MainActivity extends Activity {
                 payload.put("account_type", String.valueOf(type.getSelectedItem()));
                 payload.put("email", email.getText().toString());
                 payload.put("secret_code", secretCode == null ? "" : secretCode.getText().toString());
-                payload.put("price", editPriceField == null ? "0" : editPriceField.getText().toString());
+                payload.put("price", price.getText().toString());
                 payload.put("console", "Satılmayıb".equals(selectedStatus) ? "" : selectedEditConsole);
                 // Satılmış hesab Satılmayıb statusuna qaytarılanda əvvəlki satış/müştəri izi saxlanmır.
                 // Beləliklə hesab Satılmayanlar bölməsinə tam təmiz stok kimi qayıdır.
@@ -6014,9 +6183,10 @@ public class MainActivity extends Activity {
         return null;
     }
 
-    private void showAccountSalesCreateTypeDialog(String gameName, String email, String sourceSection) {
+    private void showAccountSalesCreateTypeDialog(String gameName, String email, String price, String sourceSection) {
         String requestedGame = gameName == null ? "" : gameName.trim();
         String mail = email == null ? "" : email.trim();
+        String amount = price == null ? "" : price.trim();
         JSONObject linkedOnlineAccount = accountSalesOnlineAccountForEmail(mail);
         String lockedOnlineGame = linkedOnlineAccount == null ? "" : linkedOnlineAccount.optString("game_name", "").trim();
         final String game = lockedOnlineGame.isEmpty() ? requestedGame : lockedOnlineGame;
@@ -6029,6 +6199,11 @@ public class MainActivity extends Activity {
             toast("E-mail daxil et.");
             return;
         }
+        if (amount.isEmpty()) {
+            toast("Qiyməti daxil et.");
+            return;
+        }
+
         final String[] types = {"Online", "Universal PS4", "Universal PS5"};
         final CheckBox[] checks = new CheckBox[types.length];
         final EditText[] secretFields = new EditText[types.length];
@@ -6120,10 +6295,7 @@ public class MainActivity extends Activity {
                 // köhnə serverin eyni kodu bütün sətrlərə yaymaması üçün boş göndərilir.
                 payload.put("secret_codes", secretCodes);
                 payload.put("secret_code", selectedTypes.length() == 1 ? firstSelectedSecret : "");
-                // v138: Yeni hesab satış/icarə qiyməti olmadan stokda yaradılır.
-                // Plugin-in mövcud schema/validasiyası ilə tam uyğunluq üçün 0 göndərilir.
-                // Real qiymət Sat və ya İcarə ver əməliyyatında ayrıca daxil edilir.
-                payload.put("price", "0");
+                payload.put("price", amount);
                 payload.put("account_types", selectedTypes);
             } catch (Exception ignored) {}
             dialog.dismiss();
