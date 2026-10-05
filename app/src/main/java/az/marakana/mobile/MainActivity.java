@@ -88,6 +88,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.Future;
 import java.time.LocalDate;
 
 /**
@@ -97,6 +98,9 @@ import java.time.LocalDate;
  * communicates with the existing Marakana PC mobile REST API.
  */
 public class MainActivity extends Activity {
+    // v139: Bir PC tapılsa belə avtomatik qoşulmur; seçim pəncərəsi açılır və operator mütləq "Qoşul" basır.
+    // Birdən çox PC tapılarsa heç biri avtomatik seçilmir; operator istədiyi PC-ni seçir.
+    // v138: Local discovery artıq eyni LAN-dakı bütün Marakana PC-ləri toplayır; operator siyahıdan istədiyini seçib qoşulur.
     // v137: Local IP ekranına eyni LAN daxilində Marakana PC-ni avtomatik tapıb qoşulan təhlükəsiz discovery əlavə edildi.
     // v136: Sol paneldə filial adları cache-dən dərhal görünür; Online/Offline statusları arxa planda yenilənir və menyu aşağı-yuxarı sürüşmür.
     // v135: Online rejimdə WordPress plugin-i olan modullar Gateway-i keçmədən birbaşa REST API-yə gedir; PC-live Terminallar/Mətbəx/login/QR Gateway-də qalır.
@@ -2404,47 +2408,150 @@ public class MainActivity extends Activity {
         return advertised.isEmpty() ? candidate : advertised;
     }
 
-    private String discoverLocalMarakanaPc() throws Exception {
+    private List<String> discoverLocalMarakanaPcs() throws Exception {
         List<String> hosts = localDiscoveryHostCandidates();
         if (hosts.isEmpty()) throw new Exception("Yoxlanacaq lokal IP tapılmadı.");
 
-        // Birinci mərhələ: normal/default port. Əksər filiallarda 8765 işləyir və bu yol çox sürətlidir.
-        String found = discoverLocalMarakanaPcOnPorts(hosts, new int[]{8765}, 350, 650, 4500);
-        if (!found.isEmpty()) return found;
+        List<String> found = new ArrayList<>();
 
-        // İkinci mərhələ: PC-də 8765 dolu olarsa serverin seçə bildiyi fallback portlar.
+        // Birinci mərhələ: bütün hostlarda default 8765 portunu yoxla.
+        // v137-də invokeAny ilk PC-ni tapanda qalan scan-i dayandırırdı; v138 bütün uyğun PC-ləri toplayır.
+        mergeUniqueServers(found, discoverLocalMarakanaPcsOnPorts(hosts, new int[]{8765}, 350, 650, 5500));
+
+        // İkinci mərhələ: eyni LAN-da başqa PC fallback 8766-8784 portlarından birində işləyə bilər.
+        // Default portda PC tapılsa belə bu mərhələ işləyir ki ikinci/üçüncü PC siyahıdan itməsin.
         int[] fallbackPorts = new int[19];
         for (int i = 0; i < fallbackPorts.length; i++) fallbackPorts[i] = 8766 + i;
-        found = discoverLocalMarakanaPcOnPorts(hosts, fallbackPorts, 180, 450, 12000);
-        if (!found.isEmpty()) return found;
-        throw new Exception("Marakana PC lokal şəbəkədə tapılmadı.");
+        mergeUniqueServers(found, discoverLocalMarakanaPcsOnPorts(hosts, fallbackPorts, 180, 450, 12000));
+
+        if (found.isEmpty()) throw new Exception("Marakana PC lokal şəbəkədə tapılmadı.");
+        return found;
     }
 
-    private String discoverLocalMarakanaPcOnPorts(List<String> hosts, int[] ports, int connectTimeoutMs, int readTimeoutMs, long overallTimeoutMs) {
+    private void mergeUniqueServers(List<String> target, List<String> source) {
+        if (target == null || source == null) return;
+        for (String raw : source) {
+            String value = normalizeServerBase(raw);
+            if (value.isEmpty()) continue;
+            boolean exists = false;
+            for (String current : target) {
+                if (value.equalsIgnoreCase(normalizeServerBase(current))) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) target.add(value);
+        }
+    }
+
+    private List<String> discoverLocalMarakanaPcsOnPorts(List<String> hosts, int[] ports, int connectTimeoutMs, int readTimeoutMs, long overallTimeoutMs) {
+        List<String> found = new ArrayList<>();
+        if (hosts == null || hosts.isEmpty() || ports == null || ports.length == 0) return found;
+
         int workers = Math.max(8, Math.min(48, hosts.size()));
         ExecutorService discoveryPool = Executors.newFixedThreadPool(workers);
         List<Callable<String>> tasks = new ArrayList<>();
         for (String host : hosts) {
             tasks.add(() -> {
-                Exception last = null;
                 for (int port : ports) {
                     if (Thread.currentThread().isInterrupted()) throw new InterruptedException("Discovery dayandırıldı.");
                     try {
+                        // Hər host üçün ilk həqiqi Marakana serverini qaytarırıq. Bir PC eyni anda bir local port istifadə edir.
                         return probeMarakanaPc(host, port, connectTimeoutMs, readTimeoutMs);
-                    } catch (Exception ex) {
-                        last = ex;
-                    }
+                    } catch (Exception ignored) {}
                 }
-                throw (last == null ? new Exception("Server tapılmadı.") : last);
+                return "";
             });
         }
         try {
-            return discoveryPool.invokeAny(tasks, overallTimeoutMs, TimeUnit.MILLISECONDS);
-        } catch (Exception ignored) {
-            return "";
+            List<Future<String>> futures = discoveryPool.invokeAll(tasks, overallTimeoutMs, TimeUnit.MILLISECONDS);
+            for (Future<String> future : futures) {
+                if (future == null || future.isCancelled()) continue;
+                try {
+                    String value = normalizeServerBase(future.get());
+                    if (!value.isEmpty()) mergeUniqueServers(found, java.util.Collections.singletonList(value));
+                } catch (Exception ignored) {}
+            }
+        } catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
         } finally {
             discoveryPool.shutdownNow();
         }
+        return found;
+    }
+
+    private String localDiscoveryLabel(String server) {
+        String value = normalizeServerBase(server);
+        if (value.toLowerCase(Locale.ROOT).startsWith("http://")) value = value.substring(7);
+        else if (value.toLowerCase(Locale.ROOT).startsWith("https://")) value = value.substring(8);
+        return "Marakana PC — " + value;
+    }
+
+    private void connectToDiscoveredLocalServer(String found) {
+        final String selected = normalizeServerBase(found);
+        if (selected.isEmpty()) {
+            toast("Seçilmiş PC ünvanı düzgün deyil.");
+            return;
+        }
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                // Siyahıdan seçiləndə də son dəfə ayrıca ping et; scan nəticəsini kor-koranə qəbul etmirik.
+                JSONObject ping = directHttpRequest(selected, "/api/mobile/ping", "GET", null, "", 2000, 4000);
+                if (!ping.optBoolean("ok", false)) throw new Exception("Seçilmiş server Marakana cavabı vermədi.");
+                String status = ping.optString("status", "").trim();
+                if (!status.isEmpty() && !"mobile_panel_reachable".equalsIgnoreCase(status)) throw new Exception("Seçilmiş server Marakana mobil server deyil.");
+
+                String advertised = normalizeServerBase(ping.optString("server_url", ""));
+                String finalServer = advertised.isEmpty() ? selected : advertised;
+                activateLocalConnection(finalServer);
+                runOnUiThread(() -> {
+                    if (serverAddressInput != null) {
+                        serverAddressInput.setText(finalServer);
+                        serverAddressInput.setSelection(finalServer.length());
+                    }
+                    toast("PC-yə qoşuldu: " + localDiscoveryLabel(finalServer).replace("Marakana PC — ", ""));
+                    showLogin();
+                });
+            } catch (Exception ex) {
+                runOnUiThread(() -> toast("Seçilmiş PC-yə qoşulmaq alınmadı. Şəbəkə/Firewall bağlantısını yoxlayın."));
+            } finally {
+                setBusy(false);
+            }
+        });
+    }
+
+    private void showDiscoveredLocalPcChooser(List<String> found) {
+        if (found == null || found.isEmpty()) {
+            toast("Marakana PC lokal şəbəkədə tapılmadı.");
+            return;
+        }
+
+        String[] labels = new String[found.size()];
+        for (int i = 0; i < found.size(); i++) labels[i] = localDiscoveryLabel(found.get(i));
+        // Tək PC tapılanda onu hazır seçirik, amma heç vaxt avtomatik qoşulmuruq:
+        // operator yenə də "Qoşul" düyməsini basmalıdır. Birdən çox PC-də operator özü seçir.
+        final int initialSelection = found.size() == 1 ? 0 : -1;
+        final int[] selectedIndex = {initialSelection};
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Tapılan Marakana PC-lər")
+                .setSingleChoiceItems(labels, initialSelection, (d, which) -> selectedIndex[0] = which)
+                .setNegativeButton("Ləğv", null)
+                .setPositiveButton("Qoşul", null)
+                .create();
+
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            int index = selectedIndex[0];
+            if (index < 0 || index >= found.size()) {
+                toast("Qoşulmaq üçün PC seçin.");
+                return;
+            }
+            String selected = found.get(index);
+            dialog.dismiss();
+            connectToDiscoveredLocalServer(selected);
+        }));
+        dialog.show();
     }
 
     private void showLocalServerSetup() {
@@ -2487,38 +2594,30 @@ public class MainActivity extends Activity {
             connect.setEnabled(false);
             qrConnect.setEnabled(false);
             serverAddressInput.setEnabled(false);
-            autoFind.setText("PC axtarılır…");
+            autoFind.setText("PC-lər axtarılır…");
             setBusy(true);
             io.execute(() -> {
-                boolean success = false;
                 try {
-                    String found = discoverLocalMarakanaPc();
-                    // Son dəfə normal ping ilə təsdiqlə; scan nəticəsini kor-koranə qəbul etmirik.
-                    JSONObject ping = directHttpRequest(found, "/api/mobile/ping", "GET", null, "", 2000, 4000);
-                    if (!ping.optBoolean("ok", false)) throw new Exception("Tapılan server Marakana cavabı vermədi.");
-                    activateLocalConnection(found);
-                    success = true;
+                    List<String> found = discoverLocalMarakanaPcs();
                     runOnUiThread(() -> {
-                        if (serverAddressInput != null) {
-                            serverAddressInput.setText(found);
-                            serverAddressInput.setSelection(found.length());
-                        }
-                        toast("PC tapıldı: " + found);
-                        showLogin();
+                        autoFind.setText("🔎  PC-ni avtomatik tap");
+                        autoFind.setEnabled(true);
+                        connect.setEnabled(true);
+                        qrConnect.setEnabled(true);
+                        if (serverAddressInput != null) serverAddressInput.setEnabled(true);
+                        showDiscoveredLocalPcChooser(found);
                     });
                 } catch (Exception ex) {
-                    runOnUiThread(() -> toast("PC avtomatik tapılmadı. Telefon və PC eyni lokal şəbəkədə olmalı və cihazlar arası əlaqə açıq olmalıdır."));
+                    runOnUiThread(() -> {
+                        autoFind.setText("🔎  PC-ni avtomatik tap");
+                        autoFind.setEnabled(true);
+                        connect.setEnabled(true);
+                        qrConnect.setEnabled(true);
+                        if (serverAddressInput != null) serverAddressInput.setEnabled(true);
+                        toast("PC avtomatik tapılmadı. Telefon və PC eyni lokal şəbəkədə olmalı və cihazlar arası əlaqə açıq olmalıdır.");
+                    });
                 } finally {
                     setBusy(false);
-                    if (!success) {
-                        runOnUiThread(() -> {
-                            autoFind.setText("🔎  PC-ni avtomatik tap");
-                            autoFind.setEnabled(true);
-                            connect.setEnabled(true);
-                            qrConnect.setEnabled(true);
-                            if (serverAddressInput != null) serverAddressInput.setEnabled(true);
-                        });
-                    }
                 }
             });
         });

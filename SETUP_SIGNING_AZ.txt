@@ -1,4 +1,4 @@
-MARAKANA MOBILE v19 — DAİMİ UPDATE SIGNING QURULUMU
+MARAKANA MOBILE v139 — DAİMİ UPDATE SIGNING QAYDASI
 
 Bu repo paketində PRIVATE keystore yoxdur. Onu PUBLIC GitHub-a yükləmə.
 
@@ -21,3 +21,11 @@ VACİB:
 - v17 və əvvəlki APK başqa imza ilə olduğu üçün v19-ə keçiddə köhnə tətbiqi SON DƏFƏ silmək lazım ola bilər.
 - Bundan sonra v19, v20 və s. eyni GitHub Secrets ilə build olunarsa köhnəni silmədən UPDATE kimi quraşacaq.
 - PRIVATE signing paketini təhlükəsiz yerdə backup et və heç vaxt public repo-ya yükləmə.
+
+
+v139 UPDATE QORUMASI:
+- applicationId dəyişməzdir: az.marakana.mobile
+- versionCode 139-dur; əvvəlki 138/137-dən böyükdür.
+- GitHub Actions yalnız eyni MARAKANA_KEYSTORE_* secrets ilə signed release APK yaradır.
+- Yerli assembleRelease signing məlumatı olmadan artıq uğursuz olur; unsigned/səhv release APK çıxmır.
+- Android təhlükəsizlik qaydasına görə telefonda quraşdırılmış tətbiqin imzası başqa sertifikatdırsa bunu kodla keçmək mümkün deyil. Belə hal yalnız fərqli keystore ilə build edildikdə yaranır. Eyni daimi release keystore istifadə olunarsa sonrakı versiyalar UPDATE kimi quraşır.

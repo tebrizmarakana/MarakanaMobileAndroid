@@ -1,7 +1,7 @@
-# Marakana Mobile v137 — Auto Local PC Discovery
+# Marakana Mobile v139 — Update Safe Multi-PC Selection
 
-- `versionCode 137`
-- `versionName 3.4.99-native-v137`
+- `versionCode 139`
+- `versionName 3.5.01-native-v139`
 
 ## Online rejim
 WordPress-də ayrıca server-authoritative plugin-i olan mobil modullar artıq PC Remote Gateway queue-suna düşmür:
@@ -61,3 +61,23 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - Tapılan `server_url` normalize edilir, son ping ilə yenidən təsdiqlənir və yalnız bundan sonra Local bağlantı aktivləşdirilir.
 - Axtarış zamanı IP yazmaq lazım deyil; nəticə tapılarsa avtomatik qoşulur.
 - Routerdə AP/Client Isolation varsa discovery bunu keçə bilməz; telefonun PC-yə lokal trafik göndərə bilməsi şərtdir.
+
+
+## v138 — Eyni LAN-da bir neçə PC seçimi
+
+- `PC-ni avtomatik tap` artıq ilk tapılan PC-yə avtomatik qoşulmur.
+- Eyni lokal şəbəkədə tapılan bütün Marakana PC-lər siyahıda göstərilir.
+- Hər PC `IP:port` ilə ayrılır; operator istədiyi sətri seçib `Qoşul` basır.
+- Yalnız `/api/mobile/ping` cavabı Marakana serveri kimi təsdiqlənən hostlar siyahıya düşür.
+- 8765 və PC fallback portları 8766-8784 birlikdə nəzərə alınır.
+- Seçilmiş PC qoşulmadan əvvəl ayrıca son ping ilə yenidən təsdiqlənir.
+- Tək PC tapılsa da eyni seçim pəncərəsi göstərilir; manual IP və QR yolları saxlanılıb.
+- AP/Client Isolation varsa discovery şəbəkə blokunu keçə bilməz.
+
+
+## v139 — Local PC seçimi + update təhlükəsizliyi
+- `PC-ni avtomatik tap` bir PC tapsa belə birbaşa qoşulmur; seçim pəncərəsində PC seçili görünür və yalnız `Qoşul` basıldıqdan sonra bağlantı aktivləşir.
+- Birdən çox PC tapılarsa heç biri əvvəlcədən seçilmir; operator istədiyi PC-ni seçib `Qoşul` basır.
+- `applicationId` dəyişməyib (`az.marakana.mobile`), `versionCode=139`.
+- Release APK daimi signing məlumatları olmadan build edilmir. Bu, səhv/unsigned APK-nın update kimi quraşdırılmağa çalışılmasının qarşısını alır.
+- GitHub Actions artifact/APK adı v139-a düzəldilib və build sonrası package + versionCode ayrıca yoxlanır.

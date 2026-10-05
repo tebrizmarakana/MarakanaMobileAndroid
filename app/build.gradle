@@ -2,6 +2,13 @@ plugins {
     id 'com.android.application'
 }
 
+def releaseKeystorePath = System.getenv("MARAKANA_KEYSTORE_PATH")
+def releaseKeystorePassword = System.getenv("MARAKANA_KEYSTORE_PASSWORD")
+def releaseKeyAlias = System.getenv("MARAKANA_KEY_ALIAS")
+def releaseKeyPassword = System.getenv("MARAKANA_KEY_PASSWORD")
+def releaseSigningReady = [releaseKeystorePath, releaseKeystorePassword, releaseKeyAlias, releaseKeyPassword]
+        .every { it != null && !it.trim().isEmpty() }
+
 android {
     namespace 'az.marakana.mobile'
     compileSdk 35
@@ -10,25 +17,29 @@ android {
         applicationId 'az.marakana.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 137
-        versionName '3.4.99-native-v137'
+        versionCode 139
+        versionName '3.5.01-native-v139'
     }
 
     signingConfigs {
         release {
-            def ksPath = System.getenv("MARAKANA_KEYSTORE_PATH")
-            if (ksPath != null && !ksPath.isEmpty()) {
-                storeFile file(ksPath)
-                storePassword System.getenv("MARAKANA_KEYSTORE_PASSWORD")
-                keyAlias System.getenv("MARAKANA_KEY_ALIAS")
-                keyPassword System.getenv("MARAKANA_KEY_PASSWORD")
+            if (releaseSigningReady) {
+                storeFile file(releaseKeystorePath)
+                storePassword releaseKeystorePassword
+                keyAlias releaseKeyAlias
+                keyPassword releaseKeyPassword
             }
         }
     }
 
     buildTypes {
         release {
-            signingConfig signingConfigs.release
+            // Update APK-ları yalnız daimi release sertifikatı ilə çıxır.
+            // Signing env-ləri yoxdursa aşağıdakı task guard build-i dayandırır;
+            // səhv/unsigned APK yaradılıb telefonda "tətbiq quraşdırılmadı" verməsinin qarşısı alınır.
+            if (releaseSigningReady) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
@@ -43,4 +54,13 @@ android {
 dependencies {
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
+}
+
+// v139: Release build update təhlükəsizliyi. GitHub/yerli release build daimi keystore olmadan yaradılmır.
+tasks.matching { it.name in ["assembleRelease", "bundleRelease", "packageRelease"] }.configureEach {
+    doFirst {
+        if (!releaseSigningReady) {
+            throw new GradleException("Marakana Mobile release signing məlumatları yoxdur. Update APK yaratmaq üçün daimi MARAKANA_KEYSTORE_* env dəyişənlərini istifadə edin.")
+        }
+    }
 }
