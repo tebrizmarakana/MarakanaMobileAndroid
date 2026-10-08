@@ -1,10 +1,10 @@
-Marakana Mobile v140 GitHub upload
+Marakana Mobile v141 GitHub upload
 
 1) Daimi signing üçün mövcud GitHub Secret-lər olduğu kimi qalır.
 2) Bu TAM layihənin içindəkiləri repo kökünə yüklə və köhnə faylların üstünə yaz.
 3) Commit changes et.
-4) Actions -> Build Marakana Mobile Native v140 RELEASE APK -> Run workflow.
-5) Artifact: MarakanaMobile-v140-permanent-update-apk
+4) Actions -> Build Marakana Mobile Native v141 RELEASE APK -> Run workflow.
+5) Artifact: MarakanaMobile-v141-permanent-update-apk
 
 v136 əsas dəyişiklik:
 - Online rejimdə sol paneldə Filiallar bölməsi görünür.

@@ -1,7 +1,7 @@
-# Marakana Mobile v140 — Target Branch Messages
+# Marakana Mobile v141 — E-mail Game Lock + Account Type Guard
 
-- `versionCode 140`
-- `versionName 3.5.02-native-v140`
+- `versionCode 141`
+- `versionName 3.5.03-native-v141`
 
 ## Online rejim
 WordPress-də ayrıca server-authoritative plugin-i olan mobil modullar artıq PC Remote Gateway queue-suna düşmür:
@@ -89,3 +89,14 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - Konkret filial hədəfi yalnız server `target_branch_messages` capability qaytaranda aktiv olur.
 - Mesaj kartlarında Master görünüşündə `Hədəf` göstərilir və `Gözləyən` yalnız real hədəfə görə hesablanır.
 - Filial Mesajları plugin v1.0.3 artıq bu payload-u dəstəkləyir; yeni plugin dəyişikliyi tələb olunmur.
+
+
+## v141 — E-mail oyun kilidi + hesab növü qoruması
+- **Hesab Satışı → Yeni hesab yarat** formasında eyni e-mailə bağlı hər hansı mövcud hesabın oyun/Bundle məlumatı tapılarsa oyun sahəsi həmin oyuna kilidlənir və dəyişdirilə bilmir.
+- Oyun mənbəyində **Online** varsa ona üstünlük verilir; Online yoxdursa həmin e-mail üzrə mövcud Universal hesabın oyunu istifadə olunur.
+- Eyni e-mail üçün **Online / Universal PS4 / Universal PS5** növlərindən artıq yaradılan növ yenidən seçilə bilmir; yalnız çatışmayan növlər göstərilir.
+- Online artıq varsa Universal PS4 və Universal PS5 ayrıca yaradılmağa davam edir.
+- Hər üç növ artıq mövcuddursa həmin e-mail ilə `Yeni hesab yarat` əməliyyatı bloklanır.
+- `Hesabı əlavə et` basılanda server həmin e-mail üzrə yenidən yoxlanılır; form açıldıqdan sonra başqa cihazda yaradılmış hesab da nəzərə alınır.
+- Köhnə `Offline` adı Universal PS4, köhnə `Universal` adı Universal PS5 kimi hesablanır ki legacy qeydlər dublikat növ yaratmasın.
+- WordPress Hesab Satışı plugininə dəyişiklik tələb olunmur; mövcud `/overview?section=accounts` və `/create-accounts` API-ləri istifadə olunur.
