@@ -1,7 +1,7 @@
-# Marakana Mobile v141 — E-mail Game Lock + Account Type Guard
+# Marakana Mobile v142 — Hesab Satışı Sıralama
 
-- `versionCode 141`
-- `versionName 3.5.03-native-v141`
+- `versionCode 142`
+- `versionName 3.5.04-native-v142`
 
 ## Online rejim
 WordPress-də ayrıca server-authoritative plugin-i olan mobil modullar artıq PC Remote Gateway queue-suna düşmür:
@@ -90,6 +90,16 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - Mesaj kartlarında Master görünüşündə `Hədəf` göstərilir və `Gözləyən` yalnız real hədəfə görə hesablanır.
 - Filial Mesajları plugin v1.0.3 artıq bu payload-u dəstəkləyir; yeni plugin dəyişikliyi tələb olunmur.
 
+
+
+## v142 — Hesab Satışı sıralama
+
+- Hesablar, Satılanlar, Satılmayanlar və İcarə bölmələrində axtarış xanasının sağında `Sırala` düyməsi əlavə edildi.
+- Sıralama seçimləri: `Tarixə görə` və `Son dəyişikliyə görə`.
+- Tarix sıralaması ən yeni tarixdən köhnəyədir; satış/icarə tarixi varsa istifadə olunur, yoxdursa yaradılma tarixi əsas götürülür.
+- Son dəyişiklik sıralaması `updated_at`, fallback olaraq `created_at` istifadə edir.
+- Hesablar bölməsində sabitlənmiş hesablar hər iki sıralamada yuxarıda qalır.
+- Müştəri və Ayarlar bölmələrinin görünüşünə toxunulmayıb.
 
 ## v141 — E-mail oyun kilidi + hesab növü qoruması
 - **Hesab Satışı → Yeni hesab yarat** formasında eyni e-mailə bağlı hər hansı mövcud hesabın oyun/Bundle məlumatı tapılarsa oyun sahəsi həmin oyuna kilidlənir və dəyişdirilə bilmir.

@@ -99,6 +99,7 @@ import java.time.LocalDate;
  * communicates with the existing Marakana PC mobile REST API.
  */
 public class MainActivity extends Activity {
+    // v142: Hesab Satışı > Hesablar/Satılanlar/Satılmayanlar/İcarə bölmələrində axtarışın sağında Sırala düyməsi əlavə edildi; Tarixə görə və Son dəyişikliyə görə sıralama dəstəklənir.
     // v141: Hesab Satışı > Yeni hesab yarat: eyni e-mailə bağlı oyun/Bundle dəyişdirilə bilmir; Online/Universal PS4/Universal PS5 növlərindən yalnız çatışmayanlar yaradıla bilir və hər üçü varsa yeni yaradılış bloklanır.
     // v140: Mobil Mesaj qutusunda Master istifadəçi mesajı bütün filiallara və ya seçilmiş konkret filiala göndərə bilir; hədəf/status görünüşü server capability ilə qorunur.
     // v139: Bir PC tapılsa belə avtomatik qoşulmur; seçim pəncərəsi açılır və operator mütləq "Qoşul" basır.
@@ -161,6 +162,9 @@ public class MainActivity extends Activity {
 // v117: Hesablar axtarışında yazılan e-mail Yeni hesab yarat formasına avtomatik ötürülür.
     // v116: Hesablar bölməsində istifadəçinin sabitlədiyi hesab ID-ləri lokal saxlanılır.
     private static final String KEY_ACCOUNT_SALES_PINNED_RECORDS = "account_sales_pinned_records";
+    private static final String ACCOUNT_SALES_SORT_DATE = "date";
+    private static final String ACCOUNT_SALES_SORT_UPDATED = "updated";
+    private static final String KEY_ACCOUNT_SALES_SORT_PREFIX = "account_sales_sort_";
     private static final String ACCOUNT_SALES_DEFAULT_SITE = "https://marakana.az";
     private static final String ACCOUNT_SALES_API_PATH = "/wp-json/marakana-account-sales/v1";
     private static final String[] ACCOUNT_SALES_SECTIONS = {"accounts", "sold", "unsold", "rental", "customers", "settings"};
@@ -4701,7 +4705,24 @@ public class MainActivity extends Activity {
             try { search.setSelection(search.getText().length()); } catch (Exception ignored) {}
             search.addTextChangedListener(new SimpleTextWatcher(() ->
                     accountSalesSearchQuery = search.getText().toString()));
-            body.addView(search);
+
+            if (isAccountSalesSortableSection(section)) {
+                // v142: Axtarış sağdan bir qədər kiçilir; boşalan hissədə Sırala düyməsi görünür.
+                LinearLayout searchRow = new LinearLayout(this);
+                searchRow.setOrientation(LinearLayout.HORIZONTAL);
+                searchRow.setGravity(Gravity.CENTER_VERTICAL);
+                searchRow.addView(search, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+                Button sortButton = button("⇅ Sırala", CARD, TEXT);
+                sortButton.setTextSize(12);
+                LinearLayout.LayoutParams sortLp = new LinearLayout.LayoutParams(dp(112), dp(48));
+                sortLp.setMargins(dp(8), 0, 0, 0);
+                searchRow.addView(sortButton, sortLp);
+                sortButton.setOnClickListener(v -> showAccountSalesSortDialog(section));
+                body.addView(searchRow);
+            } else {
+                body.addView(search);
+            }
             spacer(body, 10);
         }
 
@@ -4760,10 +4781,8 @@ public class MainActivity extends Activity {
             } else {
                 JSONArray records = result.optJSONArray("records");
                 if (records == null) records = new JSONArray();
-                if ("accounts".equals(section)) {
-                    records = sortAccountSalesAccountsPinnedThenCreated(records);
-                } else if ("sold".equals(section) || "unsold".equals(section) || "rental".equals(section)) {
-                    records = sortAccountSalesRecordsLatestActivityFirst(records);
+                if (isAccountSalesSortableSection(section)) {
+                    records = sortAccountSalesRecordsForSection(records, section);
                 }
                 final JSONArray finalRecords = records;
                 Runnable render = () -> renderAccountSalesRecords(recordsHost, finalRecords, search.getText().toString(), finalSettings, section);
@@ -4833,6 +4852,91 @@ public class MainActivity extends Activity {
 
     private String money(double value) {
         return String.format(Locale.US, "%.2f AZN", value);
+    }
+
+    private boolean isAccountSalesSortableSection(String section) {
+        String value = normalizeAccountSalesSection(section);
+        return "accounts".equals(value) || "sold".equals(value) || "unsold".equals(value) || "rental".equals(value);
+    }
+
+    private String getAccountSalesSortMode(String section) {
+        String value = normalizeAccountSalesSection(section);
+        String fallback = "accounts".equals(value) ? ACCOUNT_SALES_SORT_DATE : ACCOUNT_SALES_SORT_UPDATED;
+        String stored = prefs.getString(KEY_ACCOUNT_SALES_SORT_PREFIX + value, fallback);
+        return ACCOUNT_SALES_SORT_DATE.equals(stored) ? ACCOUNT_SALES_SORT_DATE : ACCOUNT_SALES_SORT_UPDATED;
+    }
+
+    private void setAccountSalesSortMode(String section, String mode) {
+        String value = normalizeAccountSalesSection(section);
+        String normalized = ACCOUNT_SALES_SORT_DATE.equals(mode) ? ACCOUNT_SALES_SORT_DATE : ACCOUNT_SALES_SORT_UPDATED;
+        prefs.edit().putString(KEY_ACCOUNT_SALES_SORT_PREFIX + value, normalized).apply();
+    }
+
+    private void showAccountSalesSortDialog(String section) {
+        if (!isAccountSalesSortableSection(section)) return;
+        String current = getAccountSalesSortMode(section);
+        String[] choices = {"Tarixə görə", "Son dəyişikliyə görə"};
+        int checked = ACCOUNT_SALES_SORT_DATE.equals(current) ? 0 : 1;
+        new AlertDialog.Builder(this)
+                .setTitle("Sıralama")
+                .setSingleChoiceItems(choices, checked, (dialog, which) -> {
+                    setAccountSalesSortMode(section, which == 0 ? ACCOUNT_SALES_SORT_DATE : ACCOUNT_SALES_SORT_UPDATED);
+                    dialog.dismiss();
+                    showAccountSales(section);
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
+    }
+
+    private String accountSalesRecordDateSortValue(JSONObject row, String section) {
+        if (row == null) return "";
+        String value = normalizeAccountSalesSection(section);
+        if ("rental".equals(value)) {
+            String rentalStarted = row.optString("rental_started_at", "").trim();
+            if (!rentalStarted.isEmpty()) return rentalStarted;
+        }
+        if ("sold".equals(value) || "rental".equals(value) || "accounts".equals(value)) {
+            String saleDate = row.optString("sale_date", "").trim();
+            if (!saleDate.isEmpty()) return saleDate;
+        }
+        return row.optString("created_at", "").trim();
+    }
+
+    private JSONArray sortAccountSalesRecordsForSection(JSONArray records, String section) {
+        ArrayList<JSONObject> rows = new ArrayList<>();
+        if (records != null) {
+            for (int i = 0; i < records.length(); i++) {
+                JSONObject row = records.optJSONObject(i);
+                if (row != null) rows.add(row);
+            }
+        }
+        final String normalizedSection = normalizeAccountSalesSection(section);
+        final String mode = getAccountSalesSortMode(normalizedSection);
+        java.util.Collections.sort(rows, (a, b) -> {
+            // Hesablar bölməsində əvvəlki Sabitlə davranışı həmişə qorunur.
+            if ("accounts".equals(normalizedSection)) {
+                boolean aPinned = isAccountSalesRecordPinned(a);
+                boolean bPinned = isAccountSalesRecordPinned(b);
+                if (aPinned != bPinned) return aPinned ? -1 : 1;
+            }
+            String aValue;
+            String bValue;
+            if (ACCOUNT_SALES_SORT_DATE.equals(mode)) {
+                aValue = accountSalesRecordDateSortValue(a, normalizedSection);
+                bValue = accountSalesRecordDateSortValue(b, normalizedSection);
+            } else {
+                aValue = a.optString("updated_at", a.optString("created_at", ""));
+                bValue = b.optString("updated_at", b.optString("created_at", ""));
+            }
+            int cmp = compareNewestTimestamp(aValue, bValue);
+            if (cmp != 0) return cmp;
+            cmp = compareNewestTimestamp(a.optString("created_at", ""), b.optString("created_at", ""));
+            if (cmp != 0) return cmp;
+            return Integer.compare(b.optInt("id", 0), a.optInt("id", 0));
+        });
+        JSONArray sorted = new JSONArray();
+        for (JSONObject row : rows) sorted.put(row);
+        return sorted;
     }
 
     private int compareNewestTimestamp(String a, String b) {
