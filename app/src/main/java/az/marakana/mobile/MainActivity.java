@@ -4711,7 +4711,8 @@ public class MainActivity extends Activity {
         EditText search = input("customers".equals(section)
                 ? "Ad soyad və ya telefonla axtar"
                 : "Oyun, e-mail, müştəri, telefon və ya məxfi kodla axtar");
-        // v149: Hesab Sat / Düzənlə / İcarə ver formalarında klaviatura açılarkən fokusdakı xana avtomatik görünən sahəyə scroll edilir; adjustResize aktivdir.
+        // v150: Hesab Sat / Düzənlə / İcarə ver ekranlarında qiymət və satış tarixi kiçik popup-dan daxil edilir; Satılmayan yeni hesabı Sat/İcarə ver açanda qiymət və satış tarixi boş başlayır.
+// v149: Hesab Sat / Düzənlə / İcarə ver formalarında klaviatura açılarkən fokusdakı xana avtomatik görünən sahəyə scroll edilir; adjustResize aktivdir.
     // v148: Hesab Satışı tarix sahələri həm əl ilə yazılır, həm də sağdakı kalender ikonundan seçilir; 15042026 / 15 04 2026 avtomatik 15.04.2026 formatına çevrilir.
 // v147: Hesab Satışı üst hissəsi yenidən düzəldildi: Yeni hesab / Yeni müştəri qısaldıldı, Ayarlar həmin sıraya keçdi, Yenilə silindi, zibil qutusu başlıq sətrinin sağına daşındı.
 // v146: loadAccountSalesJson callback-dən də istifadə olunduğu üçün dəyişən
@@ -6140,9 +6141,9 @@ public class MainActivity extends Activity {
                 prepared.put("sale_date", "");
                 prepared.put("rental_duration_value", 0);
                 prepared.put("rental_duration_unit", "day");
-            }
-            if ("Satılıb".equals(preferredStatus) && prepared.optString("sale_date", "").trim().isEmpty()) {
-                prepared.put("sale_date", new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(new java.util.Date()));
+                // v150: Satılmayan stokdan yeni Sat / İcarə ver əməliyyatı açılırsa
+                // qiymət və satış tarixi operator tərəfindən sıfırdan daxil edilir.
+                prepared.put("_fresh_transaction", true);
             }
         } catch (Exception ignored) {}
         showAccountSalesTransactionForm(prepared, settings, preferredStatus, sourceSection);
@@ -6244,21 +6245,28 @@ public class MainActivity extends Activity {
         customer.setClickable(true);
         customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone, sold || rental));
 
+        boolean freshTransaction = record.optBoolean("_fresh_transaction", false);
+        String initialTransactionPrice = freshTransaction
+                ? ""
+                : (record.optDouble("price", 0) == 0
+                        ? ""
+                        : String.valueOf(record.optDouble("price", 0)));
         EditText transactionPrice = accountField(
                 body,
                 rental ? "İcarə qiyməti *" : "Satış qiyməti *",
-                "Məsələn: 30.00",
-                String.valueOf(record.optDouble("price", 0)),
+                "Kliklə qiymət yaz",
+                initialTransactionPrice,
                 InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL
         );
-        keepAccountSalesFieldVisible(sv, transactionPrice);
+        attachAccountSalesAmountPopup(transactionPrice, rental ? "İcarə qiyməti" : "Satış qiyməti");
 
         EditText date = null;
         if (sold) {
-            String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
-            date = accountField(body, "Satış tarixi *", "DD.MM.YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
-            attachAccountSalesDatePicker(date);
-            keepAccountSalesFieldVisible(sv, date);
+            String initialDate = freshTransaction
+                    ? ""
+                    : accountSalesDateForDisplay(record.optString("sale_date", ""));
+            date = accountField(body, "Satış tarixi *", "Kliklə tarix yaz", initialDate, InputType.TYPE_CLASS_DATETIME);
+            attachAccountSalesDatePopup(date);
         }
 
         EditText rentalDuration = null;
@@ -6407,7 +6415,10 @@ public class MainActivity extends Activity {
         // Lambda daxilində istifadə olunduğu üçün final istinad saxlayırıq.
         // Bu yalnız Java compile xətasını aradan qaldırır, məntiqi dəyişmir.
         final EditText secretCode = secretCodeField;
-        EditText price = accountField(body, "Qiymət *", editing ? "35.50" : "", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText price = accountField(body, "Qiymət *", editing ? "Kliklə qiymət yaz" : "", editing ? String.valueOf(record.optDouble("price", 0)) : "", InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        if (editing) {
+            attachAccountSalesAmountPopup(price, "Qiymət");
+        }
 
         // v125: Eyni e-mail üzrə Online artıq varsa yeni Universal PS4/PS5 variantlarının
         // oyun seçimi həmin Online hesabın oyun/Bundle siyahısına məcburi bağlanır.
@@ -6529,9 +6540,8 @@ public class MainActivity extends Activity {
         customer.setClickable(true);
         customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone));
         String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
-        EditText date = accountField(body, "Satış tarixi", "DD.MM.YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
-        attachAccountSalesDatePicker(date);
-        keepAccountSalesFieldVisible(sv, date);
+        EditText date = accountField(body, "Satış tarixi", "Kliklə tarix yaz", initialDate, InputType.TYPE_CLASS_DATETIME);
+        attachAccountSalesDatePopup(date);
 
         String defaultStock = settings == null ? "Satılıb" : settings.optString("default_stock_status", "Satılıb");
         Spinner stock = accountSpinnerField(body, "Status *", new String[]{"Satılıb", "Satılmayıb", "İcarə"}, record.optString("stock_status", defaultStock));
@@ -6905,64 +6915,181 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
-    private void attachAccountSalesDatePicker(EditText field) {
+    private void attachAccountSalesAmountPopup(EditText field, String title) {
         if (field == null) return;
-
-        // v148: Tarix sahəsi artıq normal EditText-dir. İstifadəçi 15042026,
-        // 15 04 2026, 15-04-2026 və ya 15.04.2026 yaza bilər; görünüş avtomatik
-        // 15.04.2026 formasına salınır. Sağdakı kalender ikonu əvvəlki picker-i açır.
-        field.setFocusableInTouchMode(true);
-        field.setFocusable(true);
+        field.setFocusable(false);
+        field.setFocusableInTouchMode(false);
+        field.setCursorVisible(false);
+        field.setLongClickable(false);
         field.setClickable(true);
-        field.setCursorVisible(true);
-        field.setInputType(InputType.TYPE_CLASS_NUMBER);
-        field.setSingleLine(true);
+        field.setOnClickListener(v -> showAccountSalesAmountPopup(field, title));
+    }
+
+    private void showAccountSalesAmountPopup(EditText target, String title) {
+        if (target == null) return;
+        final EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText(target.getText().toString().trim());
+        input.setHint("Məsələn: 30.00");
+        input.setTextSize(18);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        input.setSelectAllOnFocus(true);
+        input.setPadding(dp(14), dp(10), dp(14), dp(10));
+
+        LinearLayout holder = new LinearLayout(this);
+        holder.setOrientation(LinearLayout.VERTICAL);
+        holder.setPadding(dp(18), dp(8), dp(18), 0);
+        holder.addView(input, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(54)
+        ));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(title == null ? "Qiymət" : title)
+                .setView(holder)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yadda saxla", null)
+                .create();
+        dialog.setOnShowListener(d -> {
+            Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            if (positive != null) {
+                positive.setOnClickListener(v -> {
+                    String value = input.getText().toString().trim().replace(',', '.');
+                    if (value.isEmpty()) {
+                        target.setText("");
+                        dialog.dismiss();
+                        return;
+                    }
+                    try {
+                        double parsed = Double.parseDouble(value);
+                        if (parsed < 0) {
+                            toast("Qiymət mənfi ola bilməz.");
+                            return;
+                        }
+                    } catch (Exception ex) {
+                        toast("Qiyməti düzgün daxil et.");
+                        return;
+                    }
+                    target.setText(value);
+                    dialog.dismiss();
+                });
+            }
+            input.requestFocus();
+            dialog.getWindow().setSoftInputMode(
+                    android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE |
+                    android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            );
+        });
+        dialog.show();
+    }
+
+    private void attachAccountSalesDatePopup(EditText field) {
+        if (field == null) return;
+        field.setFocusable(false);
+        field.setFocusableInTouchMode(false);
+        field.setCursorVisible(false);
+        field.setLongClickable(false);
+        field.setClickable(true);
         field.setCompoundDrawablesWithIntrinsicBounds(0, 0, android.R.drawable.ic_menu_my_calendar, 0);
         field.setCompoundDrawablePadding(dp(10));
+        field.setOnClickListener(v -> showAccountSalesDateInputPopup(field));
+    }
+
+    private void showAccountSalesDateInputPopup(EditText target) {
+        if (target == null) return;
+
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(18), dp(8), dp(18), 0);
+
+        final EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText(normalizeAccountSalesDisplayDate(target.getText().toString()));
+        input.setHint("DD.MM.YYYY");
+        input.setTextSize(18);
+        input.setInputType(InputType.TYPE_CLASS_NUMBER);
+        input.setSelectAllOnFocus(true);
+        input.setPadding(dp(14), dp(10), dp(14), dp(10));
+        box.addView(input, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(54)
+        ));
 
         final boolean[] formatting = {false};
-        field.addTextChangedListener(new TextWatcher() {
+        input.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
-
             @Override
             public void afterTextChanged(Editable editable) {
                 if (formatting[0]) return;
                 String raw = editable == null ? "" : editable.toString();
                 String digits = raw.replaceAll("\\D", "");
                 if (digits.length() > 8) digits = digits.substring(0, 8);
-
                 StringBuilder formatted = new StringBuilder();
                 for (int i = 0; i < digits.length(); i++) {
                     if (i == 2 || i == 4) formatted.append('.');
                     formatted.append(digits.charAt(i));
                 }
-                String target = formatted.toString();
-                if (!target.equals(raw)) {
+                String value = formatted.toString();
+                if (!value.equals(raw)) {
                     formatting[0] = true;
-                    field.setText(target);
-                    try { field.setSelection(target.length()); } catch (Exception ignored) {}
+                    input.setText(value);
+                    try { input.setSelection(value.length()); } catch (Exception ignored) {}
                     formatting[0] = false;
                 }
             }
         });
 
-        field.setOnTouchListener((v, event) -> {
-            if (event.getAction() != MotionEvent.ACTION_UP) return false;
-            if (field.getCompoundDrawables()[2] == null) return false;
-            int iconWidth = field.getCompoundDrawables()[2].getBounds().width();
-            int touchStart = field.getWidth() - field.getPaddingRight() - iconWidth - dp(12);
-            if (event.getX() < touchStart) return false;
-            showAccountSalesDatePicker(field);
-            return true;
+        Button calendar = button("📅 Kalenderdən seç", CARD, TEXT);
+        calendar.setTextSize(13);
+        LinearLayout.LayoutParams calendarLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                dp(46)
+        );
+        calendarLp.setMargins(0, dp(8), 0, 0);
+        box.addView(calendar, calendarLp);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Satış tarixi")
+                .setView(box)
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Yadda saxla", null)
+                .create();
+
+        calendar.setOnClickListener(v -> showAccountSalesDatePickerForInput(input));
+
+        dialog.setOnShowListener(d -> {
+            Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            if (positive != null) {
+                positive.setOnClickListener(v -> {
+                    String value = normalizeAccountSalesDisplayDate(input.getText().toString());
+                    if (value.isEmpty()) {
+                        target.setText("");
+                        dialog.dismiss();
+                        return;
+                    }
+                    if (!isValidAccountSalesDisplayDate(value)) {
+                        toast("Tarixi düzgün daxil et. Məsələn: 15.04.2026");
+                        return;
+                    }
+                    target.setText(value);
+                    dialog.dismiss();
+                });
+            }
+            input.requestFocus();
+            dialog.getWindow().setSoftInputMode(
+                    android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE |
+                    android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE
+            );
         });
+        dialog.show();
     }
 
-    private void showAccountSalesDatePicker(EditText field) {
-        if (field == null) return;
+    private void showAccountSalesDatePickerForInput(EditText input) {
+        if (input == null) return;
         java.util.Calendar selected = java.util.Calendar.getInstance();
-        String current = normalizeAccountSalesDisplayDate(field.getText().toString());
-        if (current.matches("\\d{2}\\.\\d{2}\\.\\d{4}")) {
+        String current = normalizeAccountSalesDisplayDate(input.getText().toString());
+        if (isValidAccountSalesDisplayDate(current)) {
             try {
                 java.text.SimpleDateFormat displayFormat = new java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.US);
                 displayFormat.setLenient(false);
@@ -6973,7 +7100,7 @@ public class MainActivity extends Activity {
 
         android.app.DatePickerDialog picker = new android.app.DatePickerDialog(
                 this,
-                (view, year, month, dayOfMonth) -> field.setText(String.format(
+                (view, year, month, dayOfMonth) -> input.setText(String.format(
                         java.util.Locale.US, "%02d.%02d.%04d", dayOfMonth, month + 1, year)),
                 selected.get(java.util.Calendar.YEAR),
                 selected.get(java.util.Calendar.MONTH),
@@ -6982,13 +7109,25 @@ public class MainActivity extends Activity {
         picker.setTitle("Tarixi seç");
         picker.setButton(android.content.DialogInterface.BUTTON_NEUTRAL, "Bu gün", (dialog, which) -> {
             java.util.Calendar today = java.util.Calendar.getInstance();
-            field.setText(String.format(
+            input.setText(String.format(
                     java.util.Locale.US, "%02d.%02d.%04d",
                     today.get(java.util.Calendar.DAY_OF_MONTH),
                     today.get(java.util.Calendar.MONTH) + 1,
                     today.get(java.util.Calendar.YEAR)));
         });
         picker.show();
+    }
+
+    private boolean isValidAccountSalesDisplayDate(String value) {
+        String s = value == null ? "" : value.trim();
+        if (!s.matches("\\d{2}\\.\\d{2}\\.\\d{4}")) return false;
+        try {
+            java.text.SimpleDateFormat displayFormat = new java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.US);
+            displayFormat.setLenient(false);
+            return displayFormat.parse(s) != null;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     private String normalizeAccountSalesDisplayDate(String value) {

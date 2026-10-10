@@ -17,8 +17,8 @@ android {
         applicationId 'az.marakana.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 149
-        versionName '3.5.11-native-v149'
+        versionCode 150
+        versionName '3.5.12-native-v150'
     }
 
     signingConfigs {
@@ -68,3 +68,5 @@ tasks.matching { it.name in ["assembleRelease", "bundleRelease", "packageRelease
 // v148: Hesab Satışı tarix sahələri manual giriş + kalender; DD.MM.YYYY auto-format.
 
 // v149: Hesab Satışı formalarında keyboard adjustResize + focus field auto-scroll.
+
+// v150: Hesab Sat / Düzənlə / İcarə ver qiymət-tarix popup input; fresh transaction fields start blank.

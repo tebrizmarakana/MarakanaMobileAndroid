@@ -160,3 +160,10 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - Fokuslanan qiymət, telefon, tarix, icarə müddəti və məxfi kod sahəsi avtomatik klaviaturanın üstündə görünən yerə scroll edilir.
 - Yazdığın rəqəmləri klaviatura açıq olsa da görmək olur.
 - v148 manual tarix + kalender davranışı saxlanılıb.
+
+## v150 — Qiymət/Tarix popup + yeni satışda boş sahələr
+- Hesab Sat və İcarə ver ekranında qiymət xanasına toxunanda kiçik popup açılır; rəqəm popup daxilində yazılır.
+- Satış tarixinə toxunanda kiçik popup açılır; tarix əl ilə yazıla və ya `Kalenderdən seç` ilə seçilə bilər.
+- Düzənlə ekranında qiymət və satış tarixi də eyni popup davranışını istifadə edir.
+- Satılmayan yeni hesabı Sat və ya İcarə ver açanda qiymət sahəsi boş başlayır.
+- Satılmayan yeni hesabı Sat açanda satış tarixi də boş başlayır; artıq avtomatik bugünkü tarix yazılmır.
