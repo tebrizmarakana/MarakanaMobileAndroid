@@ -147,3 +147,9 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - Bu düymələr bir qədər kiçildildi və `Ayarlar` düyməsi onların sağında eyni sıraya keçirildi.
 - `Yenilə` düyməsi ləğv edildi.
 - `Zibil qutusu` düyməsi başlıq sətrində, hesab satışi başlığının ən sağında yerləşdirildi.
+
+## v148 — Hesab Satışı manual tarix + kalender
+- Hesab Sat / Düzənlə tarix sahələri artıq həm klaviatura ilə yazılır, həm də sahənin sağındakı kalender ikonundan seçilir.
+- `15042026`, `15 04 2026`, `15-04-2026` yazıldıqda avtomatik `15.04.2026` formasına düşür.
+- Kalenderdən seçilən tarix də `DD.MM.YYYY` formatında görünür.
+- Serverə göndəriləndə tarix əvvəlki kimi `YYYY-MM-DD` formatına çevrilir.

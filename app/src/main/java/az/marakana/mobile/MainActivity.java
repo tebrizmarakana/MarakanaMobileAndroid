@@ -30,8 +30,10 @@ import android.os.Bundle;
 import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
 import android.text.InputType;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.util.Base64;
 import android.view.GestureDetector;
 import android.view.Gravity;
@@ -4709,7 +4711,8 @@ public class MainActivity extends Activity {
         EditText search = input("customers".equals(section)
                 ? "Ad soyad və ya telefonla axtar"
                 : "Oyun, e-mail, müştəri, telefon və ya məxfi kodla axtar");
-        // v147: Hesab Satışı üst hissəsi yenidən düzəldildi: Yeni hesab / Yeni müştəri qısaldıldı, Ayarlar həmin sıraya keçdi, Yenilə silindi, zibil qutusu başlıq sətrinin sağına daşındı.
+        // v148: Hesab Satışı tarix sahələri həm əl ilə yazılır, həm də sağdakı kalender ikonundan seçilir; 15042026 / 15 04 2026 avtomatik 15.04.2026 formatına çevrilir.
+// v147: Hesab Satışı üst hissəsi yenidən düzəldildi: Yeni hesab / Yeni müştəri qısaldıldı, Ayarlar həmin sıraya keçdi, Yenilə silindi, zibil qutusu başlıq sətrinin sağına daşındı.
 // v146: loadAccountSalesJson callback-dən də istifadə olunduğu üçün dəyişən
         // outer scope-da final olaraq bütün branch-lərdə bir dəfə təyin edilir.
         final Button filterButton;
@@ -6233,7 +6236,7 @@ public class MainActivity extends Activity {
         EditText date = null;
         if (sold) {
             String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
-            date = accountField(body, "Satış tarixi *", "DD-MM-YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
+            date = accountField(body, "Satış tarixi *", "DD.MM.YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
             attachAccountSalesDatePicker(date);
         }
 
@@ -6503,7 +6506,7 @@ public class MainActivity extends Activity {
         customer.setClickable(true);
         customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone));
         String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
-        EditText date = accountField(body, "Satış tarixi", "DD-MM-YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
+        EditText date = accountField(body, "Satış tarixi", "DD.MM.YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
         attachAccountSalesDatePicker(date);
 
         String defaultStock = settings == null ? "Satılıb" : settings.optString("default_stock_status", "Satılıb");
@@ -6880,54 +6883,118 @@ public class MainActivity extends Activity {
 
     private void attachAccountSalesDatePicker(EditText field) {
         if (field == null) return;
-        field.setFocusable(false);
-        field.setClickable(true);
-        field.setCursorVisible(false);
-        field.setOnClickListener(v -> {
-            java.util.Calendar selected = java.util.Calendar.getInstance();
-            String current = field.getText().toString().trim();
-            if (current.matches("\\d{2}-\\d{2}-\\d{4}")) {
-                try {
-                    java.text.SimpleDateFormat displayFormat = new java.text.SimpleDateFormat("dd-MM-yyyy", java.util.Locale.US);
-                    displayFormat.setLenient(false);
-                    java.util.Date parsed = displayFormat.parse(current);
-                    if (parsed != null) selected.setTime(parsed);
-                } catch (Exception ignored) {}
-            }
 
-            android.app.DatePickerDialog picker = new android.app.DatePickerDialog(
-                    this,
-                    (view, year, month, dayOfMonth) -> field.setText(String.format(
-                            java.util.Locale.US, "%02d-%02d-%04d", dayOfMonth, month + 1, year)),
-                    selected.get(java.util.Calendar.YEAR),
-                    selected.get(java.util.Calendar.MONTH),
-                    selected.get(java.util.Calendar.DAY_OF_MONTH)
-            );
-            picker.setTitle("Satış tarixini seç");
-            picker.setButton(android.content.DialogInterface.BUTTON_NEUTRAL, "Bu gün", (dialog, which) -> {
-                java.util.Calendar today = java.util.Calendar.getInstance();
-                field.setText(String.format(
-                        java.util.Locale.US, "%02d-%02d-%04d",
-                        today.get(java.util.Calendar.DAY_OF_MONTH),
-                        today.get(java.util.Calendar.MONTH) + 1,
-                        today.get(java.util.Calendar.YEAR)));
-            });
-            picker.show();
+        // v148: Tarix sahəsi artıq normal EditText-dir. İstifadəçi 15042026,
+        // 15 04 2026, 15-04-2026 və ya 15.04.2026 yaza bilər; görünüş avtomatik
+        // 15.04.2026 formasına salınır. Sağdakı kalender ikonu əvvəlki picker-i açır.
+        field.setFocusableInTouchMode(true);
+        field.setFocusable(true);
+        field.setClickable(true);
+        field.setCursorVisible(true);
+        field.setInputType(InputType.TYPE_CLASS_NUMBER);
+        field.setSingleLine(true);
+        field.setCompoundDrawablesWithIntrinsicBounds(0, 0, android.R.drawable.ic_menu_my_calendar, 0);
+        field.setCompoundDrawablePadding(dp(10));
+
+        final boolean[] formatting = {false};
+        field.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+                if (formatting[0]) return;
+                String raw = editable == null ? "" : editable.toString();
+                String digits = raw.replaceAll("\\D", "");
+                if (digits.length() > 8) digits = digits.substring(0, 8);
+
+                StringBuilder formatted = new StringBuilder();
+                for (int i = 0; i < digits.length(); i++) {
+                    if (i == 2 || i == 4) formatted.append('.');
+                    formatted.append(digits.charAt(i));
+                }
+                String target = formatted.toString();
+                if (!target.equals(raw)) {
+                    formatting[0] = true;
+                    field.setText(target);
+                    try { field.setSelection(target.length()); } catch (Exception ignored) {}
+                    formatting[0] = false;
+                }
+            }
+        });
+
+        field.setOnTouchListener((v, event) -> {
+            if (event.getAction() != MotionEvent.ACTION_UP) return false;
+            if (field.getCompoundDrawables()[2] == null) return false;
+            int iconWidth = field.getCompoundDrawables()[2].getBounds().width();
+            int touchStart = field.getWidth() - field.getPaddingRight() - iconWidth - dp(12);
+            if (event.getX() < touchStart) return false;
+            showAccountSalesDatePicker(field);
+            return true;
         });
     }
 
-    private String accountSalesDateForDisplay(String value) {
-        String s = value == null ? "" : value.trim();
-        if (s.matches("\\d{4}-\\d{2}-\\d{2}")) {
-            return s.substring(8, 10) + "-" + s.substring(5, 7) + "-" + s.substring(0, 4);
+    private void showAccountSalesDatePicker(EditText field) {
+        if (field == null) return;
+        java.util.Calendar selected = java.util.Calendar.getInstance();
+        String current = normalizeAccountSalesDisplayDate(field.getText().toString());
+        if (current.matches("\\d{2}\\.\\d{2}\\.\\d{4}")) {
+            try {
+                java.text.SimpleDateFormat displayFormat = new java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.US);
+                displayFormat.setLenient(false);
+                java.util.Date parsed = displayFormat.parse(current);
+                if (parsed != null) selected.setTime(parsed);
+            } catch (Exception ignored) {}
         }
-        return s;
+
+        android.app.DatePickerDialog picker = new android.app.DatePickerDialog(
+                this,
+                (view, year, month, dayOfMonth) -> field.setText(String.format(
+                        java.util.Locale.US, "%02d.%02d.%04d", dayOfMonth, month + 1, year)),
+                selected.get(java.util.Calendar.YEAR),
+                selected.get(java.util.Calendar.MONTH),
+                selected.get(java.util.Calendar.DAY_OF_MONTH)
+        );
+        picker.setTitle("Tarixi seç");
+        picker.setButton(android.content.DialogInterface.BUTTON_NEUTRAL, "Bu gün", (dialog, which) -> {
+            java.util.Calendar today = java.util.Calendar.getInstance();
+            field.setText(String.format(
+                    java.util.Locale.US, "%02d.%02d.%04d",
+                    today.get(java.util.Calendar.DAY_OF_MONTH),
+                    today.get(java.util.Calendar.MONTH) + 1,
+                    today.get(java.util.Calendar.YEAR)));
+        });
+        picker.show();
+    }
+
+    private String normalizeAccountSalesDisplayDate(String value) {
+        String s = value == null ? "" : value.trim();
+        if (s.isEmpty()) return "";
+        if (s.matches("\\d{4}-\\d{2}-\\d{2}")) {
+            return s.substring(8, 10) + "." + s.substring(5, 7) + "." + s.substring(0, 4);
+        }
+        String digits = s.replaceAll("\\D", "");
+        if (digits.length() == 8) {
+            return digits.substring(0, 2) + "." + digits.substring(2, 4) + "." + digits.substring(4, 8);
+        }
+        return s.replace('-', '.').replace('/', '.');
+    }
+
+    private String accountSalesDateForDisplay(String value) {
+        return normalizeAccountSalesDisplayDate(value);
     }
 
     private String accountSalesDateForApi(String value) {
-        String s = value == null ? "" : value.trim();
-        if (s.matches("\\d{2}-\\d{2}-\\d{4}")) {
-            return s.substring(6, 10) + "-" + s.substring(3, 5) + "-" + s.substring(0, 2);
+        String s = normalizeAccountSalesDisplayDate(value);
+        if (s.matches("\\d{2}\\.\\d{2}\\.\\d{4}")) {
+            try {
+                java.text.SimpleDateFormat displayFormat = new java.text.SimpleDateFormat("dd.MM.yyyy", java.util.Locale.US);
+                displayFormat.setLenient(false);
+                java.util.Date parsed = displayFormat.parse(s);
+                if (parsed != null) {
+                    return new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US).format(parsed);
+                }
+            } catch (Exception ignored) {}
         }
         return s;
     }
