@@ -133,3 +133,9 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - Seçilən filtrlər dərhal həmin bölmənin siyahısına tətbiq olunur.
 - Başqa bölməyə keçəndə və geri qayıdanda filtr avtomatik sıfırlanır.
 - Müştəri və Ayarlar bölmələrinə filtr əlavə edilməyib.
+
+
+## v146 — Hesab Satışı Filtr build fix
+- v145-də `filterButton` dəyişəni yalnız lokal `if` blokunda yaradıldığı üçün Gradle `cannot find symbol` xətası verirdi.
+- Dəyişən callback-in görə bildiyi outer scope-a çıxarıldı və settings branch üçün `null` təyin edildi.
+- Filtr davranışı və v145 funksiyaları dəyişdirilmədi.

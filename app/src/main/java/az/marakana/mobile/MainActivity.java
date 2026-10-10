@@ -102,6 +102,7 @@ import java.time.LocalDate;
 public class MainActivity extends Activity {
     // v142: Hesab Satışı > Hesablar/Satılanlar/Satılmayanlar/İcarə bölmələrində axtarışın sağında Sırala düyməsi əlavə edildi; Tarixə görə və Son dəyişikliyə görə sıralama dəstəklənir.
     // v143: Hesab Satışı sıralanan bölmələrdə axtarış xanası 48dp edilərək Sırala düyməsi ilə eyni hündürlüyə gətirildi.
+    // v146: v145 Filtr build xətası düzəldildi; filterButton dəyişəni async callback daxilində düzgün scope-da saxlanılır.
     // v145: Hesab Satışında axtarış xanası bir qədər də kiçildi, Filtr düyməsi əlavə edildi; Növ/Konsol filtrləri seçilir və bölmə dəyişəndə avtomatik sıfırlanır.
 // v144: Hesab Satışında başlıqdan axtarış sətrinə qədər üst idarələr sabitdir; yalnız aşağıdakı hesab/müştəri siyahısı scroll olur. Müştəri bölməsində Yeni hesab/Yeni müştəri düymələri də digər bölmələrlə eyniləşdirildi.
     // v141: Hesab Satışı > Yeni hesab yarat: eyni e-mailə bağlı oyun/Bundle dəyişdirilə bilmir; Online/Universal PS4/Universal PS5 növlərindən yalnız çatışmayanlar yaradıla bilir və hər üçü varsa yeni yaradılış bloklanır.
@@ -4718,6 +4719,9 @@ public class MainActivity extends Activity {
         EditText search = input("customers".equals(section)
                 ? "Ad soyad və ya telefonla axtar"
                 : "Oyun, e-mail, müştəri, telefon və ya məxfi kodla axtar");
+        // v146: loadAccountSalesJson callback-dən də istifadə olunduğu üçün dəyişən
+        // outer scope-da final olaraq bütün branch-lərdə bir dəfə təyin edilir.
+        final Button filterButton;
         if (!"settings".equals(section)) {
             // v123: Axtarış istifadəçi özü silməyənədək Hesablar / Satılanlar /
             // Satılmayanlar / İcarə / Müştəri bölmələri arasında eyni qalır.
@@ -4730,7 +4734,6 @@ public class MainActivity extends Activity {
             search.setMinHeight(0);
             search.setMinimumHeight(0);
 
-            final Button filterButton;
             if (isAccountSalesSortableSection(section)) {
                 LinearLayout searchRow = new LinearLayout(this);
                 searchRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -4759,6 +4762,8 @@ public class MainActivity extends Activity {
                 ));
             }
             spacer(fixedControls, 10);
+        } else {
+            filterButton = null;
         }
 
         // v144: Pull-to-refresh və scroll yalnız axtarış sətrinin altındakı məlumat sahəsinə tətbiq olunur.
