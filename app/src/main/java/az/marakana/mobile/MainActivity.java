@@ -4711,7 +4711,8 @@ public class MainActivity extends Activity {
         EditText search = input("customers".equals(section)
                 ? "Ad soyad və ya telefonla axtar"
                 : "Oyun, e-mail, müştəri, telefon və ya məxfi kodla axtar");
-        // v148: Hesab Satışı tarix sahələri həm əl ilə yazılır, həm də sağdakı kalender ikonundan seçilir; 15042026 / 15 04 2026 avtomatik 15.04.2026 formatına çevrilir.
+        // v149: Hesab Sat / Düzənlə / İcarə ver formalarında klaviatura açılarkən fokusdakı xana avtomatik görünən sahəyə scroll edilir; adjustResize aktivdir.
+    // v148: Hesab Satışı tarix sahələri həm əl ilə yazılır, həm də sağdakı kalender ikonundan seçilir; 15042026 / 15 04 2026 avtomatik 15.04.2026 formatına çevrilir.
 // v147: Hesab Satışı üst hissəsi yenidən düzəldildi: Yeni hesab / Yeni müştəri qısaldıldı, Ayarlar həmin sıraya keçdi, Yenilə silindi, zibil qutusu başlıq sətrinin sağına daşındı.
 // v146: loadAccountSalesJson callback-dən də istifadə olunduğu üçün dəyişən
         // outer scope-da final olaraq bütün branch-lərdə bir dəfə təyin edilir.
@@ -6147,6 +6148,22 @@ public class MainActivity extends Activity {
         showAccountSalesTransactionForm(prepared, settings, preferredStatus, sourceSection);
     }
 
+    private void keepAccountSalesFieldVisible(ScrollView scroll, View field) {
+        if (scroll == null || field == null) return;
+        field.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) return;
+            v.postDelayed(() -> {
+                try {
+                    android.graphics.Rect rect = new android.graphics.Rect();
+                    v.getDrawingRect(rect);
+                    rect.top = Math.max(0, rect.top - dp(24));
+                    rect.bottom += dp(180);
+                    v.requestRectangleOnScreen(rect, true);
+                } catch (Exception ignored) {}
+            }, 220);
+        });
+    }
+
     private void showAccountSalesTransactionForm(JSONObject record, JSONObject settings, String preferredStatus, String sourceSection) {
         final boolean rental = "İcarə".equals(preferredStatus);
         final boolean sold = "Satılıb".equals(preferredStatus);
@@ -6183,6 +6200,7 @@ public class MainActivity extends Activity {
                     record.optString("secret_code", ""),
                     InputType.TYPE_CLASS_TEXT
             );
+            keepAccountSalesFieldVisible(sv, transactionSecretCode);
         } else {
             addAccountSalesDetailField(info, "🔐", "Məxfi kod", record.optString("secret_code", ""));
         }
@@ -6221,6 +6239,7 @@ public class MainActivity extends Activity {
 
         EditText customer = accountField(body, "Ad soyad *", "Kliklə müştəri seç və ya axtar", record.optString("customer_name", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         EditText phone = accountField(body, "Telefon *", "0705603030", record.optString("phone", ""), InputType.TYPE_CLASS_PHONE);
+        keepAccountSalesFieldVisible(sv, phone);
         customer.setFocusable(false);
         customer.setClickable(true);
         customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone, sold || rental));
@@ -6232,12 +6251,14 @@ public class MainActivity extends Activity {
                 String.valueOf(record.optDouble("price", 0)),
                 InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL
         );
+        keepAccountSalesFieldVisible(sv, transactionPrice);
 
         EditText date = null;
         if (sold) {
             String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
             date = accountField(body, "Satış tarixi *", "DD.MM.YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
             attachAccountSalesDatePicker(date);
+            keepAccountSalesFieldVisible(sv, date);
         }
 
         EditText rentalDuration = null;
@@ -6250,6 +6271,7 @@ public class MainActivity extends Activity {
                     record.optInt("rental_duration_value", 0) > 0 ? String.valueOf(record.optInt("rental_duration_value", 0)) : "",
                     InputType.TYPE_CLASS_NUMBER
             );
+            keepAccountSalesFieldVisible(sv, rentalDuration);
             String rentalUnitValue = "hour".equalsIgnoreCase(record.optString("rental_duration_unit", "day")) ? "Saat" : "Gün";
             rentalUnit = accountSpinnerField(body, "Müddət vahidi *", new String[]{"Saat", "Gün"}, rentalUnitValue);
         }
@@ -6502,12 +6524,14 @@ public class MainActivity extends Activity {
         Spinner type = accountSpinnerField(body, "Növ *", new String[]{"Online", "Universal PS4", "Universal PS5"}, editingAccountType);
         EditText customer = accountField(body, "Ad soyad", "Kliklə müştəri seç və ya axtar", record.optString("customer_name", ""), InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
         EditText phone = accountField(body, "Telefon", "0705603030", record.optString("phone", ""), InputType.TYPE_CLASS_PHONE);
+        keepAccountSalesFieldVisible(sv, phone);
         customer.setFocusable(false);
         customer.setClickable(true);
         customer.setOnClickListener(v -> showAccountSalesCustomerPicker(customer, phone));
         String initialDate = accountSalesDateForDisplay(record.optString("sale_date", ""));
         EditText date = accountField(body, "Satış tarixi", "DD.MM.YYYY", initialDate, InputType.TYPE_CLASS_DATETIME);
         attachAccountSalesDatePicker(date);
+        keepAccountSalesFieldVisible(sv, date);
 
         String defaultStock = settings == null ? "Satılıb" : settings.optString("default_stock_status", "Satılıb");
         Spinner stock = accountSpinnerField(body, "Status *", new String[]{"Satılıb", "Satılmayıb", "İcarə"}, record.optString("stock_status", defaultStock));

@@ -153,3 +153,10 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - `15042026`, `15 04 2026`, `15-04-2026` yazıldıqda avtomatik `15.04.2026` formasına düşür.
 - Kalenderdən seçilən tarix də `DD.MM.YYYY` formatında görünür.
 - Serverə göndəriləndə tarix əvvəlki kimi `YYYY-MM-DD` formatına çevrilir.
+
+
+## v149 — Hesab Satışı klaviatura görünüşü
+- Sat / Düzənlə / İcarə ver ekranlarında klaviatura açılarkən ekran `adjustResize` ilə kiçilir.
+- Fokuslanan qiymət, telefon, tarix, icarə müddəti və məxfi kod sahəsi avtomatik klaviaturanın üstündə görünən yerə scroll edilir.
+- Yazdığın rəqəmləri klaviatura açıq olsa da görmək olur.
+- v148 manual tarix + kalender davranışı saxlanılıb.
