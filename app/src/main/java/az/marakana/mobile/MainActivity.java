@@ -100,6 +100,8 @@ import java.time.LocalDate;
  */
 public class MainActivity extends Activity {
     // v142: Hesab Satışı > Hesablar/Satılanlar/Satılmayanlar/İcarə bölmələrində axtarışın sağında Sırala düyməsi əlavə edildi; Tarixə görə və Son dəyişikliyə görə sıralama dəstəklənir.
+    // v143: Hesab Satışı sıralanan bölmələrdə axtarış xanası 48dp edilərək Sırala düyməsi ilə eyni hündürlüyə gətirildi.
+    // v144: Hesab Satışında başlıqdan axtarış sətrinə qədər üst idarələr sabitdir; yalnız aşağıdakı hesab/müştəri siyahısı scroll olur. Müştəri bölməsində Yeni hesab/Yeni müştəri düymələri də digər bölmələrlə eyniləşdirildi.
     // v141: Hesab Satışı > Yeni hesab yarat: eyni e-mailə bağlı oyun/Bundle dəyişdirilə bilmir; Online/Universal PS4/Universal PS5 növlərindən yalnız çatışmayanlar yaradıla bilir və hər üçü varsa yeni yaradılış bloklanır.
     // v140: Mobil Mesaj qutusunda Master istifadəçi mesajı bütün filiallara və ya seçilmiş konkret filiala göndərə bilir; hədəf/status görünüşü server capability ilə qorunur.
     // v139: Bir PC tapılsa belə avtomatik qoşulmur; seçim pəncərəsi açılır və operator mütləq "Qoşul" basır.
@@ -4653,9 +4655,18 @@ public class MainActivity extends Activity {
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
         installGlobalDrawerSwipe(scroll);
-        addPullToRefreshContent(shell, scroll, () -> showAccountSales(section));
         LinearLayout body = scrollBody(scroll);
         body.setPadding(0, dp(4), 0, dp(92));
+
+        // v144: Başlıqdan axtarış sətrinə qədər bütün idarələr scroll sahəsindən kənardadır.
+        // Beləliklə yalnız aşağıdakı hesab/müştəri kartları yuxarı-aşağı hərəkət edir.
+        LinearLayout fixedControls = new LinearLayout(this);
+        fixedControls.setOrientation(LinearLayout.VERTICAL);
+        fixedControls.setPadding(0, dp(4), 0, 0);
+        shell.addView(fixedControls, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
 
         LinearLayout topActions = new LinearLayout(this);
         topActions.setOrientation(LinearLayout.HORIZONTAL);
@@ -4675,8 +4686,8 @@ public class MainActivity extends Activity {
         trashLp.setMargins(dp(8), 0, 0, 0);
         topActions.addView(trash, trashLp);
         trash.setOnClickListener(v -> showAccountSalesTrash());
-        body.addView(topActions);
-        spacer(body, 10);
+        fixedControls.addView(topActions);
+        spacer(fixedControls, 10);
 
         LinearLayout createActions = new LinearLayout(this);
         createActions.setOrientation(LinearLayout.HORIZONTAL);
@@ -4688,9 +4699,10 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams addCustomerLp = new LinearLayout.LayoutParams(0, dp(52), 1f);
         addCustomerLp.setMargins(dp(8), 0, 0, 0);
         createActions.addView(addCustomer, addCustomerLp);
-        if (!"settings".equals(section) && !"customers".equals(section)) {
-            body.addView(createActions);
-            spacer(body, 10);
+        if (!"settings".equals(section)) {
+            // v144: Müştəri bölməsində də digər Hesab Satışı bölmələri kimi hər iki yarat düyməsi görünür.
+            fixedControls.addView(createActions);
+            spacer(fixedControls, 10);
         }
         add.setEnabled(false);
         addCustomer.setEnabled(false);
@@ -4706,12 +4718,17 @@ public class MainActivity extends Activity {
             search.addTextChangedListener(new SimpleTextWatcher(() ->
                     accountSalesSearchQuery = search.getText().toString()));
 
+            // v144: Müştəri daxil bütün Hesab Satışı axtarış sahələri eyni 48dp hündürlükdədir.
+            search.setMinHeight(0);
+            search.setMinimumHeight(0);
+
             if (isAccountSalesSortableSection(section)) {
                 // v142: Axtarış sağdan bir qədər kiçilir; boşalan hissədə Sırala düyməsi görünür.
                 LinearLayout searchRow = new LinearLayout(this);
                 searchRow.setOrientation(LinearLayout.HORIZONTAL);
                 searchRow.setGravity(Gravity.CENTER_VERTICAL);
-                searchRow.addView(search, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                // v143: Axtarış xanası da Sırala düyməsi ilə eyni 48dp hündürlükdədir.
+                searchRow.addView(search, new LinearLayout.LayoutParams(0, dp(48), 1f));
 
                 Button sortButton = button("⇅ Sırala", CARD, TEXT);
                 sortButton.setTextSize(12);
@@ -4719,12 +4736,18 @@ public class MainActivity extends Activity {
                 sortLp.setMargins(dp(8), 0, 0, 0);
                 searchRow.addView(sortButton, sortLp);
                 sortButton.setOnClickListener(v -> showAccountSalesSortDialog(section));
-                body.addView(searchRow);
+                fixedControls.addView(searchRow);
             } else {
-                body.addView(search);
+                fixedControls.addView(search, new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        dp(48)
+                ));
             }
-            spacer(body, 10);
+            spacer(fixedControls, 10);
         }
+
+        // v144: Pull-to-refresh və scroll yalnız axtarış sətrinin altındakı məlumat sahəsinə tətbiq olunur.
+        addPullToRefreshContent(shell, scroll, () -> showAccountSales(section));
 
         LinearLayout summaryHost = new LinearLayout(this);
         summaryHost.setOrientation(LinearLayout.VERTICAL);

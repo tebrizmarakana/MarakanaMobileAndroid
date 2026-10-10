@@ -110,3 +110,17 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - `Hesabı əlavə et` basılanda server həmin e-mail üzrə yenidən yoxlanılır; form açıldıqdan sonra başqa cihazda yaradılmış hesab da nəzərə alınır.
 - Köhnə `Offline` adı Universal PS4, köhnə `Universal` adı Universal PS5 kimi hesablanır ki legacy qeydlər dublikat növ yaratmasın.
 - WordPress Hesab Satışı plugininə dəyişiklik tələb olunmur; mövcud `/overview?section=accounts` və `/create-accounts` API-ləri istifadə olunur.
+
+## v143
+- Hesab Satışı > Hesablar / Satılanlar / Satılmayanlar / İcarə bölmələrində axtarış xanasının hündürlüyü 48dp edildi.
+- Axtarış xanası və `⇅ Sırala` düyməsi artıq eyni hündürlükdədir.
+- Sıralama məntiqinə və digər bölmələrə toxunulmayıb.
+
+
+## v144 — Hesab Satışı sabit üst panel
+- Hesab Satışı > Hesablar / Satılanlar / Satılmayanlar / İcarə / Müştəri bölmələrində başlıqdan axtarış sətrinə qədər bütün üst idarələr sabit qalır.
+- Aşağı-yuxarı sürüşdürəndə yalnız axtarışın altındakı hesab və ya müştəri kartları scroll olur.
+- `Ayarlar`, `Yenilə`, zibil qutusu, `Yeni hesab yarat`, `Yeni müştəri yarat` və axtarış sətri scroll sahəsindən çıxarılıb.
+- Müştəri bölməsində də `Yeni hesab yarat` və `Yeni müştəri yarat` düymələri digər bölmələrlə eyni yerdə göstərilir.
+- Müştəri axtarış sahəsi də 48dp hündürlükdədir.
+- Müştəri bölməsinə sıralama filtri əlavə edilməyib; v142-də istənən sıralama yalnız Hesablar / Satılanlar / Satılmayanlar / İcarə üçün saxlanılır.
