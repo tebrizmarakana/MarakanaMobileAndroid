@@ -4659,7 +4659,12 @@ public class MainActivity extends Activity {
         shell.setOrientation(LinearLayout.VERTICAL);
         shell.setPadding(dp(8), dp(10), dp(8), 0);
         content.addView(shell, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        shell.addView(buildMainHeader("Hesab Satışı", false, null));
+        LinearLayout accountSalesHeader = buildMainHeader("Hesab Satışı", false, null);
+        Button headerTrash = button("🗑", CARD, Color.rgb(190, 55, 55));
+        headerTrash.setTextSize(17);
+        headerTrash.setOnClickListener(v -> showAccountSalesTrash());
+        accountSalesHeader.addView(headerTrash, new LinearLayout.LayoutParams(dp(52), dp(48)));
+        shell.addView(accountSalesHeader);
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
@@ -4677,39 +4682,24 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT
         ));
 
-        LinearLayout topActions = new LinearLayout(this);
-        topActions.setOrientation(LinearLayout.HORIZONTAL);
-        Button settingsButton = button("⚙ Ayarlar", CARD, TEXT);
-        settingsButton.setTextSize(13);
-        topActions.addView(settingsButton, new LinearLayout.LayoutParams(0, dp(48), 1f));
-        settingsButton.setOnClickListener(v -> showAccountSales("settings"));
-        Button refresh = button("↻ Yenilə", CARD, TEXT);
-        refresh.setTextSize(13);
-        LinearLayout.LayoutParams refreshLp = new LinearLayout.LayoutParams(0, dp(48), 1f);
-        refreshLp.setMargins(dp(8), 0, 0, 0);
-        topActions.addView(refresh, refreshLp);
-        refresh.setOnClickListener(v -> showAccountSales(section));
-        Button trash = button("🗑", CARD, Color.rgb(190, 55, 55));
-        trash.setTextSize(17);
-        LinearLayout.LayoutParams trashLp = new LinearLayout.LayoutParams(dp(52), dp(48));
-        trashLp.setMargins(dp(8), 0, 0, 0);
-        topActions.addView(trash, trashLp);
-        trash.setOnClickListener(v -> showAccountSalesTrash());
-        fixedControls.addView(topActions);
-        spacer(fixedControls, 10);
-
         LinearLayout createActions = new LinearLayout(this);
         createActions.setOrientation(LinearLayout.HORIZONTAL);
-        Button add = button("＋ Yeni hesab yarat", GREEN, Color.WHITE);
+        Button add = button("＋ Yeni hesab", GREEN, Color.WHITE);
         add.setTextSize(13);
-        createActions.addView(add, new LinearLayout.LayoutParams(0, dp(52), 1f));
-        Button addCustomer = button("＋ Yeni müştəri yarat", BLUE, Color.WHITE);
+        createActions.addView(add, new LinearLayout.LayoutParams(0, dp(50), 1.05f));
+        Button addCustomer = button("＋ Yeni müştəri", BLUE, Color.WHITE);
         addCustomer.setTextSize(13);
-        LinearLayout.LayoutParams addCustomerLp = new LinearLayout.LayoutParams(0, dp(52), 1f);
+        LinearLayout.LayoutParams addCustomerLp = new LinearLayout.LayoutParams(0, dp(50), 1.05f);
         addCustomerLp.setMargins(dp(8), 0, 0, 0);
         createActions.addView(addCustomer, addCustomerLp);
+        Button settingsButton = button("⚙ Ayarlar", CARD, TEXT);
+        settingsButton.setTextSize(13);
+        settingsButton.setOnClickListener(v -> showAccountSales("settings"));
+        LinearLayout.LayoutParams settingsLp = new LinearLayout.LayoutParams(0, dp(50), 0.82f);
+        settingsLp.setMargins(dp(8), 0, 0, 0);
+        createActions.addView(settingsButton, settingsLp);
         if (!"settings".equals(section)) {
-            // v144: Müştəri bölməsində də digər Hesab Satışı bölmələri kimi hər iki yarat düyməsi görünür.
+            // v147: Yeni hesab / Yeni müştəri düymələri qısaldıldı və Ayarlar eyni sıraya, sağ tərəfə keçirildi.
             fixedControls.addView(createActions);
             spacer(fixedControls, 10);
         }
@@ -4719,7 +4709,8 @@ public class MainActivity extends Activity {
         EditText search = input("customers".equals(section)
                 ? "Ad soyad və ya telefonla axtar"
                 : "Oyun, e-mail, müştəri, telefon və ya məxfi kodla axtar");
-        // v146: loadAccountSalesJson callback-dən də istifadə olunduğu üçün dəyişən
+        // v147: Hesab Satışı üst hissəsi yenidən düzəldildi: Yeni hesab / Yeni müştəri qısaldıldı, Ayarlar həmin sıraya keçdi, Yenilə silindi, zibil qutusu başlıq sətrinin sağına daşındı.
+// v146: loadAccountSalesJson callback-dən də istifadə olunduğu üçün dəyişən
         // outer scope-da final olaraq bütün branch-lərdə bir dəfə təyin edilir.
         final Button filterButton;
         if (!"settings".equals(section)) {

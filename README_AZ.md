@@ -139,3 +139,11 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - v145-də `filterButton` dəyişəni yalnız lokal `if` blokunda yaradıldığı üçün Gradle `cannot find symbol` xətası verirdi.
 - Dəyişən callback-in görə bildiyi outer scope-a çıxarıldı və settings branch üçün `null` təyin edildi.
 - Filtr davranışı və v145 funksiyaları dəyişdirilmədi.
+
+
+## v147 — Hesab Satışı üst düymələr düzəni
+- `Yeni hesab yarat` düyməsinin mətni `Yeni hesab` edildi.
+- `Yeni müştəri yarat` düyməsinin mətni `Yeni müştəri` edildi.
+- Bu düymələr bir qədər kiçildildi və `Ayarlar` düyməsi onların sağında eyni sıraya keçirildi.
+- `Yenilə` düyməsi ləğv edildi.
+- `Zibil qutusu` düyməsi başlıq sətrində, hesab satışi başlığının ən sağında yerləşdirildi.
