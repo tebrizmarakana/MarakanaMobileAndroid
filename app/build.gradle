@@ -17,8 +17,8 @@ android {
         applicationId 'az.marakana.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 144
-        versionName '3.5.06-native-v144'
+        versionCode 145
+        versionName '3.5.07-native-v145'
     }
 
     signingConfigs {
@@ -56,7 +56,7 @@ dependencies {
     implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
 }
 
-// v144: Release signing təhlükəsizliyi saxlanılır; Hesab Satışında üst idarələr sabit, yalnız siyahı scroll olur.
+// v145: Release signing təhlükəsizliyi saxlanılır; Hesab Satışında Filtr düyməsi, Növ/Konsol filtrləri və bölmə dəyişəndə filtr sıfırlanması əlavə edildi.
 tasks.matching { it.name in ["assembleRelease", "bundleRelease", "packageRelease"] }.configureEach {
     doFirst {
         if (!releaseSigningReady) {

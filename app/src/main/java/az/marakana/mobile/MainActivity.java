@@ -82,6 +82,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -101,7 +102,8 @@ import java.time.LocalDate;
 public class MainActivity extends Activity {
     // v142: Hesab Satışı > Hesablar/Satılanlar/Satılmayanlar/İcarə bölmələrində axtarışın sağında Sırala düyməsi əlavə edildi; Tarixə görə və Son dəyişikliyə görə sıralama dəstəklənir.
     // v143: Hesab Satışı sıralanan bölmələrdə axtarış xanası 48dp edilərək Sırala düyməsi ilə eyni hündürlüyə gətirildi.
-    // v144: Hesab Satışında başlıqdan axtarış sətrinə qədər üst idarələr sabitdir; yalnız aşağıdakı hesab/müştəri siyahısı scroll olur. Müştəri bölməsində Yeni hesab/Yeni müştəri düymələri də digər bölmələrlə eyniləşdirildi.
+    // v145: Hesab Satışında axtarış xanası bir qədər də kiçildi, Filtr düyməsi əlavə edildi; Növ/Konsol filtrləri seçilir və bölmə dəyişəndə avtomatik sıfırlanır.
+// v144: Hesab Satışında başlıqdan axtarış sətrinə qədər üst idarələr sabitdir; yalnız aşağıdakı hesab/müştəri siyahısı scroll olur. Müştəri bölməsində Yeni hesab/Yeni müştəri düymələri də digər bölmələrlə eyniləşdirildi.
     // v141: Hesab Satışı > Yeni hesab yarat: eyni e-mailə bağlı oyun/Bundle dəyişdirilə bilmir; Online/Universal PS4/Universal PS5 növlərindən yalnız çatışmayanlar yaradıla bilir və hər üçü varsa yeni yaradılış bloklanır.
     // v140: Mobil Mesaj qutusunda Master istifadəçi mesajı bütün filiallara və ya seçilmiş konkret filiala göndərə bilir; hədəf/status görünüşü server capability ilə qorunur.
     // v139: Bir PC tapılsa belə avtomatik qoşulmur; seçim pəncərəsi açılır və operator mütləq "Qoşul" basır.
@@ -179,6 +181,9 @@ public class MainActivity extends Activity {
     private JSONArray accountSalesEmailAccounts = new JSONArray();
     // v123: Hesab Satışı bölmələri arasında istifadəçi özü silməyənədək axtarış mətni qorunur.
     private String accountSalesSearchQuery = "";
+    // v145: Hesab Satışı Növ/Konsol filtrləri yalnız cari bölmə sessiyası üçündür; bölmə dəyişəndə sıfırlanır.
+    private final LinkedHashSet<String> accountSalesSelectedTypeFilters = new LinkedHashSet<>();
+    private final LinkedHashSet<String> accountSalesSelectedConsoleFilters = new LinkedHashSet<>();
     // v123: Düzənlə / Sat / İcarə ver əməliyyatlarından sonra dəqiq gəlinən bölməyə qayıtmaq üçün son aktiv bölmə.
     private String accountSalesActiveSection = "accounts";
     // v111: Müştəri detalında hesab düzəlişindən sonra eyni səhifəyə qayıtmaq üçün kontekst.
@@ -4642,6 +4647,9 @@ public class MainActivity extends Activity {
             return;
         }
         final String section = normalizeAccountSalesSection(requestedSection);
+        if (!section.equals(normalizeAccountSalesSection(accountSalesActiveSection))) {
+            clearAccountSalesFilters();
+        }
         if (!"settings".equals(section)) accountSalesActiveSection = section;
         currentBackAction = null;
         clear();
@@ -4718,29 +4726,36 @@ public class MainActivity extends Activity {
             search.addTextChangedListener(new SimpleTextWatcher(() ->
                     accountSalesSearchQuery = search.getText().toString()));
 
-            // v144: Müştəri daxil bütün Hesab Satışı axtarış sahələri eyni 48dp hündürlükdədir.
+            // v145: Hesab Satışı axtarış sahəsi 44dp edildi; sortable bölmələrdə sağda həm Sırala, həm Filtr düyməsi görünür.
             search.setMinHeight(0);
             search.setMinimumHeight(0);
 
+            final Button filterButton;
             if (isAccountSalesSortableSection(section)) {
-                // v142: Axtarış sağdan bir qədər kiçilir; boşalan hissədə Sırala düyməsi görünür.
                 LinearLayout searchRow = new LinearLayout(this);
                 searchRow.setOrientation(LinearLayout.HORIZONTAL);
                 searchRow.setGravity(Gravity.CENTER_VERTICAL);
-                // v143: Axtarış xanası da Sırala düyməsi ilə eyni 48dp hündürlükdədir.
-                searchRow.addView(search, new LinearLayout.LayoutParams(0, dp(48), 1f));
+                searchRow.addView(search, new LinearLayout.LayoutParams(0, dp(44), 1f));
 
                 Button sortButton = button("⇅ Sırala", CARD, TEXT);
                 sortButton.setTextSize(12);
-                LinearLayout.LayoutParams sortLp = new LinearLayout.LayoutParams(dp(112), dp(48));
+                LinearLayout.LayoutParams sortLp = new LinearLayout.LayoutParams(dp(92), dp(44));
                 sortLp.setMargins(dp(8), 0, 0, 0);
                 searchRow.addView(sortButton, sortLp);
                 sortButton.setOnClickListener(v -> showAccountSalesSortDialog(section));
+
+                filterButton = button("⚲ Filtr", CARD, TEXT);
+                filterButton.setTextSize(12);
+                filterButton.setEnabled(false);
+                LinearLayout.LayoutParams filterLp = new LinearLayout.LayoutParams(dp(92), dp(44));
+                filterLp.setMargins(dp(8), 0, 0, 0);
+                searchRow.addView(filterButton, filterLp);
                 fixedControls.addView(searchRow);
             } else {
+                filterButton = null;
                 fixedControls.addView(search, new LinearLayout.LayoutParams(
                         ViewGroup.LayoutParams.MATCH_PARENT,
-                        dp(48)
+                        dp(44)
                 ));
             }
             spacer(fixedControls, 10);
@@ -4809,6 +4824,10 @@ public class MainActivity extends Activity {
                 }
                 final JSONArray finalRecords = records;
                 Runnable render = () -> renderAccountSalesRecords(recordsHost, finalRecords, search.getText().toString(), finalSettings, section);
+                if (filterButton != null) {
+                    filterButton.setEnabled(true);
+                    filterButton.setOnClickListener(v -> showAccountSalesFilterDialog(section, finalRecords, render));
+                }
                 search.addTextChangedListener(new SimpleTextWatcher(render));
                 render.run();
             }
@@ -5063,6 +5082,128 @@ public class MainActivity extends Activity {
         return sorted;
     }
 
+    private void clearAccountSalesFilters() {
+        accountSalesSelectedTypeFilters.clear();
+        accountSalesSelectedConsoleFilters.clear();
+    }
+
+    private boolean accountSalesHasActiveFilters() {
+        return !accountSalesSelectedTypeFilters.isEmpty() || !accountSalesSelectedConsoleFilters.isEmpty();
+    }
+
+    private boolean accountSalesRecordMatchesFilters(JSONObject row) {
+        if (row == null) return false;
+        if (!accountSalesSelectedTypeFilters.isEmpty()) {
+            String type = row.optString("account_type", "").trim();
+            if (!accountSalesSelectedTypeFilters.contains(type)) return false;
+        }
+        if (!accountSalesSelectedConsoleFilters.isEmpty()) {
+            String console = row.optString("console", "").trim();
+            if (!accountSalesSelectedConsoleFilters.contains(console)) return false;
+        }
+        return true;
+    }
+
+    private ArrayList<String> collectAccountSalesFilterOptions(JSONArray records, String key) {
+        LinkedHashSet<String> values = new LinkedHashSet<>();
+        if (records != null) {
+            for (int i = 0; i < records.length(); i++) {
+                JSONObject row = records.optJSONObject(i);
+                if (row == null) continue;
+                String value = row.optString(key, "").trim();
+                if (!value.isEmpty()) values.add(value);
+            }
+        }
+        return new ArrayList<>(values);
+    }
+
+    private void showAccountSalesFilterDialog(String section, JSONArray records, Runnable onApplied) {
+        if (!isAccountSalesSortableSection(section)) return;
+        ArrayList<String> typeOptions = collectAccountSalesFilterOptions(records, "account_type");
+        ArrayList<String> consoleOptions = collectAccountSalesFilterOptions(records, "console");
+        if (typeOptions.isEmpty() && consoleOptions.isEmpty()) {
+            toast("Filtr üçün məlumat tapılmadı.");
+            return;
+        }
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(14), dp(10), dp(14), dp(10));
+        scroll.addView(box, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        ));
+
+        ArrayList<CheckBox> typeChecks = new ArrayList<>();
+        ArrayList<CheckBox> consoleChecks = new ArrayList<>();
+
+        if (!typeOptions.isEmpty()) {
+            TextView typeTitle = text("Növ", 14, TEXT, true);
+            typeTitle.setPadding(0, 0, 0, dp(6));
+            box.addView(typeTitle);
+            for (String value : typeOptions) {
+                CheckBox cb = new CheckBox(this);
+                cb.setText(value);
+                cb.setTextColor(TEXT);
+                cb.setTextSize(14);
+                cb.setChecked(accountSalesSelectedTypeFilters.contains(value));
+                box.addView(cb);
+                typeChecks.add(cb);
+            }
+        }
+
+        if (!consoleOptions.isEmpty()) {
+            if (!typeOptions.isEmpty()) spacer(box, 10);
+            TextView consoleTitle = text("Konsol", 14, TEXT, true);
+            consoleTitle.setPadding(0, 0, 0, dp(6));
+            box.addView(consoleTitle);
+            for (String value : consoleOptions) {
+                CheckBox cb = new CheckBox(this);
+                cb.setText(value);
+                cb.setTextColor(TEXT);
+                cb.setTextSize(14);
+                cb.setChecked(accountSalesSelectedConsoleFilters.contains(value));
+                box.addView(cb);
+                consoleChecks.add(cb);
+            }
+        }
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Filtrlər")
+                .setView(scroll)
+                .setPositiveButton("Tətbiq et", null)
+                .setNeutralButton("Sıfırla", null)
+                .setNegativeButton("Bağla", null)
+                .create();
+        dialog.setOnShowListener(d -> {
+            Button apply = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+            Button clear = dialog.getButton(AlertDialog.BUTTON_NEUTRAL);
+            if (apply != null) {
+                apply.setOnClickListener(v -> {
+                    accountSalesSelectedTypeFilters.clear();
+                    for (CheckBox cb : typeChecks) {
+                        if (cb.isChecked()) accountSalesSelectedTypeFilters.add(String.valueOf(cb.getText()).trim());
+                    }
+                    accountSalesSelectedConsoleFilters.clear();
+                    for (CheckBox cb : consoleChecks) {
+                        if (cb.isChecked()) accountSalesSelectedConsoleFilters.add(String.valueOf(cb.getText()).trim());
+                    }
+                    dialog.dismiss();
+                    if (onApplied != null) onApplied.run();
+                });
+            }
+            if (clear != null) {
+                clear.setOnClickListener(v -> {
+                    clearAccountSalesFilters();
+                    dialog.dismiss();
+                    if (onApplied != null) onApplied.run();
+                });
+            }
+        });
+        dialog.show();
+    }
+
     private void renderAccountSalesRecords(LinearLayout host, JSONArray records, String query, JSONObject settings, String section) {
         host.removeAllViews();
         String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
@@ -5076,10 +5217,15 @@ public class MainActivity extends Activity {
                     row.optString("account_type", "") + " " + row.optString("stock_status", "") + " " +
                     row.optString("rental_remaining_text", "");
             if (!q.isEmpty() && !haystack.toLowerCase(Locale.ROOT).contains(q)) continue;
+            if (!accountSalesRecordMatchesFilters(row)) continue;
             visible++;
             host.addView(buildAccountSalesRecordCard(row, settings, section));
         }
-        if (visible == 0) host.addView(empty(q.isEmpty() ? "Hesab yoxdur." : "Axtarışa uyğun hesab tapılmadı."));
+        if (visible == 0) {
+            host.addView(empty((q.isEmpty() && !accountSalesHasActiveFilters())
+                    ? "Hesab yoxdur."
+                    : "Axtarışa / filtrə uyğun hesab tapılmadı."));
+        }
     }
 
     private LinearLayout buildAccountSalesRecordCard(JSONObject row, JSONObject settings, String section) {

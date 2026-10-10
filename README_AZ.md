@@ -124,3 +124,12 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - Müştəri bölməsində də `Yeni hesab yarat` və `Yeni müştəri yarat` düymələri digər bölmələrlə eyni yerdə göstərilir.
 - Müştəri axtarış sahəsi də 48dp hündürlükdədir.
 - Müştəri bölməsinə sıralama filtri əlavə edilməyib; v142-də istənən sıralama yalnız Hesablar / Satılanlar / Satılmayanlar / İcarə üçün saxlanılır.
+
+
+## v145 — Hesab Satışı filtr düyməsi + filtr sıfırlama
+- Hesablar / Satılanlar / Satılmayanlar / İcarə bölmələrində axtarış xanası bir qədər də kiçildi (44dp).
+- Axtarışın sağında yeni `⚲ Filtr` düyməsi əlavə edildi.
+- Filtr pəncərəsində `Növ` və `Konsol` seçimləri çoxlu seçim (multi-select) kimi göstərilir.
+- Seçilən filtrlər dərhal həmin bölmənin siyahısına tətbiq olunur.
+- Başqa bölməyə keçəndə və geri qayıdanda filtr avtomatik sıfırlanır.
+- Müştəri və Ayarlar bölmələrinə filtr əlavə edilməyib.
