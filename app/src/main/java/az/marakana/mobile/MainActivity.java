@@ -102,6 +102,7 @@ import java.time.LocalDate;
  * communicates with the existing Marakana PC mobile REST API.
  */
 public class MainActivity extends Activity {
+    // v151: İcarə Paneli > Müştərilər bölməsində yeni sayt qeydiyyatı gözləyən müştərini mobil tətbiqdən Təsdiqlə etmək olur.
     // v142: Hesab Satışı > Hesablar/Satılanlar/Satılmayanlar/İcarə bölmələrində axtarışın sağında Sırala düyməsi əlavə edildi; Tarixə görə və Son dəyişikliyə görə sıralama dəstəklənir.
     // v143: Hesab Satışı sıralanan bölmələrdə axtarış xanası 48dp edilərək Sırala düyməsi ilə eyni hündürlüyə gətirildi.
     // v146: v145 Filtr build xətası düzəldildi; filterButton dəyişəni async callback daxilində düzgün scope-da saxlanılır.
@@ -3580,9 +3581,68 @@ public class MainActivity extends Activity {
         if (!registered.isEmpty()) c.addView(text("Qeydiyyat: " + registered, 12, MUTED, false));
         int completed = row.optInt("completed_rentals", 0);
         c.addView(text("Tamamlanan icarə: " + completed, 12, MUTED, true));
+        if (isRentalCustomerPending(row)) {
+            Button approve = button("Təsdiqlə", GREEN, Color.WHITE);
+            LinearLayout.LayoutParams approveLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46));
+            approveLp.setMargins(0, dp(10), 0, 0);
+            c.addView(approve, approveLp);
+            approve.setOnClickListener(v -> confirmRentalCustomerApproval(row));
+        }
         c.setClickable(true);
         c.setOnClickListener(v -> showRentalCustomerDetails(row));
         return c;
+    }
+
+    private boolean isRentalCustomerPending(JSONObject row) {
+        if (row == null || row.optInt("is_active", 0) != 1) return false;
+        return "pending".equals(row.optString("approval_status", "").trim().toLowerCase(Locale.ROOT));
+    }
+
+    private void confirmRentalCustomerApproval(JSONObject row) {
+        if (row == null) return;
+        String customerUuid = row.optString("customer_uuid", "").trim();
+        if (customerUuid.isEmpty()) {
+            toast("Müştəri UUID məlumatı yoxdur.");
+            return;
+        }
+        String name = row.optString("full_name", "Müştəri").trim();
+        if (name.isEmpty()) name = "Müştəri";
+        final String customerName = name;
+        new AlertDialog.Builder(this)
+                .setTitle("Müştərini təsdiqlə")
+                .setMessage(customerName + " təsdiqlənsin? Təsdiqdən sonra Yeni icarə yarat bölməsində seçilə biləcək.")
+                .setPositiveButton("Təsdiqlə", (d, w) -> approveRentalCustomer(row))
+                .setNegativeButton("Ləğv et", null)
+                .show();
+    }
+
+    private void approveRentalCustomer(JSONObject row) {
+        String customerUuid = row == null ? "" : row.optString("customer_uuid", "").trim();
+        if (customerUuid.isEmpty()) {
+            toast("Müştəri UUID məlumatı yoxdur.");
+            return;
+        }
+        JSONObject payload = new JSONObject();
+        try {
+            payload.put("action", "customer_approve");
+            payload.put("operation_id", "mobile-customer-approve-" + java.util.UUID.randomUUID());
+            payload.put("customer_uuid", customerUuid);
+        } catch (Exception ignored) {}
+
+        final AlertDialog progress = showRentalCenteredLoading("Müştəri təsdiqlənir...");
+        postJson("/api/mobile/rental/customer_approve", payload, result -> {
+            if (progress.isShowing()) progress.dismiss();
+            if (result.has("ok") && !result.optBoolean("ok", true)) {
+                toast(result.optString("message", "Müştəri təsdiqlənmədi."));
+                return;
+            }
+            toast(result.optString("message", "Müştəri təsdiqləndi."));
+            showRental("customers");
+        }, ex -> {
+            if (progress.isShowing()) progress.dismiss();
+            String message = ex == null || ex.getMessage() == null ? "Müştəri təsdiqlənmədi." : ex.getMessage();
+            toast(message);
+        });
     }
 
     private LinearLayout buildRentalHistoryCard(JSONObject row) {
@@ -4014,14 +4074,31 @@ public class MainActivity extends Activity {
         addRentalCustomerImageCard(box, "Şəxsiyyət vəsiqəsi", registration.optString("id_card_blob", ""), registration.optString("id_card_filename", ""));
         addRentalCustomerImageCard(box, "Selfi", registration.optString("selfie_blob", ""), registration.optString("selfie_filename", ""));
 
-        AlertDialog dialog = new AlertDialog.Builder(this)
+        final boolean pendingApproval = isRentalCustomerPending(customer);
+        AlertDialog.Builder detailBuilder = new AlertDialog.Builder(this)
                 .setTitle(fullName.isEmpty() ? "Müştəri" : fullName)
-                .setView(scroll)
-                .setPositiveButton("Bağla", null)
-                .create();
+                .setView(scroll);
+        if (pendingApproval) {
+            detailBuilder.setPositiveButton("Təsdiqlə", null);
+            detailBuilder.setNegativeButton("Bağla", null);
+        } else {
+            detailBuilder.setPositiveButton("Bağla", null);
+        }
+        AlertDialog dialog = detailBuilder.create();
+        final JSONObject approvalCustomer = customer;
         dialog.setOnShowListener(d -> {
             Window w = dialog.getWindow();
             if (w != null) w.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, (int) (getResources().getDisplayMetrics().heightPixels * 0.90f));
+            if (pendingApproval) {
+                Button approveButton = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                if (approveButton != null) {
+                    approveButton.setTextColor(GREEN);
+                    approveButton.setOnClickListener(v -> {
+                        dialog.dismiss();
+                        confirmRentalCustomerApproval(approvalCustomer);
+                    });
+                }
+            }
         });
         dialog.show();
     }
@@ -9511,6 +9588,8 @@ public class MainActivity extends Activity {
             String query = value.length() > "/api/mobile/rental/customer_detail".length() ? value.substring("/api/mobile/rental/customer_detail".length()) : "";
             return DIRECT_RENTAL_MOBILE_API + "/customer-detail" + query;
         }
+        // v151: customer_approve mövcud Rental V2 /customers POST action-ından istifadə edir.
+        if (value.equals("/api/mobile/rental/customer_approve")) return "/wp-json/marakana-rental/v2/customers";
         if (value.equals("/api/mobile/rental/quote")) return DIRECT_RENTAL_MOBILE_API + "/quote";
         if (value.equals("/api/mobile/rental/create")) return DIRECT_RENTAL_MOBILE_API + "/create";
 

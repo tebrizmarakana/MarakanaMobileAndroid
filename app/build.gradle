@@ -17,8 +17,8 @@ android {
         applicationId 'az.marakana.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 150
-        versionName '3.5.12-native-v150'
+        versionCode 151
+        versionName '3.5.13-native-v151'
     }
 
     signingConfigs {
@@ -70,3 +70,5 @@ tasks.matching { it.name in ["assembleRelease", "bundleRelease", "packageRelease
 // v149: Hesab Satışı formalarında keyboard adjustResize + focus field auto-scroll.
 
 // v150: Hesab Sat / Düzənlə / İcarə ver qiymət-tarix popup input; fresh transaction fields start blank.
+
+// v151: İcarə Paneli Müştərilər bölməsində pending sayt qeydiyyatını mobil tətbiqdən Təsdiqlə.
