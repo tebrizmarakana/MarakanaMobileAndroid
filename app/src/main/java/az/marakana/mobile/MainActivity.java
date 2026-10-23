@@ -333,7 +333,7 @@ public class MainActivity extends Activity {
         video.setOnErrorListener((mp, what, extra) -> { closeOpeningVideo(); return true; });
         // Dekoder / fayl problemi olsa UI bağlı qalmasın.
         openingVideoTimeout = this::closeOpeningVideo;
-        openingVideoHandler.postDelayed(openingVideoTimeout, 6500L);
+        openingVideoHandler.postDelayed(openingVideoTimeout, 14000L);
         try {
             video.setVideoURI(Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.marakana_opening));
         } catch (Exception ignored) {
@@ -2865,18 +2865,6 @@ public class MainActivity extends Activity {
             body.addView(empty("Bu istifadəçi üçün mobil modul icazəsi tapılmadı."));
         }
 
-        TextView other = text("Digər xidmətlər", 20, TEXT, true);
-        LinearLayout.LayoutParams otherLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(60));
-        otherLp.topMargin = dp(13);
-        body.addView(other, otherLp);
-        if (isOnlineMode() && !loadRemoteTokenSecurely().isEmpty()) {
-            body.addView(dashboardOtherRow("🏢", "Filiallar", "Filial seç və statusa bax",
-                    this::showDashboardBranches));
-        }
-        body.addView(dashboardOtherRow("👤", "Profil", "İstifadəçi və sessiya məlumatları",
-                this::showDashboardProfile));
-
         LinearLayout nav = new LinearLayout(this);
         nav.setGravity(Gravity.CENTER_VERTICAL);
         nav.setBackground(bg(Color.rgb(248, 250, 251), 24, BORDER));
@@ -2917,32 +2905,6 @@ public class MainActivity extends Activity {
         return tile;
     }
 
-    private View dashboardOtherRow(String symbol, String title, String sub, Runnable onClick) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setPadding(dp(12), dp(8), dp(10), dp(8));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(75));
-        lp.bottomMargin = dp(7);
-        row.setLayoutParams(lp);
-        row.setBackground(bg(Color.rgb(249, 250, 251), 15, BORDER));
-        TextView icon = text(symbol, 26, TEXT, true);
-        icon.setGravity(Gravity.CENTER);
-        row.addView(icon, new LinearLayout.LayoutParams(dp(46), dp(50)));
-        LinearLayout labels = new LinearLayout(this);
-        labels.setOrientation(LinearLayout.VERTICAL);
-        labels.setPadding(dp(8), 0, 0, 0);
-        row.addView(labels, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        labels.addView(text(title, 16, TEXT, true));
-        labels.addView(text(sub, 12, MUTED, false));
-        row.addView(text("›", 28, TEXT, false));
-        row.setClickable(true);
-        row.setFocusable(true);
-        row.setOnClickListener(v -> onClick.run());
-        return row;
-    }
-
     private void addDashboardNav(LinearLayout parent, String symbol, String label, boolean selected, Runnable action) {
         LinearLayout item = new LinearLayout(this);
         item.setOrientation(LinearLayout.VERTICAL);
@@ -2962,7 +2924,7 @@ public class MainActivity extends Activity {
         item.setOnClickListener(v -> action.run());
     }
 
-    // v154: Avatar, ad, Profil kartı və alt Profil düyməsi eyni hesab pəncərəsini açır.
+    // v154: Avatar, ad və alt Profil düyməsi eyni hesab pəncərəsini açır.
     // Profil məlumatları + ayrıca Çıxış action düyməsi (artıq siyahıda gizlənmir).
     private void showDashboardProfile() {
         String account = username == null || username.trim().isEmpty() ? "İstifadəçi" : username.trim();

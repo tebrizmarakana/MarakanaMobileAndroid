@@ -196,3 +196,16 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - Zaldakı, Mətbəxdəki, Borc və İcarədəki mövcud ayrıca bölmə jestləri/pull-to-refresh saxlanılıb.
 - Bütün modullarda alt **Əsas** düyməsi, dashboard-da ikon menyular və filial dəyişdirmə axını saxlanılıb.
 - `versionCode=154`, `versionName=3.5.16-native-v154`, eyni applicationId və permanent signing.
+
+
+## v156 — Ana ekran təkrar menyuların çıxarılması
+- `Digər xidmətlər` başlığı, `Filiallar` və `Profil` kartları ana dashboard-dan çıxarıldı.
+- Yuxarı sol profil menyusundakı filial seçimi, profil/çıxış qorundu.
+- Alt paneldə `Profil` və `Əsas` düymələri saxlanılıb.
+- Əsas xidmət kartları və video splash dəyişməyib.
+
+
+## v157 - New opening video
+- Opening asset updated to provided 1001204689.mp4 (720x1280, 10s, H264/AAC).
+- Existing no-loop muted video overlay, completion flow and cold/warm launch behavior retained.
+- MainActivity logic unchanged; video asset replaced only.
