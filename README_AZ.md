@@ -1,4 +1,4 @@
-# Marakana Mobile v142 — Hesab Satışı Sıralama
+# Marakana Mobile — Layihə tarixçəsi (v153 son baza)
 
 - `versionCode 142`
 - `versionName 3.5.04-native-v142`
@@ -174,3 +174,16 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - Üst sol blokda `Salam 👋` və giriş etmiş istifadəçinin `/api/mobile/login` cavabındakı `username` görünür.
 - Xidmətlər rol icazələrinə görə göstərilir. Profil və filial seçimləri dashboard daxilindədir.
 - APK build üçün `BUILD_APK_WINDOWS.bat` və ya GitHub Actions v152 workflow istifadə olunur; imzalama açarları əvvəlki kimi tələb olunur.
+
+
+## v153 — Hesab Satışı müştəri keçidi və bütün bölmələrdə Əsas
+- Bazası: v152 Dashboard, username, rol icazələri saxlanılıb.
+- Hesab Satışı alt panelindəki Müştəri tabı çıxarıldı. Digər 4 tab qalır.
+- Hesab Satışının yuxarı hissəsində Yeni müştəri basanda əvvəlcə mövcud müştərilər siyahısı açılır.
+- Müştərilər siyahısının yuxarısında Yeni müştəri yarat düyməsi var; mövcud yaratma forması və /customer/save dəyişmir.
+- Yeni müştəri yaradılınca yenilənmiş müştərilər siyahısına qayıdır.
+- Bütün login olunmuş daxili ekranlarda sabit alt panelin ilk düyməsi Əsas-dır; ana ekrana qaytarır.
+- Borc, İcarə, Mətbəx və Hesab Satışı üçün əvvəlki tablar Əsas-dan sonra saxlanılıb.
+- Detal/form ekranlarında da ən azı Əsas düyməsi görünür; login ekranında göstərilmir.
+- Dashboard-un mövcud öz alt paneli qorunur, ikiqat panel olmur.
+- Business/API, rol icazələri, filial konteksti və daimi release imzası dəyişməyib.

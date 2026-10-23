@@ -208,6 +208,8 @@ public class MainActivity extends Activity {
     private SharedPreferences prefs;
     private LinearLayout root;
     private LinearLayout content;
+    // v153: bütün giriş edilmiş ekranlar üçün sabit alt naviqasiya sahəsi.
+    private LinearLayout persistentBottomNavigationHost;
     private ProgressBar busy;
     private EditText serverAddressInput = null;
 
@@ -635,6 +637,13 @@ public class MainActivity extends Activity {
         content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         root.addView(content, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        // v153: tək, sabit alt panel — məzmunu örtmür, bütün ekranlarda eyni yerdə qalır.
+        persistentBottomNavigationHost = new LinearLayout(this);
+        persistentBottomNavigationHost.setOrientation(LinearLayout.VERTICAL);
+        persistentBottomNavigationHost.setVisibility(View.GONE);
+        root.addView(persistentBottomNavigationHost,
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(86)));
     }
 
     private void clear() {
@@ -643,6 +652,46 @@ public class MainActivity extends Activity {
         activeOrderCartStation = "";
         content.removeAllViews();
         dashboardVisible = false;
+        // Mövcud bölməyə görə tablar sonradan qoşulur, form/detallarda yalnız Əsas qalır.
+        showPersistentBottomNavigation(null);
+    }
+
+    // v153: bütün bölmələrin alt panelində ən birinci Əsas düyməsi.
+    // Bölmə tabları mövcud View və onClick-ləri ilə bu vahid bara köçürülür.
+    private void showPersistentBottomNavigation(LinearLayout sectionFooter) {
+        if (persistentBottomNavigationHost == null) return;
+        persistentBottomNavigationHost.removeAllViews();
+        if (sessionToken == null || sessionToken.trim().isEmpty() || dashboardVisible) {
+            persistentBottomNavigationHost.setVisibility(View.GONE);
+            return;
+        }
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER);
+        bar.setPadding(dp(5), dp(6), dp(5), dp(6));
+        bar.setBackground(bg(Color.WHITE, 22, BORDER));
+        bar.setElevation(dp(8));
+        LinearLayout.LayoutParams barLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        barLp.setMargins(dp(8), 0, dp(8), dp(7));
+        persistentBottomNavigationHost.addView(bar, barLp);
+
+        LinearLayout home = buildRentalFooterTab("⌂", "Əsas", false);
+        home.setContentDescription("Əsas — ana ekrana qayıt");
+        home.setOnClickListener(v -> showDashboard());
+        bar.addView(home, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+
+        if (sectionFooter != null) {
+            while (sectionFooter.getChildCount() > 0) {
+                View tab = sectionFooter.getChildAt(0);
+                sectionFooter.removeViewAt(0);
+                LinearLayout.LayoutParams tabLp = new LinearLayout.LayoutParams(
+                        0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+                tabLp.leftMargin = dp(3);
+                bar.addView(tab, tabLp);
+            }
+        }
+        persistentBottomNavigationHost.setVisibility(View.VISIBLE);
     }
 
     private void setBusy(boolean value) {
@@ -2949,6 +2998,8 @@ public class MainActivity extends Activity {
         currentBackAction = null;
         clear();
         dashboardVisible = true;
+        // Dashboard-un öz alt paneli var; v153 universal panel burada ikinci dəfə göstərilmir.
+        persistentBottomNavigationHost.setVisibility(View.GONE);
 
         LinearLayout shell = new LinearLayout(this);
         shell.setOrientation(LinearLayout.VERTICAL);
@@ -3695,7 +3746,7 @@ public class MainActivity extends Activity {
         installRentalGestures(body, activeSection);
 
         LinearLayout footer = buildRentalFooter(activeSection);
-        shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(88)));
+        showPersistentBottomNavigation(footer);
 
         loadRentalJson("/api/mobile/rental/list?section=" + urlEncode(activeSection), 2, result -> {
             if (rentalLoadingDialog != null && rentalLoadingDialog.isShowing()) rentalLoadingDialog.dismiss();
@@ -5064,12 +5115,22 @@ public class MainActivity extends Activity {
 
         LinearLayout createActions = new LinearLayout(this);
         createActions.setOrientation(LinearLayout.HORIZONTAL);
+        if ("customers".equals(section)) {
+            TextView customerHeading = text("Müştərilər", 18, TEXT, true);
+            fixedControls.addView(customerHeading, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(37)));
+        }
         Button add = button("＋ Yeni hesab", GREEN, Color.WHITE);
         add.setTextSize(13);
-        createActions.addView(add, new LinearLayout.LayoutParams(0, dp(50), 1.05f));
-        Button addCustomer = button("＋ Yeni müştəri", BLUE, Color.WHITE);
+        // Müştərilər siyahısında əsas yuxarı əməliyyat yeni müştəri yaratmaqdır.
+        if (!"customers".equals(section)) {
+            createActions.addView(add, new LinearLayout.LayoutParams(0, dp(50), 1.05f));
+        }
+        Button addCustomer = button("customers".equals(section)
+                ? "＋ Yeni müştəri yarat" : "＋ Yeni müştəri", BLUE, Color.WHITE);
         addCustomer.setTextSize(13);
-        LinearLayout.LayoutParams addCustomerLp = new LinearLayout.LayoutParams(0, dp(50), 1.05f);
+        LinearLayout.LayoutParams addCustomerLp = new LinearLayout.LayoutParams(
+                0, dp(50), "customers".equals(section) ? 2.1f : 1.05f);
         addCustomerLp.setMargins(dp(8), 0, 0, 0);
         createActions.addView(addCustomer, addCustomerLp);
         Button settingsButton = button("⚙ Ayarlar", CARD, TEXT);
@@ -5152,7 +5213,7 @@ public class MainActivity extends Activity {
         body.addView(recordsHost);
 
         LinearLayout footer = buildAccountSalesFooter(section);
-        shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(86)));
+        showPersistentBottomNavigation(footer);
 
         loadAccountSalesJson("/overview?section=" + urlEncode(section), result -> {
             JSONObject settings = result.optJSONObject("settings");
@@ -5166,7 +5227,7 @@ public class MainActivity extends Activity {
             JSONArray onlineAccounts = result.optJSONArray("online_accounts");
             accountSalesOnlineAccounts = onlineAccounts == null ? new JSONArray() : onlineAccounts;
             JSONObject finalSettings = settings;
-            add.setEnabled(true);
+            add.setEnabled(!"customers".equals(section));
             add.setOnClickListener(v -> {
                 String prefillEmail = "";
                 if ("accounts".equals(section)) {
@@ -5178,7 +5239,16 @@ public class MainActivity extends Activity {
                 showAccountSalesForm(null, finalSettings, section, prefillEmail);
             });
             addCustomer.setEnabled(true);
-            addCustomer.setOnClickListener(v -> showAccountSalesNewCustomer(section));
+            addCustomer.setOnClickListener(v -> {
+                if ("customers".equals(section)) {
+                    // Müştərilər səhifəsinin yuxarısındakı yeni müştəri yarat düyməsi.
+                    showAccountSalesNewCustomer("customers");
+                } else {
+                    // Başqa səhifədəki Yeni müştəri əvvəlcə mövcud müştərilər siyahısını açır.
+                    accountSalesSearchQuery = "";
+                    showAccountSales("customers");
+                }
+            });
 
             if ("settings".equals(section)) {
                 renderAccountSalesSummary(summaryHost, result.optJSONObject("stats"));
@@ -5232,9 +5302,10 @@ public class MainActivity extends Activity {
         footer.setPadding(dp(4), dp(8), dp(4), dp(8));
         footer.setBackground(bg(Color.WHITE, 22, BORDER));
         footer.setElevation(dp(12));
-        String[] labels = {"Hesablar", "Satılanlar", "Satılmayanlar", "İcarə", "Müştəri"};
-        String[] icons = {"🎮", "✓", "✓", "⏳", "👥"};
-        String[] targets = {"accounts", "sold", "unsold", "rental", "customers"};
+        // v153: Müştərilər alt tabdan çıxarıldı; yuxarıdakı Yeni müştəri ilə açılır.
+        String[] labels = {"Hesablar", "Satılanlar", "Satılmayanlar", "İcarə"};
+        String[] icons = {"🎮", "✓", "✓", "⏳"};
+        String[] targets = {"accounts", "sold", "unsold", "rental"};
         for (int i = 0; i < targets.length; i++) {
             final String target = targets[i];
             LinearLayout tab = buildRentalFooterTab(icons[i], labels[i], target.equals(activeSection));
@@ -8329,6 +8400,7 @@ public class MainActivity extends Activity {
             } catch (Exception ignored) {}
             postAccountSalesJson("/customer/save", payload, result -> {
                 toast("Müştəri yaradıldı.");
+                if ("customers".equals(returnSection)) accountSalesSearchQuery = "";
                 showAccountSales(returnSection);
             });
         });
@@ -8708,7 +8780,7 @@ public class MainActivity extends Activity {
         installDebtGestures(body, category);
 
         LinearLayout footer = buildDebtFooter(category);
-        shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(86)));
+        showPersistentBottomNavigation(footer);
 
         loadJson("/api/mobile/debt/list?category=" + urlEncode(category), result -> {
             JSONArray records = result.optJSONArray("records");
@@ -9319,7 +9391,7 @@ public class MainActivity extends Activity {
         installKitchenGestures(body, category);
 
         LinearLayout footer = buildKitchenFooter(category);
-        shell.addView(footer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(86)));
+        showPersistentBottomNavigation(footer);
 
         recordsHost.addView(empty("Mətbəx sifarişləri gözlənilir..."));
         startKitchenAutoRefresh(recordsHost, category);
