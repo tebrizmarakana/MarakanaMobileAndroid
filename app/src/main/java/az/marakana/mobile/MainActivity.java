@@ -53,6 +53,7 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+import android.widget.VideoView;
 
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanner;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
@@ -158,7 +159,7 @@ public class MainActivity extends Activity {
     private static final String KEY_ACCOUNT_SALES_SITE = "account_sales_site";
     private static final String KEY_ACCOUNT_SALES_API_KEY_ENC = "account_sales_api_key_enc";
     private static final String KEY_ACCOUNT_SALES_API_KEY_IV = "account_sales_api_key_iv";
-    // v134: Sol drawer daxilində filiallar Online/Offline statusu ilə görünür; Online filiala toxunanda cari istifadəçi/şifrə ilə həmin filiala avtomatik yenidən giriş edilir.
+    // v154: Filiallar profil/ana ekran seçim pəncərəsində Online/Offline göstərilir; giriş/keçid məntiqi saxlanılır.
     // v133: Online relay sürət düzəlişi: login rol probe-ları cache ilə ləğv edildi, mətbəx foreground/background dublikat poll dayandırıldı, result long-poll istifadə olunur.
     // v132: Eyni APK həm Local IP, həm də marakana.az Remote Gateway üzərindən filial seçimi ilə işləyir.
     // v120: Hazırdır göndəriləndə üstündən xətt çəkilmiş/silinmiş məhsullar PC-yə hazır cavab kimi göndərilmir; yalnız aktiv məhsullar hazır sayılır.
@@ -202,7 +203,6 @@ public class MainActivity extends Activity {
     private static final int GREEN = Color.rgb(28, 133, 90);
     private static final int ORANGE = Color.rgb(181, 90, 37);
     private static final int BORDER = Color.rgb(216, 227, 238);
-    private static final int MENU_SCRIM = Color.argb(105, 18, 32, 46);
 
     private final ExecutorService io = Executors.newCachedThreadPool();
     private SharedPreferences prefs;
@@ -237,23 +237,18 @@ public class MainActivity extends Activity {
     private AlertDialog dashboardBranchesDialog = null;
     private long lastExitBackPressedAt = 0L;
     private static final long EXIT_BACK_INTERVAL_MS = 2000L;
-    private FrameLayout activeNavigationOverlay = null;
-    private LinearLayout activeNavigationPanel = null;
-    private View activeNavigationScrim = null;
-    private float navigationDrawerProgress = 0f;
-    // v101: sol panel artıq ekranın istənilən nöqtəsindən sağa swipe ilə interaktiv açılır.
-    private float globalDrawerSwipeStartX = 0f;
-    private float globalDrawerSwipeStartY = 0f;
-    private long globalDrawerSwipeStartTime = 0L;
-    private boolean globalDrawerSwipeTracking = false;
-    private boolean globalDrawerSwipeDragging = false;
-    // v110: şaquli scroll aşkar ediləndə həmin toxunuş bitənədək drawer swipe bloklanır.
-    private boolean globalDrawerSwipeVerticalLocked = false;
+    // v154: köhnə sol drawer və qlobal swipe vəziyyət dəyişənləri tam silindi.
     private static final String[] DEBT_CATEGORIES = {"İşçi", "Müştəri", "Firma"};
     private static final String[] KITCHEN_CATEGORIES = {"Hazırlanır", "Hazırdır"};
     private static final long KITCHEN_LIVE_REFRESH_MS = 750L;
     private static final long ONLINE_KITCHEN_LIVE_REFRESH_MS = 2500L;
     private final Handler kitchenRefreshHandler = new Handler(Looper.getMainLooper());
+    // v155: Bir tətbiq açılışında bir dəfə görünən, səssiz video splash.
+    private FrameLayout openingVideoOverlay = null;
+    private VideoView openingVideoView = null;
+    private final Handler openingVideoHandler = new Handler(Looper.getMainLooper());
+    private Runnable openingVideoTimeout = null;
+    private boolean openingVideoClosed = false;
     private Runnable kitchenRefreshRunnable = null;
     private boolean kitchenAutoRefreshActive = false;
     private boolean activityVisible = false;
@@ -309,12 +304,69 @@ public class MainActivity extends Activity {
         } else {
             showLogin();
         }
+        // İlk açılışda (hər cold start) mövcud login/dashboard axınının üstündə video.
+        showOpeningVideoOnce();
+    }
+
+    private void showOpeningVideoOnce() {
+        if (openingVideoOverlay != null) return;
+        openingVideoClosed = false;
+        FrameLayout overlay = new FrameLayout(this);
+        overlay.setBackgroundColor(Color.BLACK);
+        overlay.setClickable(true);
+        overlay.setFocusable(true);
+        VideoView video = new VideoView(this);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER);
+        overlay.addView(video, lp);
+        openingVideoOverlay = overlay;
+        openingVideoView = video;
+        // Decor content üst qatında saxlanılır: login/dashboard yeniləmələri onu silmir.
+        addContentView(overlay, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        video.setOnPreparedListener(mp -> {
+            mp.setLooping(false);
+            mp.setVolume(0f, 0f);
+            video.start();
+        });
+        video.setOnCompletionListener(mp -> closeOpeningVideo());
+        video.setOnErrorListener((mp, what, extra) -> { closeOpeningVideo(); return true; });
+        // Dekoder / fayl problemi olsa UI bağlı qalmasın.
+        openingVideoTimeout = this::closeOpeningVideo;
+        openingVideoHandler.postDelayed(openingVideoTimeout, 6500L);
+        try {
+            video.setVideoURI(Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.marakana_opening));
+        } catch (Exception ignored) {
+            closeOpeningVideo();
+        }
+    }
+
+    private void closeOpeningVideo() {
+        if (openingVideoClosed) return;
+        openingVideoClosed = true;
+        if (openingVideoTimeout != null) openingVideoHandler.removeCallbacks(openingVideoTimeout);
+        openingVideoTimeout = null;
+        if (openingVideoView != null) {
+            try { openingVideoView.stopPlayback(); } catch (Exception ignored) {}
+        }
+        if (openingVideoOverlay != null) {
+            ViewGroup parent = (ViewGroup) openingVideoOverlay.getParent();
+            if (parent != null) parent.removeView(openingVideoOverlay);
+        }
+        openingVideoView = null;
+        openingVideoOverlay = null;
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        // Tətbiqin ikonu ilə yenidən açılış (singleTask warm launch) da splash göstərir.
+        // Bildiriş və deep link isə splash-i təkrar işə salmır.
+        if (intent != null && Intent.ACTION_MAIN.equals(intent.getAction())
+                && intent.hasCategory(Intent.CATEGORY_LAUNCHER)) {
+            showOpeningVideoOnce();
+        }
         if (captureAdminApprovalDeepLink(intent)) {
             String previousServer = normalizeServerBase(serverBase);
             preparePendingAdminApprovalServerForLogin();
@@ -715,7 +767,7 @@ public class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        // v152: qlobal drawer jestləri bağlandı; ana ekran kartlarla işləyir.
+        // v154: sol menyu yoxdur; native scroll və pull-to-refresh işləyir.
         addPullToRefreshContent(shell, scroll, refreshAction);
         return scroll;
     }
@@ -837,170 +889,6 @@ public class MainActivity extends Activity {
         }
     }
 
-    @Override
-    public boolean dispatchTouchEvent(MotionEvent event) {
-        // v110: sol panel hər yerdən sağa swipe ilə açıla bilər, amma şaquli scroll ilə qarışmır.
-        // Drawer yalnız aydın üfüqi jestdə başlayır; şaquli hərəkət üstün gələn kimi həmin toxunuş kilidlənir.
-        if (event != null && sessionToken != null && !sessionToken.isEmpty()) {
-            final int action = event.getActionMasked();
-
-            if (action == MotionEvent.ACTION_DOWN) {
-                // Panel artıq açıqdırsa onun öz toxunma davranışına qarışmırıq.
-                globalDrawerSwipeTracking = activeNavigationOverlay == null;
-                globalDrawerSwipeDragging = false;
-                globalDrawerSwipeVerticalLocked = false;
-                globalDrawerSwipeStartX = event.getX();
-                globalDrawerSwipeStartY = event.getY();
-                globalDrawerSwipeStartTime = System.currentTimeMillis();
-            } else if (globalDrawerSwipeTracking && action == MotionEvent.ACTION_MOVE) {
-                float dx = event.getX() - globalDrawerSwipeStartX;
-                float dy = event.getY() - globalDrawerSwipeStartY;
-                float absDx = Math.abs(dx);
-                float absDy = Math.abs(dy);
-                int horizontalStartThreshold = dp(18);
-                int verticalLockThreshold = dp(10);
-
-                if (!globalDrawerSwipeDragging && !globalDrawerSwipeVerticalLocked) {
-                    // Aşağı/yuxarı scroll üstünlük qazandıqda bu touch seriyasında paneli açma.
-                    if (absDy > verticalLockThreshold && absDy > absDx * 1.20f) {
-                        globalDrawerSwipeVerticalLocked = true;
-                    } else if (dx > horizontalStartThreshold && absDx > absDy * 1.75f) {
-                        globalDrawerSwipeDragging = true;
-                        ensureNavigationMenuOverlay();
-
-                        // ACTION_DOWN almış alt elementdə klik/scroll əməliyyatını dayandırırıq.
-                        MotionEvent cancelEvent = MotionEvent.obtain(event);
-                        cancelEvent.setAction(MotionEvent.ACTION_CANCEL);
-                        super.dispatchTouchEvent(cancelEvent);
-                        cancelEvent.recycle();
-                    }
-                }
-
-                if (globalDrawerSwipeDragging) {
-                    float width = getNavigationPanelWidth();
-                    setNavigationDrawerProgress(width <= 0f ? 0f : dx / width);
-                    return true;
-                }
-            } else if (globalDrawerSwipeTracking
-                    && (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL)) {
-                if (globalDrawerSwipeDragging) {
-                    float dx = event.getX() - globalDrawerSwipeStartX;
-                    long elapsed = Math.max(1L, System.currentTimeMillis() - globalDrawerSwipeStartTime);
-                    float velocity = dx * 1000f / elapsed;
-                    boolean open = navigationDrawerProgress >= 0.34f
-                            || (dx >= dp(64) && velocity >= dp(420));
-                    animateNavigationDrawer(open);
-                    globalDrawerSwipeTracking = false;
-                    globalDrawerSwipeDragging = false;
-                    globalDrawerSwipeVerticalLocked = false;
-                    return true;
-                }
-                globalDrawerSwipeTracking = false;
-                globalDrawerSwipeDragging = false;
-                globalDrawerSwipeVerticalLocked = false;
-            }
-        }
-
-        return super.dispatchTouchEvent(event);
-    }
-
-    private void installGlobalDrawerSwipe(View target) {
-        final float[] startX = {0f};
-        final float[] startY = {0f};
-        final long[] startTime = {0L};
-        final boolean[] dragging = {false};
-        final boolean[] verticalLocked = {false};
-        final int horizontalStartThreshold = dp(18);
-        final int verticalLockThreshold = dp(10);
-
-        target.setOnTouchListener((v, event) -> {
-            switch (event.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                    startX[0] = event.getX();
-                    startY[0] = event.getY();
-                    startTime[0] = System.currentTimeMillis();
-                    dragging[0] = false;
-                    verticalLocked[0] = false;
-                    break;
-                case MotionEvent.ACTION_MOVE: {
-                    float dx = event.getX() - startX[0];
-                    float dy = event.getY() - startY[0];
-                    float absDx = Math.abs(dx);
-                    float absDy = Math.abs(dy);
-
-                    if (!dragging[0] && !verticalLocked[0]) {
-                        if (absDy > verticalLockThreshold && absDy > absDx * 1.20f) {
-                            verticalLocked[0] = true;
-                        } else if (dx > horizontalStartThreshold && absDx > absDy * 1.75f) {
-                            dragging[0] = true;
-                            ensureNavigationMenuOverlay();
-                            if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(true);
-                        }
-                    }
-
-                    if (dragging[0]) {
-                        float width = getNavigationPanelWidth();
-                        setNavigationDrawerProgress(width <= 0f ? 0f : dx / width);
-                        return true;
-                    }
-                    break;
-                }
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    if (dragging[0]) {
-                        float dx = event.getX() - startX[0];
-                        long elapsed = Math.max(1L, System.currentTimeMillis() - startTime[0]);
-                        float velocity = dx * 1000f / elapsed;
-                        boolean open = navigationDrawerProgress >= 0.34f
-                                || (dx >= dp(64) && velocity >= dp(420));
-                        animateNavigationDrawer(open);
-                        if (v.getParent() != null) v.getParent().requestDisallowInterceptTouchEvent(false);
-                        dragging[0] = false;
-                        verticalLocked[0] = false;
-                        return true;
-                    }
-                    verticalLocked[0] = false;
-                    break;
-                default:
-                    break;
-            }
-            return false;
-        });
-    }
-
-    private View buildChatGptMenuButton() {
-        FrameLayout outer = new FrameLayout(this);
-        outer.setBackground(bg(CARD, 18, BORDER));
-        outer.setElevation(dp(3));
-        outer.setClickable(true);
-        outer.setFocusable(true);
-        outer.setContentDescription("Menyu");
-        outer.setLayoutParams(new LinearLayout.LayoutParams(dp(52), dp(46)));
-
-        LinearLayout bars = new LinearLayout(this);
-        bars.setOrientation(LinearLayout.VERTICAL);
-        bars.setGravity(Gravity.CENTER_VERTICAL);
-        int padH = dp(15);
-        int padV = dp(10);
-        bars.setPadding(padH, padV, padH, padV);
-
-        int[] widths = {dp(18), dp(18), dp(12)};
-        for (int i = 0; i < widths.length; i++) {
-            View line = new View(this);
-            GradientDrawable d = new GradientDrawable();
-            d.setColor(TEXT);
-            d.setCornerRadius(dp(2));
-            line.setBackground(d);
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(widths[i], dp(3));
-            if (i > 0) lp.topMargin = dp(5);
-            bars.addView(line, lp);
-        }
-
-        outer.addView(bars, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER));
-        outer.setOnClickListener(v -> showNavigationMenu());
-        return outer;
-    }
-
     private LinearLayout buildMainHeader(String title, boolean back, Runnable backAction) {
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
@@ -1029,159 +917,7 @@ public class MainActivity extends Activity {
         return header;
     }
 
-    private float getNavigationPanelWidth() {
-        return Math.max(dp(280), getResources().getDisplayMetrics().widthPixels * 0.82f);
-    }
-
-    private void ensureNavigationMenuOverlay() {
-        if (activeNavigationOverlay != null) return;
-        ViewGroup host = findViewById(android.R.id.content);
-        if (host == null) return;
-
-        FrameLayout overlay = new FrameLayout(this);
-        overlay.setBackgroundColor(Color.TRANSPARENT);
-
-        View scrim = new View(this);
-        scrim.setBackgroundColor(MENU_SCRIM);
-        scrim.setAlpha(0f);
-        overlay.addView(scrim, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
-        LinearLayout panel = new LinearLayout(this);
-        panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setPadding(dp(18), dp(22), dp(18), dp(18));
-        panel.setBackgroundColor(Color.WHITE);
-        panel.setElevation(dp(12));
-        int panelWidth = (int) getNavigationPanelWidth();
-        FrameLayout.LayoutParams panelLp = new FrameLayout.LayoutParams(panelWidth, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.START);
-        overlay.addView(panel, panelLp);
-        panel.setTranslationX(-panelWidth);
-
-        TextView appTitle = text("Marakana Mobile", 22, TEXT, true);
-        panel.addView(appTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42)));
-        TextView account = text((username.isEmpty() ? "İstifadəçi" : username) + "  •  " + roleLabel, 13, MUTED, true);
-        panel.addView(account, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30)));
-
-        TextView connection = text(currentConnectionLabel(), 12, isOnlineMode() ? BLUE : GREEN, true);
-        connection.setSingleLine(true);
-        panel.addView(connection, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(28)));
-        spacer(panel, 6);
-
-        ScrollView menuScroll = new ScrollView(this);
-        menuScroll.setFillViewport(false);
-        menuScroll.setVerticalScrollBarEnabled(false);
-        LinearLayout menu = new LinearLayout(this);
-        menu.setOrientation(LinearLayout.VERTICAL);
-        menuScroll.addView(menu, new ScrollView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        panel.addView(menuScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-
-        if (isOnlineMode() && !loadRemoteTokenSecurely().isEmpty()) {
-            addOnlineBranchDrawerSection(menu);
-            spacer(menu, 10);
-            addDrawerSectionLabel(menu, "MENYU");
-        }
-
-        if (canHall) addDrawerItem(menu, "Terminallar / Zal", () -> { dismissNavigationMenuImmediate(); switchMobileRole("hall", false, this::showTerminals); });
-        if (canKitchen) addDrawerItem(menu, "Mətbəx", () -> { dismissNavigationMenuImmediate(); switchMobileRole("kitchen", false, this::showKitchen); });
-        if (canAdmin) {
-            addDrawerItem(menu, "Borc Dəftəri", () -> { dismissNavigationMenuImmediate(); openAdminPluginModule(true, () -> showDebt("İşçi")); });
-            addDrawerItem(menu, "İcarə Paneli", () -> { dismissNavigationMenuImmediate(); openAdminPluginModule(false, () -> showRental("active")); });
-            addDrawerItem(menu, "Hesab Satışı", () -> { dismissNavigationMenuImmediate(); openAdminPluginModule(false, () -> showAccountSales("accounts")); });
-            addDrawerItem(menu, "Mesaj qutusu", () -> { dismissNavigationMenuImmediate(); openAdminPluginModule(false, this::showBranchMessages); });
-            addDrawerItem(menu, "Admin QR təsdiqi", () -> {
-                dismissNavigationMenuImmediate();
-                if ("admin".equals(role)) startAdminApprovalQrScanner();
-                else switchMobileRole("admin", false, this::startAdminApprovalQrScanner);
-            });
-        }
-
-        if ("kitchen".equals(role)) {
-            LinearLayout soundItem = new LinearLayout(this);
-            soundItem.setOrientation(LinearLayout.VERTICAL);
-            soundItem.setGravity(Gravity.CENTER_VERTICAL);
-            soundItem.setPadding(dp(14), dp(7), dp(14), dp(7));
-            soundItem.setBackground(bg(CARD, 14, BORDER));
-            soundItem.setClickable(true);
-            soundItem.setFocusable(true);
-            TextView soundTitle = text("Bildiriş səsi", 14, TEXT, true);
-            TextView soundValue = text(getKitchenNotificationSoundTitle(), 12, MUTED, false);
-            soundValue.setSingleLine(true);
-            soundItem.addView(soundTitle, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(23)));
-            soundItem.addView(soundValue, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(21)));
-            LinearLayout.LayoutParams soundLp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(60));
-            soundLp.setMargins(0, dp(8), 0, dp(8));
-            panel.addView(soundItem, soundLp);
-            soundItem.setOnClickListener(v -> { dismissNavigationMenuImmediate(); chooseKitchenNotificationSound(); });
-        }
-
-        Button exit = button("Çıxış", Color.rgb(255, 246, 246), Color.rgb(176, 54, 54));
-        exit.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(52)));
-        panel.addView(exit);
-
-        activeNavigationOverlay = overlay;
-        activeNavigationPanel = panel;
-        activeNavigationScrim = scrim;
-        navigationDrawerProgress = 0f;
-        host.addView(overlay, new ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-
-        scrim.setOnClickListener(v -> animateNavigationDrawer(false));
-        exit.setOnClickListener(v -> { dismissNavigationMenuImmediate(); logout(); });
-    }
-
-    private void setNavigationDrawerProgress(float progress) {
-        if (activeNavigationPanel == null || activeNavigationScrim == null) return;
-        float p = Math.max(0f, Math.min(1f, progress));
-        navigationDrawerProgress = p;
-        float width = getNavigationPanelWidth();
-        activeNavigationPanel.animate().cancel();
-        activeNavigationScrim.animate().cancel();
-        activeNavigationPanel.setTranslationX(-width * (1f - p));
-        activeNavigationScrim.setAlpha(p);
-    }
-
-    private void animateNavigationDrawer(boolean open) {
-        if (activeNavigationOverlay == null) {
-            if (!open) return;
-            ensureNavigationMenuOverlay();
-        }
-        if (activeNavigationPanel == null || activeNavigationScrim == null) return;
-        float target = open ? 1f : 0f;
-        float distance = Math.abs(target - navigationDrawerProgress);
-        long duration = Math.max(110L, (long) (230L * distance));
-        float width = getNavigationPanelWidth();
-        navigationDrawerProgress = target;
-        activeNavigationPanel.animate().translationX(open ? 0f : -width).setDuration(duration).withEndAction(() -> { if (!open) dismissNavigationMenuImmediate(); }).start();
-        activeNavigationScrim.animate().alpha(open ? 1f : 0f).setDuration(duration).start();
-    }
-
-    private void dismissNavigationMenuImmediate() {
-        if (activeNavigationOverlay == null) return;
-        if (activeNavigationOverlay.getParent() instanceof ViewGroup) {
-            ((ViewGroup) activeNavigationOverlay.getParent()).removeView(activeNavigationOverlay);
-        }
-        activeNavigationOverlay = null;
-        activeNavigationPanel = null;
-        activeNavigationScrim = null;
-        navigationDrawerProgress = 0f;
-    }
-
-    private void showNavigationMenu() {
-        ensureNavigationMenuOverlay();
-        setNavigationDrawerProgress(0f);
-        animateNavigationDrawer(true);
-    }
-
-    private void addDrawerItem(LinearLayout panel, String label, Runnable action) {
-        Button item = button(label, CARD, TEXT);
-        item.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-        item.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(54)));
-        LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) item.getLayoutParams();
-        lp.setMargins(0, 0, 0, dp(8));
-        item.setLayoutParams(lp);
-        item.setOnClickListener(v -> action.run());
-        panel.addView(item);
-    }
-
-    private void addDrawerSectionLabel(LinearLayout panel, String label) {
+    private void addBranchSectionLabel(LinearLayout panel, String label) {
         TextView title = text(label, 11, MUTED, true);
         title.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(30));
@@ -1189,8 +925,8 @@ public class MainActivity extends Activity {
         panel.addView(title, lp);
     }
 
-    private void addOnlineBranchDrawerSection(LinearLayout menu) {
-        addDrawerSectionLabel(menu, "FİLİALLAR");
+    private void addOnlineBranchSelectionSection(LinearLayout menu) {
+        addBranchSectionLabel(menu, "FİLİALLAR");
 
         // v136: filial sahəsinin hündürlüyü sabitdir. Statuslar gec gəlsə və ya
         // filial sayı yenilənsə belə MENYU/Terminallar/Mətbəx aşağı-yuxarı tullanmasın.
@@ -1208,13 +944,13 @@ public class MainActivity extends Activity {
         if (currentName.isEmpty()) currentName = currentId > 0 ? "Filial #" + currentId : "Filial seçilməyib";
 
         // Əvvəlki uğurlu /branches cavabından saxlanmış adları dərhal göstəririk.
-        // Online/Offline statusu isə hər drawer açılışında ayrıca təzələnir.
+        // Online/Offline statusu isə filial seçimi pəncərəsi açılanda ayrıca təzələnir.
         JSONArray cachedBranches = loadRemoteBranchesCache();
         Set<Integer> renderedIds = new HashSet<>();
         boolean renderedAny = false;
         if (currentId > 0) {
-            Button current = createDrawerBranchButton(currentId, currentName, null, currentId);
-            branchHost.addView(current, drawerBranchLayoutParams());
+            Button current = createBranchChoiceButton(currentId, currentName, null, currentId);
+            branchHost.addView(current, branchChoiceLayoutParams());
             renderedIds.add(currentId);
             renderedAny = true;
         }
@@ -1225,8 +961,8 @@ public class MainActivity extends Activity {
             if (id <= 0 || renderedIds.contains(id)) continue;
             String name = item.optString("name", "Filial #" + id).trim();
             if (name.isEmpty()) name = "Filial #" + id;
-            Button branch = createDrawerBranchButton(id, name, null, currentId);
-            branchHost.addView(branch, drawerBranchLayoutParams());
+            Button branch = createBranchChoiceButton(id, name, null, currentId);
+            branchHost.addView(branch, branchChoiceLayoutParams());
             renderedIds.add(id);
             renderedAny = true;
         }
@@ -1262,7 +998,7 @@ public class MainActivity extends Activity {
                 }
 
                 runOnUiThread(() -> {
-                    // Yalnız sabit filial viewport-un içini yeniləyirik; aşağıdakı menyu yerlərini dəyişmir.
+                    // Yalnız filial siyahısının içini yeniləyirik; digər ekranlara toxunmuruq.
                     branchHost.removeAllViews();
                     if (ids.isEmpty()) {
                         TextView emptyBranches = text("Filial siyahısı alınmadı.", 12, MUTED, false);
@@ -1273,8 +1009,8 @@ public class MainActivity extends Activity {
 
                     int selectedId = prefs.getInt(KEY_REMOTE_BRANCH_ID, 0);
                     for (int i = 0; i < ids.size(); i++) {
-                        Button branch = createDrawerBranchButton(ids.get(i), names.get(i), states.get(i), selectedId);
-                        branchHost.addView(branch, drawerBranchLayoutParams());
+                        Button branch = createBranchChoiceButton(ids.get(i), names.get(i), states.get(i), selectedId);
+                        branchHost.addView(branch, branchChoiceLayoutParams());
                     }
                 });
             } catch (Exception ex) {
@@ -1290,13 +1026,13 @@ public class MainActivity extends Activity {
         });
     }
 
-    private LinearLayout.LayoutParams drawerBranchLayoutParams() {
+    private LinearLayout.LayoutParams branchChoiceLayoutParams() {
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
         lp.setMargins(0, 0, 0, dp(6));
         return lp;
     }
 
-    private Button createDrawerBranchButton(int id, String rawName, Boolean onlineState, int selectedId) {
+    private Button createBranchChoiceButton(int id, String rawName, Boolean onlineState, int selectedId) {
         String name = rawName == null ? "" : rawName.trim();
         if (name.isEmpty()) name = "Filial #" + id;
         boolean selected = id == selectedId;
@@ -1314,7 +1050,6 @@ public class MainActivity extends Activity {
         final String branchName = name;
         branch.setOnClickListener(v -> {
             if (selected) {
-                dismissNavigationMenuImmediate();
                 toast("Hazırda " + branchName + " filialındasınız.");
                 return;
             }
@@ -1330,7 +1065,6 @@ public class MainActivity extends Activity {
                 dashboardBranchesDialog.dismiss();
                 dashboardBranchesDialog = null;
             }
-            dismissNavigationMenuImmediate();
             switchOnlineBranch(id, branchName);
         });
         return branch;
@@ -2988,7 +2722,7 @@ public class MainActivity extends Activity {
         return b;
     }
 
-    // v152: Sol açılan menyu əvəzinə şəkil nümunəsinə uyğun rol əsaslı ikonlu ana ekran.
+    // v154: Yeganə əsas naviqasiya rol əsaslı ikonlu dashboard və alt Əsas düyməsidir.
     // İstifadəçi adı heç vaxt hard-code edilmir, /api/mobile/login cavabında username istifadə olunur.
     private void showDashboard() {
         if (sessionToken == null || sessionToken.trim().isEmpty()) {
@@ -3051,6 +2785,11 @@ public class MainActivity extends Activity {
         profileControl.setContentDescription("Profil və çıxış");
         profileControl.setOnClickListener(v -> showDashboardProfile());
         profile.addView(profileControl, new LinearLayout.LayoutParams(dp(46), dp(50)));
+        // v154: Profil ikonundan başqa salam/istifadəçi sətrinin özünə də klik mümkündür.
+        profile.setClickable(true);
+        profile.setFocusable(true);
+        profile.setContentDescription("İstifadəçi profili və çıxış");
+        profile.setOnClickListener(v -> showDashboardProfile());
 
         LinearLayout banner = new LinearLayout(this);
         banner.setOrientation(LinearLayout.VERTICAL);
@@ -3223,30 +2962,52 @@ public class MainActivity extends Activity {
         item.setOnClickListener(v -> action.run());
     }
 
+    // v154: Avatar, ad, Profil kartı və alt Profil düyməsi eyni hesab pəncərəsini açır.
+    // Profil məlumatları + ayrıca Çıxış action düyməsi (artıq siyahıda gizlənmir).
     private void showDashboardProfile() {
         String account = username == null || username.trim().isEmpty() ? "İstifadəçi" : username.trim();
-        String description = "İstifadəçi: " + account + "\nRol: " + roleLabel + "\nBağlantı: " + currentConnectionLabel();
-        List<String> actions = new ArrayList<>();
-        if (isOnlineMode() && !loadRemoteTokenSecurely().isEmpty()) actions.add("Filiallar");
-        if ("kitchen".equals(role)) actions.add("Bildiriş səsi");
-        actions.add("Çıxış et");
-        new AlertDialog.Builder(this)
+        LinearLayout profileBody = new LinearLayout(this);
+        profileBody.setOrientation(LinearLayout.VERTICAL);
+        profileBody.setPadding(dp(22), dp(8), dp(22), dp(8));
+
+        TextView summary = text("İstifadəçi: " + account + "\nRol: " + roleLabel
+                + "\nBağlantı: " + currentConnectionLabel(), 15, TEXT, false);
+        summary.setPadding(0, 0, 0, dp(10));
+        profileBody.addView(summary);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
                 .setTitle("Profil")
-                .setMessage(description)
-                .setItems(actions.toArray(new String[0]), (d, which) -> {
-                    String item = actions.get(which);
-                    if ("Filiallar".equals(item)) showDashboardBranches();
-                    else if ("Bildiriş səsi".equals(item)) chooseKitchenNotificationSound();
-                    else if ("Çıxış et".equals(item)) {
-                        new AlertDialog.Builder(this)
-                                .setTitle("Hesabdan çıxış")
-                                .setMessage("Cari hesabdan çıxmaq istəyirsiniz?")
-                                .setNegativeButton("Ləğv et", null)
-                                .setPositiveButton("Çıxış", (dialog, button) -> logout())
-                                .show();
-                    }
-                })
+                .setView(profileBody)
                 .setNegativeButton("Bağla", null)
+                .setPositiveButton("Çıxış", (closedDialog, which) -> showLogoutConfirmation())
+                .create();
+
+        if (isOnlineMode() && !loadRemoteTokenSecurely().isEmpty()) {
+            Button branches = button("Filiallar", CARD, TEXT);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+            lp.bottomMargin = dp(8);
+            profileBody.addView(branches, lp);
+            branches.setOnClickListener(v -> { dialog.dismiss(); showDashboardBranches(); });
+        }
+        if ("kitchen".equals(role)) {
+            Button sound = button("Bildiriş səsi", CARD, TEXT);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+            lp.bottomMargin = dp(8);
+            profileBody.addView(sound, lp);
+            sound.setOnClickListener(v -> { dialog.dismiss(); chooseKitchenNotificationSound(); });
+        }
+        dialog.show();
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.rgb(176, 54, 54));
+    }
+
+    private void showLogoutConfirmation() {
+        new AlertDialog.Builder(this)
+                .setTitle("Hesabdan çıxış")
+                .setMessage("Cari hesabdan çıxmaq istəyirsiniz?")
+                .setNegativeButton("Ləğv et", null)
+                .setPositiveButton("Çıxış", (dialog, which) -> logout())
                 .show();
     }
 
@@ -3256,7 +3017,7 @@ public class MainActivity extends Activity {
         LinearLayout branchList = new LinearLayout(this);
         branchList.setOrientation(LinearLayout.VERTICAL);
         branchList.setPadding(dp(16), dp(4), dp(16), dp(4));
-        addOnlineBranchDrawerSection(branchList);
+        addOnlineBranchSelectionSection(branchList);
         dashboardBranchesDialog = new AlertDialog.Builder(this)
                 .setTitle("Filial seçimi")
                 .setView(branchList)
@@ -4861,7 +4622,7 @@ public class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        // v152: köhnə drawer swipe jesti bu ekranda deaktivdir.
+        // v154: köhnə sol menyu jesti tam çıxarılıb.
         addPullToRefreshContent(shell, scroll, this::showBranchMessages);
         LinearLayout body = scrollBody(scroll);
         body.setPadding(0, dp(4), 0, dp(92));
@@ -5099,7 +4860,7 @@ public class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        // v152: köhnə drawer swipe jesti bu ekranda deaktivdir.
+        // v154: köhnə sol menyu jesti tam çıxarılıb.
         LinearLayout body = scrollBody(scroll);
         body.setPadding(0, dp(4), 0, dp(92));
 

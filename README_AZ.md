@@ -1,4 +1,4 @@
-# Marakana Mobile — Layihə tarixçəsi (v153 son baza)
+# Marakana Mobile — Layihə tarixçəsi (v154 son baza)
 
 - `versionCode 142`
 - `versionName 3.5.04-native-v142`
@@ -187,3 +187,12 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - Detal/form ekranlarında da ən azı Əsas düyməsi görünür; login ekranında göstərilmir.
 - Dashboard-un mövcud öz alt paneli qorunur, ikiqat panel olmur.
 - Business/API, rol icazələri, filial konteksti və daimi release imzası dəyişməyib.
+
+## v154 — Profil çıxış düyməsi və sol menyunun tam çıxarılması
+- Əsas ekranın sol yuxarı profil ikonuna, Profil kartına və alt Profil düyməsinə klikdə cari istifadəçi/rol/bağlantı məlumatları görünür.
+- Profil pəncərəsinin altında görünən **Çıxış** düyməsi ayrıca təsdiqdən sonra mövcud təhlükəsiz logout axınını işə salır.
+- Filiallar (Online) və Mətbəx bildiriş səsi seçimləri profil daxilində ayrıca düymələr kimi saxlanılıb.
+- Köhnə drawer overlay, swipe-to-open, hamburger düyməsi və istifadə olunmayan drawer kodu çıxarılıb. Sağa/sola sürüşdürmə köhnə sol paneli açmır.
+- Zaldakı, Mətbəxdəki, Borc və İcarədəki mövcud ayrıca bölmə jestləri/pull-to-refresh saxlanılıb.
+- Bütün modullarda alt **Əsas** düyməsi, dashboard-da ikon menyular və filial dəyişdirmə axını saxlanılıb.
+- `versionCode=154`, `versionName=3.5.16-native-v154`, eyni applicationId və permanent signing.
