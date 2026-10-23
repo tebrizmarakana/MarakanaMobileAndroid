@@ -102,6 +102,7 @@ import java.time.LocalDate;
  * communicates with the existing Marakana PC mobile REST API.
  */
 public class MainActivity extends Activity {
+    // v152: Drawer əvəzinə ikonlu ana ekran; yuxarı solda aktiv sessiyanın username dəyəri.
     // v151: İcarə Paneli > Müştərilər bölməsində yeni sayt qeydiyyatı gözləyən müştərini mobil tətbiqdən Təsdiqlə etmək olur.
     // v142: Hesab Satışı > Hesablar/Satılanlar/Satılmayanlar/İcarə bölmələrində axtarışın sağında Sırala düyməsi əlavə edildi; Tarixə görə və Son dəyişikliyə görə sıralama dəstəklənir.
     // v143: Hesab Satışı sıralanan bölmələrdə axtarış xanası 48dp edilərək Sırala düyməsi ilə eyni hündürlüyə gətirildi.
@@ -229,6 +230,9 @@ public class MainActivity extends Activity {
     private FrameLayout activeOrderCartButton = null;
     private String activeOrderCartStation = "";
     private Runnable currentBackAction = null;
+    private boolean dashboardVisible = false;
+    private boolean openKitchenAfterNotificationLogin = false;
+    private AlertDialog dashboardBranchesDialog = null;
     private long lastExitBackPressedAt = 0L;
     private static final long EXIT_BACK_INTERVAL_MS = 2000L;
     private FrameLayout activeNavigationOverlay = null;
@@ -282,6 +286,7 @@ public class MainActivity extends Activity {
         // filialı yox, QR-ın aid olduğu PC serverini giriş hədəfi et.
         preparePendingAdminApprovalServerForLogin();
         boolean openKitchenFromNotification = getIntent() != null && getIntent().getBooleanExtra("open_kitchen", false);
+        openKitchenAfterNotificationLogin = openKitchenFromNotification;
         if ("kitchen".equals(role) && hasKitchenBackgroundPassword()) {
             startKitchenBackgroundService();
         }
@@ -425,9 +430,9 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (activeNavigationOverlay != null) {
-            animateNavigationDrawer(false);
-            lastExitBackPressedAt = 0L;
+        if (dashboardBranchesDialog != null && dashboardBranchesDialog.isShowing()) {
+            dashboardBranchesDialog.dismiss();
+            dashboardBranchesDialog = null;
             return;
         }
 
@@ -436,6 +441,12 @@ public class MainActivity extends Activity {
             currentBackAction = null;
             lastExitBackPressedAt = 0L;
             action.run();
+            return;
+        }
+
+        if (!sessionToken.isEmpty() && !dashboardVisible) {
+            lastExitBackPressedAt = 0L;
+            showDashboard();
             return;
         }
 
@@ -631,6 +642,7 @@ public class MainActivity extends Activity {
         activeOrderCartButton = null;
         activeOrderCartStation = "";
         content.removeAllViews();
+        dashboardVisible = false;
     }
 
     private void setBusy(boolean value) {
@@ -654,7 +666,7 @@ public class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        if (!back && !sessionToken.isEmpty()) installGlobalDrawerSwipe(scroll);
+        // v152: qlobal drawer jestləri bağlandı; ana ekran kartlarla işləyir.
         addPullToRefreshContent(shell, scroll, refreshAction);
         return scroll;
     }
@@ -953,7 +965,12 @@ public class MainActivity extends Activity {
             b.setOnClickListener(v -> { if (backAction != null) backAction.run(); });
             header.addView(b);
         } else if (!sessionToken.isEmpty()) {
-            header.addView(buildChatGptMenuButton());
+            Button home = button("⌂", CARD, BLUE);
+            home.setTextSize(26);
+            home.setContentDescription("Ana ekran");
+            home.setLayoutParams(new LinearLayout.LayoutParams(dp(52), dp(46)));
+            home.setOnClickListener(v -> showDashboard());
+            header.addView(home);
         }
 
         TextView h = text(title, 21, TEXT, true);
@@ -1259,6 +1276,10 @@ public class MainActivity extends Activity {
             if (!online) {
                 toast(branchName + " hazırda Offline-dir. PC online olduqda keçid edə bilərsiniz.");
                 return;
+            }
+            if (dashboardBranchesDialog != null) {
+                dashboardBranchesDialog.dismiss();
+                dashboardBranchesDialog = null;
             }
             dismissNavigationMenuImmediate();
             switchOnlineBranch(id, branchName);
@@ -1765,9 +1786,13 @@ public class MainActivity extends Activity {
                 if (rememberPassword) savePasswordSecurely(p); else clearSavedPassword();
                 runOnUiThread(() -> {
                     updateKitchenBackgroundServiceForRole(p);
-                    if (role.equals("kitchen")) showKitchen();
-                    else if (role.equals("admin") && adminDebtOnly) showDebt("İşçi");
-                    else showTerminals();
+                    if (openKitchenAfterNotificationLogin && "kitchen".equals(role)) {
+                        openKitchenAfterNotificationLogin = false;
+                        showKitchen();
+                    } else {
+                        openKitchenAfterNotificationLogin = false;
+                        showDashboard();
+                    }
                     handlePendingAdminApprovalDeepLink();
                 });
             } catch (Exception ex) {
@@ -1824,7 +1849,13 @@ public class MainActivity extends Activity {
             try {
                 JSONObject usersResult = request(serverBase, "/api/mobile/users", "GET", null, "");
                 cacheAllowedRolesFromUsers(usersResult.optJSONArray("users"));
-                runOnUiThread(() -> applyCachedAllowedMobileRoles(loginUser, activeRole));
+                runOnUiThread(() -> {
+                    boolean oldHall = canHall, oldKitchen = canKitchen, oldAdmin = canAdmin;
+                    if (applyCachedAllowedMobileRoles(loginUser, activeRole)
+                            && dashboardVisible && (oldHall != canHall || oldKitchen != canKitchen || oldAdmin != canAdmin)) {
+                        showDashboard();
+                    }
+                });
             } catch (Exception ignored) {
                 // Aktiv rol işləyirsə giriş dayandırılmır; siyahı növbəti girişdə yenilənəcək.
             }
@@ -2237,13 +2268,7 @@ public class MainActivity extends Activity {
     }
 
     private void reopenCurrentRoleHome() {
-        if ("kitchen".equals(role)) {
-            showKitchen();
-        } else if ("admin".equals(role) && adminDebtOnly) {
-            showDebt("İşçi");
-        } else {
-            showTerminals();
-        }
+        showDashboard();
     }
 
     private void connectToScannedServer(String scannedValue) {
@@ -2912,6 +2937,282 @@ public class MainActivity extends Activity {
         b.setLayoutParams(new LinearLayout.LayoutParams(dp(Math.max(105, label.length() * 10 + 40)), dp(46)));
         LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams)b.getLayoutParams(); lp.setMargins(0, 0, dp(8), 0); b.setLayoutParams(lp);
         return b;
+    }
+
+    // v152: Sol açılan menyu əvəzinə şəkil nümunəsinə uyğun rol əsaslı ikonlu ana ekran.
+    // İstifadəçi adı heç vaxt hard-code edilmir, /api/mobile/login cavabında username istifadə olunur.
+    private void showDashboard() {
+        if (sessionToken == null || sessionToken.trim().isEmpty()) {
+            showLogin();
+            return;
+        }
+        currentBackAction = null;
+        clear();
+        dashboardVisible = true;
+
+        LinearLayout shell = new LinearLayout(this);
+        shell.setOrientation(LinearLayout.VERTICAL);
+        shell.setBackgroundColor(Color.WHITE);
+        content.addView(shell, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        scroll.setVerticalScrollBarEnabled(false);
+        shell.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(16), dp(18) + getStatusBarInset(), dp(16), dp(28));
+        scroll.addView(body, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout profile = new LinearLayout(this);
+        profile.setOrientation(LinearLayout.HORIZONTAL);
+        profile.setGravity(Gravity.CENTER_VERTICAL);
+        profile.setPadding(0, dp(3), 0, dp(12));
+        body.addView(profile, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(83)));
+
+        TextView avatar = text("●", 26, Color.WHITE, true);
+        avatar.setText("👤");
+        avatar.setGravity(Gravity.CENTER);
+        avatar.setBackground(bg(Color.rgb(22, 126, 100), 44, Color.TRANSPARENT));
+        profile.addView(avatar, new LinearLayout.LayoutParams(dp(60), dp(60)));
+        avatar.setContentDescription("İstifadəçi profili");
+        avatar.setOnClickListener(v -> showDashboardProfile());
+
+        LinearLayout names = new LinearLayout(this);
+        names.setOrientation(LinearLayout.VERTICAL);
+        names.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams namesLp = new LinearLayout.LayoutParams(0, dp(65), 1f);
+        namesLp.setMargins(dp(14), 0, dp(8), 0);
+        profile.addView(names, namesLp);
+        TextView hello = text("Salam 👋", 22, TEXT, true);
+        names.addView(hello);
+        String activeUsername = username == null ? "" : username.trim();
+        if (activeUsername.isEmpty()) activeUsername = "İstifadəçi";
+        TextView activeName = text(activeUsername, 15, MUTED, true);
+        activeName.setSingleLine(true);
+        activeName.setEllipsize(TextUtils.TruncateAt.END);
+        names.addView(activeName);
+
+        TextView profileControl = text("⚙", 25, TEXT, true);
+        profileControl.setGravity(Gravity.CENTER);
+        profileControl.setContentDescription("Profil və çıxış");
+        profileControl.setOnClickListener(v -> showDashboardProfile());
+        profile.addView(profileControl, new LinearLayout.LayoutParams(dp(46), dp(50)));
+
+        LinearLayout banner = new LinearLayout(this);
+        banner.setOrientation(LinearLayout.VERTICAL);
+        banner.setGravity(Gravity.CENTER_VERTICAL);
+        banner.setPadding(dp(18), dp(15), dp(18), dp(15));
+        GradientDrawable bannerBackground = new GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                new int[]{Color.rgb(25, 119, 104), Color.rgb(32, 90, 139)});
+        bannerBackground.setCornerRadius(dp(22));
+        banner.setBackground(bannerBackground);
+        LinearLayout.LayoutParams bannerLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(119));
+        bannerLp.setMargins(0, dp(10), 0, dp(25));
+        body.addView(banner, bannerLp);
+        banner.addView(text("MARAKANA MOBILE", 19, Color.WHITE, true));
+        TextView bannerSub = text("Xidmətlərini bir ekrandan idarə et", 13,
+                Color.rgb(224, 243, 242), false);
+        bannerSub.setPadding(0, dp(7), 0, 0);
+        banner.addView(bannerSub);
+        TextView connection = text(currentConnectionLabel(), 11, Color.rgb(220, 243, 242), true);
+        connection.setSingleLine(true);
+        connection.setEllipsize(TextUtils.TruncateAt.END);
+        connection.setPadding(0, dp(7), 0, 0);
+        banner.addView(connection);
+
+        TextView sections = text("Əsas xidmətlər", 20, TEXT, true);
+        LinearLayout.LayoutParams sectionsLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(43));
+        body.addView(sections, sectionsLp);
+
+        List<View> tiles = new ArrayList<>();
+        if (canHall) tiles.add(dashboardTile("🎮", "Terminallar", "Zal və sifarişlər",
+                () -> switchMobileRole("hall", false, this::showTerminals)));
+        if (canKitchen) tiles.add(dashboardTile("🍳", "Mətbəx", "Sifarişlər",
+                () -> switchMobileRole("kitchen", false, this::showKitchen)));
+        if (canAdmin) {
+            tiles.add(dashboardTile("📒", "Borc Dəftəri", "Borclar",
+                    () -> openAdminPluginModule(true, () -> showDebt("İşçi"))));
+            tiles.add(dashboardTile("🗓", "İcarə Paneli", "İcarələr",
+                    () -> openAdminPluginModule(false, () -> showRental("active"))));
+            tiles.add(dashboardTile("🎫", "Hesab Satışı", "Hesablar",
+                    () -> openAdminPluginModule(false, () -> showAccountSales("accounts"))));
+            tiles.add(dashboardTile("✉", "Mesaj qutusu", "Filial mesajları",
+                    () -> openAdminPluginModule(false, this::showBranchMessages)));
+            tiles.add(dashboardTile("▦", "Admin QR", "Təsdiq",
+                    () -> {
+                        if ("admin".equals(role)) startAdminApprovalQrScanner();
+                        else switchMobileRole("admin", false, this::startAdminApprovalQrScanner);
+                    }));
+        }
+        if ("kitchen".equals(role)) {
+            tiles.add(dashboardTile("♫", "Bildiriş səsi", "Səs seçimi",
+                    this::chooseKitchenNotificationSound));
+        }
+        final int colCount = getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density >= 365f ? 3 : 2;
+        for (int i = 0; i < tiles.size(); i += colCount) {
+            LinearLayout gridRow = new LinearLayout(this);
+            gridRow.setOrientation(LinearLayout.HORIZONTAL);
+            LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(146));
+            rowLp.bottomMargin = dp(10);
+            body.addView(gridRow, rowLp);
+            for (int j = 0; j < colCount; j++) {
+                int at = i + j;
+                View item = at < tiles.size() ? tiles.get(at) : new View(this);
+                LinearLayout.LayoutParams itemLp = new LinearLayout.LayoutParams(0,
+                        ViewGroup.LayoutParams.MATCH_PARENT, 1f);
+                if (j > 0) itemLp.leftMargin = dp(9);
+                gridRow.addView(item, itemLp);
+            }
+        }
+        if (tiles.isEmpty()) {
+            body.addView(empty("Bu istifadəçi üçün mobil modul icazəsi tapılmadı."));
+        }
+
+        TextView other = text("Digər xidmətlər", 20, TEXT, true);
+        LinearLayout.LayoutParams otherLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(60));
+        otherLp.topMargin = dp(13);
+        body.addView(other, otherLp);
+        if (isOnlineMode() && !loadRemoteTokenSecurely().isEmpty()) {
+            body.addView(dashboardOtherRow("🏢", "Filiallar", "Filial seç və statusa bax",
+                    this::showDashboardBranches));
+        }
+        body.addView(dashboardOtherRow("👤", "Profil", "İstifadəçi və sessiya məlumatları",
+                this::showDashboardProfile));
+
+        LinearLayout nav = new LinearLayout(this);
+        nav.setGravity(Gravity.CENTER_VERTICAL);
+        nav.setBackground(bg(Color.rgb(248, 250, 251), 24, BORDER));
+        nav.setPadding(dp(6), dp(3), dp(6), dp(3));
+        LinearLayout.LayoutParams navLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(70));
+        navLp.setMargins(dp(12), 0, dp(12), dp(9));
+        shell.addView(nav, navLp);
+        addDashboardNav(nav, "⌂", "Əsas", true, this::showDashboard);
+        if (canHall) addDashboardNav(nav, "🎮", "Zal", false,
+                () -> switchMobileRole("hall", false, this::showTerminals));
+        if (canKitchen) addDashboardNav(nav, "🍳", "Mətbəx", false,
+                () -> switchMobileRole("kitchen", false, this::showKitchen));
+        addDashboardNav(nav, "👤", "Profil", false, this::showDashboardProfile);
+    }
+
+    private View dashboardTile(String symbol, String title, String caption, Runnable onClick) {
+        LinearLayout tile = new LinearLayout(this);
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setGravity(Gravity.CENTER);
+        tile.setPadding(dp(5), dp(12), dp(5), dp(8));
+        tile.setBackground(bg(Color.rgb(244, 246, 247), 18, Color.TRANSPARENT));
+        tile.setClickable(true);
+        tile.setFocusable(true);
+        tile.setContentDescription(title);
+        TextView glyph = text(symbol, 33, TEXT, true);
+        glyph.setGravity(Gravity.CENTER);
+        tile.addView(glyph, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(53)));
+        TextView name = text(title, 14, Color.rgb(37, 45, 52), true);
+        name.setGravity(Gravity.CENTER);
+        name.setMaxLines(2);
+        tile.addView(name, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(39)));
+        TextView note = text(caption, 11, MUTED, false);
+        note.setGravity(Gravity.CENTER);
+        note.setMaxLines(2);
+        tile.addView(note, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(32)));
+        tile.setOnClickListener(v -> onClick.run());
+        return tile;
+    }
+
+    private View dashboardOtherRow(String symbol, String title, String sub, Runnable onClick) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(12), dp(8), dp(10), dp(8));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(75));
+        lp.bottomMargin = dp(7);
+        row.setLayoutParams(lp);
+        row.setBackground(bg(Color.rgb(249, 250, 251), 15, BORDER));
+        TextView icon = text(symbol, 26, TEXT, true);
+        icon.setGravity(Gravity.CENTER);
+        row.addView(icon, new LinearLayout.LayoutParams(dp(46), dp(50)));
+        LinearLayout labels = new LinearLayout(this);
+        labels.setOrientation(LinearLayout.VERTICAL);
+        labels.setPadding(dp(8), 0, 0, 0);
+        row.addView(labels, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        labels.addView(text(title, 16, TEXT, true));
+        labels.addView(text(sub, 12, MUTED, false));
+        row.addView(text("›", 28, TEXT, false));
+        row.setClickable(true);
+        row.setFocusable(true);
+        row.setOnClickListener(v -> onClick.run());
+        return row;
+    }
+
+    private void addDashboardNav(LinearLayout parent, String symbol, String label, boolean selected, Runnable action) {
+        LinearLayout item = new LinearLayout(this);
+        item.setOrientation(LinearLayout.VERTICAL);
+        item.setGravity(Gravity.CENTER);
+        item.setBackground(bg(selected ? Color.rgb(230, 240, 236) : Color.TRANSPARENT, 20, Color.TRANSPARENT));
+        TextView symbolView = text(symbol, 24, selected ? GREEN : TEXT, true);
+        symbolView.setGravity(Gravity.CENTER);
+        item.addView(symbolView);
+        TextView textView = text(label, 11, selected ? GREEN : TEXT, selected);
+        textView.setGravity(Gravity.CENTER);
+        item.addView(textView);
+        parent.addView(item, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.MATCH_PARENT, 1f));
+        item.setContentDescription(label);
+        item.setClickable(true);
+        item.setFocusable(true);
+        item.setOnClickListener(v -> action.run());
+    }
+
+    private void showDashboardProfile() {
+        String account = username == null || username.trim().isEmpty() ? "İstifadəçi" : username.trim();
+        String description = "İstifadəçi: " + account + "\nRol: " + roleLabel + "\nBağlantı: " + currentConnectionLabel();
+        List<String> actions = new ArrayList<>();
+        if (isOnlineMode() && !loadRemoteTokenSecurely().isEmpty()) actions.add("Filiallar");
+        if ("kitchen".equals(role)) actions.add("Bildiriş səsi");
+        actions.add("Çıxış et");
+        new AlertDialog.Builder(this)
+                .setTitle("Profil")
+                .setMessage(description)
+                .setItems(actions.toArray(new String[0]), (d, which) -> {
+                    String item = actions.get(which);
+                    if ("Filiallar".equals(item)) showDashboardBranches();
+                    else if ("Bildiriş səsi".equals(item)) chooseKitchenNotificationSound();
+                    else if ("Çıxış et".equals(item)) {
+                        new AlertDialog.Builder(this)
+                                .setTitle("Hesabdan çıxış")
+                                .setMessage("Cari hesabdan çıxmaq istəyirsiniz?")
+                                .setNegativeButton("Ləğv et", null)
+                                .setPositiveButton("Çıxış", (dialog, button) -> logout())
+                                .show();
+                    }
+                })
+                .setNegativeButton("Bağla", null)
+                .show();
+    }
+
+    private void showDashboardBranches() {
+        if (!isOnlineMode() || loadRemoteTokenSecurely().isEmpty()) return;
+        if (dashboardBranchesDialog != null && dashboardBranchesDialog.isShowing()) return;
+        LinearLayout branchList = new LinearLayout(this);
+        branchList.setOrientation(LinearLayout.VERTICAL);
+        branchList.setPadding(dp(16), dp(4), dp(16), dp(4));
+        addOnlineBranchDrawerSection(branchList);
+        dashboardBranchesDialog = new AlertDialog.Builder(this)
+                .setTitle("Filial seçimi")
+                .setView(branchList)
+                .setNegativeButton("Bağla", null)
+                .create();
+        dashboardBranchesDialog.setOnDismissListener(dialog -> dashboardBranchesDialog = null);
+        dashboardBranchesDialog.show();
     }
 
     private void showTerminals() {
@@ -4279,7 +4580,7 @@ public class MainActivity extends Activity {
                 for (int i = 0; i < RENTAL_TABS.length; i++) if (RENTAL_TABS[i].equals(section)) { index = i; break; }
                 if (dx > 0) {
                     if (index > 0) showRental(RENTAL_TABS[index - 1]);
-                    else showNavigationMenu();
+                    else showDashboard();
                 } else if (index < RENTAL_TABS.length - 1) {
                     showRental(RENTAL_TABS[index + 1]);
                 }
@@ -4509,7 +4810,7 @@ public class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        installGlobalDrawerSwipe(scroll);
+        // v152: köhnə drawer swipe jesti bu ekranda deaktivdir.
         addPullToRefreshContent(shell, scroll, this::showBranchMessages);
         LinearLayout body = scrollBody(scroll);
         body.setPadding(0, dp(4), 0, dp(92));
@@ -4747,7 +5048,7 @@ public class MainActivity extends Activity {
 
         ScrollView scroll = new ScrollView(this);
         scroll.setFillViewport(true);
-        installGlobalDrawerSwipe(scroll);
+        // v152: köhnə drawer swipe jesti bu ekranda deaktivdir.
         LinearLayout body = scrollBody(scroll);
         body.setPadding(0, dp(4), 0, dp(92));
 
@@ -8435,10 +8736,10 @@ public class MainActivity extends Activity {
                 if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy) * 1.60f) return false;
 
                 if (dx > 0) {
-                    // Sağa swipe: əvvəlki kateqoriya. Birinci kateqoriyadayıqsa sol menyunu aç.
+                    // Sağa swipe: əvvəlki kateqoriya. İlk kateqoriyada ana ekrana qayıt.
                     String previous = shiftDebtCategory(category, -1);
                     if (!previous.equals(category)) showDebt(previous);
-                    else showNavigationMenu();
+                    else showDashboard();
                 } else {
                     // Sola swipe: növbəti kateqoriya.
                     String next = shiftDebtCategory(category, 1);
@@ -9305,9 +9606,9 @@ public class MainActivity extends Activity {
                 if (Math.abs(dx) < swipeThreshold || Math.abs(dx) <= Math.abs(dy) * 1.60f) return false;
 
                 if (dx > 0) {
-                    // Hazırdır -> Hazırlanır -> sol menyu.
+                    // Hazırdır -> Hazırlanır -> ana ekran.
                     if ("Hazırdır".equals(category)) showKitchen("Hazırlanır");
-                    else showNavigationMenu();
+                    else showDashboard();
                 } else {
                     // Hazırlanır -> Hazırdır.
                     if ("Hazırlanır".equals(category)) showKitchen("Hazırdır");
@@ -9449,6 +9750,7 @@ public class MainActivity extends Activity {
     private void updateKitchen(int ticketId,String status,String refreshCategory){JSONObject p=new JSONObject();try{p.put("ticket_id",ticketId);p.put("status",status);if("ready".equals(status))p.put("active_only",true);}catch(Exception ignored){}postJson("/api/mobile/kitchen/ticket/update",p,r->showKitchen(refreshCategory));}
 
     private void logout() {
+        dashboardVisible = false;
         stopKitchenAutoRefresh();
         stopKitchenBackgroundService(true);
         currentBackAction = null;

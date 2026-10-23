@@ -167,3 +167,10 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - Düzənlə ekranında qiymət və satış tarixi də eyni popup davranışını istifadə edir.
 - Satılmayan yeni hesabı Sat və ya İcarə ver açanda qiymət sahəsi boş başlayır.
 - Satılmayan yeni hesabı Sat açanda satış tarixi də boş başlayır; artıq avtomatik bugünkü tarix yazılmır.
+
+
+## v152 — Ana ekran / istifadəçi adı
+- Login uğurlu olduqda drawer əvəzinə ikonlu Dashboard açılır.
+- Üst sol blokda `Salam 👋` və giriş etmiş istifadəçinin `/api/mobile/login` cavabındakı `username` görünür.
+- Xidmətlər rol icazələrinə görə göstərilir. Profil və filial seçimləri dashboard daxilindədir.
+- APK build üçün `BUILD_APK_WINDOWS.bat` və ya GitHub Actions v152 workflow istifadə olunur; imzalama açarları əvvəlki kimi tələb olunur.
