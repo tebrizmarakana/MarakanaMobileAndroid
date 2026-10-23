@@ -326,14 +326,14 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         video.setOnPreparedListener(mp -> {
             mp.setLooping(false);
-            mp.setVolume(0f, 0f);
+            mp.setVolume(1f, 1f); // Splash videosunun orijinal sesi: telefonun media ses seviyyesine uygun
             video.start();
         });
         video.setOnCompletionListener(mp -> closeOpeningVideo());
         video.setOnErrorListener((mp, what, extra) -> { closeOpeningVideo(); return true; });
         // Dekoder / fayl problemi olsa UI bağlı qalmasın.
         openingVideoTimeout = this::closeOpeningVideo;
-        openingVideoHandler.postDelayed(openingVideoTimeout, 14000L);
+        openingVideoHandler.postDelayed(openingVideoTimeout, 9000L);
         try {
             video.setVideoURI(Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.marakana_opening));
         } catch (Exception ignored) {
