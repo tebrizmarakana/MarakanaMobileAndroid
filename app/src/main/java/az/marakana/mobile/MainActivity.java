@@ -1558,7 +1558,10 @@ public class MainActivity extends Activity {
                         refreshAllowedMobileRolesOnlineAsync(username, role);
                     }
                 } else {
-                    refreshAllowedMobileRoles(username, p, role);
+                    canHall = "hall".equals(role);
+                    canKitchen = "kitchen".equals(role);
+                    canAdmin = false;
+                    // Local rejimdə eyni kassir kodu ilə admin rolunu yoxlamırıq.
                 }
                 SharedPreferences.Editor editor = prefs.edit()
                         .putString(KEY_USERNAME, username)
@@ -1645,6 +1648,12 @@ public class MainActivity extends Activity {
         });
     }
 
+    // v160: Kassir (Zal/Mətbəx) və Local IP rejimində admin modulları gizlidir.
+    // Bu yalnız UI qaydasıdır; hər API sorğusunda server icazəsi qüvvədə qalır.
+    private boolean cashierOrLocalRestricted() {
+        return !isOnlineMode() || !"admin".equalsIgnoreCase(role);
+    }
+
     private void refreshAllowedMobileRoles(String loginUser, String password, String activeRole) {
         canHall = "hall".equals(activeRole);
         canKitchen = "kitchen".equals(activeRole);
@@ -1680,6 +1689,10 @@ public class MainActivity extends Activity {
     // yaratmaq lazım deyil. İstifadəçinin login zamanı alınmış canAdmin icazəsi UI gate-dir,
     // server auth isə Master Token + filial scope-dur. Local rejim köhnə rol-switch axınını saxlayır.
     private void openAdminPluginModule(boolean debtOnly, Runnable openTarget) {
+        if (cashierOrLocalRestricted()) {
+            toast("Kassir/Local girişdə yalnız Terminallar və Mətbəx mövcuddur.");
+            return;
+        }
         if (isOnlineMode()) {
             if (!canAdmin && !"admin".equals(role)) {
                 toast("Bu bölmə üçün Admin icazəsi yoxdur.");
@@ -1695,6 +1708,10 @@ public class MainActivity extends Activity {
     private void switchMobileRole(String targetRole, boolean debtOnly, Runnable openTarget) {
         String normalizedTarget = targetRole == null ? "hall" : targetRole.trim().toLowerCase(Locale.ROOT);
         if (normalizedTarget.isEmpty()) normalizedTarget = "hall";
+        if ("admin".equals(normalizedTarget) && cashierOrLocalRestricted()) {
+            toast("Kassir/Local rejimdə Admin bölmələrinə keçid yoxdur.");
+            return;
+        }
         if (normalizedTarget.equals(role)) {
             adminDebtOnly = "admin".equals(normalizedTarget) && debtOnly;
             if ("kitchen".equals(normalizedTarget)) {
@@ -2821,11 +2838,11 @@ public class MainActivity extends Activity {
         body.addView(sections, sectionsLp);
 
         List<View> tiles = new ArrayList<>();
-        if (canHall) tiles.add(dashboardTile("🎮", "Terminallar", "Zal və sifarişlər",
+        if (cashierOrLocalRestricted() || canHall) tiles.add(dashboardTile("🎮", "Terminallar", "Zal və sifarişlər",
                 () -> switchMobileRole("hall", false, this::showTerminals)));
-        if (canKitchen) tiles.add(dashboardTile("🍳", "Mətbəx", "Sifarişlər",
+        if (cashierOrLocalRestricted() || canKitchen) tiles.add(dashboardTile("🍳", "Mətbəx", "Sifarişlər",
                 () -> switchMobileRole("kitchen", false, this::showKitchen)));
-        if (canAdmin) {
+        if (!cashierOrLocalRestricted() && canAdmin) {
             tiles.add(dashboardTile("📒", "Borc Dəftəri", "Borclar",
                     () -> openAdminPluginModule(true, () -> showDebt("İşçi"))));
             tiles.add(dashboardTile("🗓", "İcarə Paneli", "İcarələr",
@@ -2840,7 +2857,7 @@ public class MainActivity extends Activity {
                         else switchMobileRole("admin", false, this::startAdminApprovalQrScanner);
                     }));
         }
-        if ("kitchen".equals(role)) {
+        if (!cashierOrLocalRestricted() && "kitchen".equals(role)) {
             tiles.add(dashboardTile("♫", "Bildiriş səsi", "Səs seçimi",
                     this::chooseKitchenNotificationSound));
         }
@@ -2874,9 +2891,9 @@ public class MainActivity extends Activity {
         navLp.setMargins(dp(12), 0, dp(12), dp(9));
         shell.addView(nav, navLp);
         addDashboardNav(nav, "⌂", "Əsas", true, this::showDashboard);
-        if (canHall) addDashboardNav(nav, "🎮", "Zal", false,
+        if (cashierOrLocalRestricted() || canHall) addDashboardNav(nav, "🎮", "Zal", false,
                 () -> switchMobileRole("hall", false, this::showTerminals));
-        if (canKitchen) addDashboardNav(nav, "🍳", "Mətbəx", false,
+        if (cashierOrLocalRestricted() || canKitchen) addDashboardNav(nav, "🍳", "Mətbəx", false,
                 () -> switchMobileRole("kitchen", false, this::showKitchen));
         addDashboardNav(nav, "👤", "Profil", false, this::showDashboardProfile);
     }
