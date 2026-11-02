@@ -1,3 +1,5 @@
+MARAKANA MOBILE v165 — Uzaqdan Admin təsdiqləri
+
 # Marakana Mobile — Layihə tarixçəsi (v154 son baza)
 
 - `versionCode 142`
