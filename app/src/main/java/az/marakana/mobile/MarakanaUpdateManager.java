@@ -208,7 +208,7 @@ final class MarakanaUpdateManager {
         try {
             PackageInfo info = host.getPackageManager().getPackageInfo(host.getPackageName(), 0);
             return Build.VERSION.SDK_INT >= 28 ? (int) info.getLongVersionCode() : info.versionCode;
-        } catch (Exception ignored) { return 171; }
+        } catch (Exception ignored) { return 176; }
     }
 
     private void showRelease(Release r) {

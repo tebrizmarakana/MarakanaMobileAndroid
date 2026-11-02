@@ -1,3 +1,16 @@
+## v176 — v175 sayt yayımından yuxarı versiya (v171 bazası üzərində)
+
+- `applicationId` **az.marakana.mobile** (dəyişməyib).
+- `versionCode` **176**, `versionName` **3.5.37-native-v176**.
+- Saytda hazırda v175 yayımlandığı üçün v171 APK yükləməsi `version_old` xətası verirdi.
+- v176 APK yalnız mövcud GitHub Actions daimi keystore sertifikatı ilə release imzalanmalıdır.
+- GitHub Actions workflow, APK/artifact adı, package/versionCode/versionName yoxlaması v176-ya uyğunlaşdırılıb.
+- MarakanaUpdateManager-də nadir `PackageManager` xətası üçün ehtiyat versiya dəyəri də 176 olub.
+- BÜTÜN tətbiq məntiqi və resurslar v171 bazasından saxlanıb; v172–v175-də
+  edilmiş ayrıca kod dəyişiklikləri bu ZIP-də yoxdur.
+- Bu ZIP **APK deyil**, GitHub Actions-da imzalı release APK qurmaq üçün tam mənbə layihəsidir.
+- WordPress plagin v1.0.1 yeni APK-dan versiyanı özü oxuyur.
+
 Marakana Mobile v169 — Admin QR: bir klik və 6 rəqəmdə avtomatik təsdiq.
 
 - Filialdan gələn sorğudakı Təsdiqlə/Rədd et artıq ikinci təsdiq dialoqunu açmır; qərar dərhal mərkəzi serverə göndərilir.

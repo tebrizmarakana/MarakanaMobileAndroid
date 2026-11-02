@@ -1,3 +1,24 @@
+Marakana Mobile v176 — v171 mənbəsi əsasında WordPress v175 üstündən yeniləmə
+
+1. Bu ZIP layihənin mənbə kodudur, telefona quraşdırılacaq APK deyil.
+2. ZIP-i açın; layihə QOVLUĞUNUN İÇİNDƏKİ faylları GitHub-dakı
+   MarakanaMobileAndroid repository-sinin kökünə yükləyib mövcud faylları yeniləyin.
+   Xüsusən `.github/workflows/main.yml` daxil olmaqla bütün fayllar kökə düşməlidir.
+3. GitHub Actions -> "Build Marakana Mobile Native v176 RELEASE APK" -> Run workflow.
+   Alternativ olaraq push main/master qoluna build-i başladır.
+4. Artifact: MarakanaMobile-v176-permanent-update-apk
+   İçində: MarakanaMobile-v176-release.apk
+5. Əvvəlki MARAKANA_KEYSTORE_* GitHub Secrets dəyərlərini dəyişməyin!
+   v175-ə yeniləmə yalnız AYNI imza sertifikatı ilə mümkündür.
+6. WordPress Marakana Mobile — Yeniləmələr plugin v1.0.1-də yaranan
+   imzalı APK-ni yükləyin. Plugin versionCode=176, versionName=3.5.37-native-v176
+   dəyərlərini özü oxuyacaq. Yayımlanmış v175-dən böyükdür.
+7. ƏVVƏL v175-də olub v171-də olmayan funksiyalar varsa, bu v176-da olmayacaq.
+   v175 mənbəsi olmadan o dəyişiklikləri bərpa etmək mümkün deyil.
+8. Android cihazında aktual v175 üzərinə quraşdırma və WordPress canlı testini edin.
+
+=================== TARİXİ MƏLUMATLAR ===================
+
 Marakana Mobile v169 — GitHub quruluşu
 1. ZIP-i aç; içindəki layihə fayllarını MarakanaMobileAndroid repository kökünə yüklə (mövcud faylların üzərinə yaz).
 2. GitHub Actions -> Build Marakana Mobile Native v169 RELEASE APK -> Run workflow.
