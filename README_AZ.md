@@ -1,4 +1,6 @@
-MARAKANA MOBILE v165 — Uzaqdan Admin təsdiqləri
+Marakana Mobile v166: Admin QR: lokal və uzaqdan təsdiq eyni ekranda.
+
+MARAKANA MOBILE v166 — Uzaqdan Admin təsdiqləri
 
 # Marakana Mobile — Layihə tarixçəsi (v154 son baza)
 

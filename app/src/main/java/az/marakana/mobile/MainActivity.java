@@ -1805,70 +1805,11 @@ public class MainActivity extends Activity {
         startEmbeddedQrScanner(true);
     }
 
-    private void showAdminApprovalOptions() {
-        if (!requireMobileFeature("admin_qr")) return;
-        if (sessionToken == null || sessionToken.trim().isEmpty()) {
-            toast("Admin təsdiqi üçün əvvəlcə serverə daxil olun.");
-            return;
-        }
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(18), dp(12), dp(18), dp(10));
-        TextView title = text("PC ekranındakı QR kodu oxudun və ya altındakı 6 rəqəmli kodu yazın.",
-                14, TEXT, false);
-        body.addView(title);
-        Button scan = button("▣  Daxili kamera ilə QR oxut", Color.rgb(36, 118, 218), Color.WHITE);
-        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(-1, dp(54));
-        scanParams.setMargins(0, dp(16), 0, dp(16));
-        body.addView(scan, scanParams);
-        TextView manualLabel = text("6 rəqəmli kodu əl ilə daxil et", 15, TEXT, true);
-        body.addView(manualLabel);
-        EditText codeField = new EditText(this);
-        codeField.setSingleLine(true);
-        codeField.setHint("000000");
-        codeField.setTextSize(25);
-        codeField.setGravity(Gravity.CENTER);
-        codeField.setInputType(InputType.TYPE_CLASS_NUMBER);
-        codeField.setFilters(new InputFilter[]{new InputFilter.LengthFilter(6)});
-        body.addView(codeField, new LinearLayout.LayoutParams(-1, dp(60)));
-        TextView notice = text("Kod 60 saniyə etibarlıdır və yalnız bir dəfə istifadə olunur.",
-                12, MUTED, false);
-        body.addView(notice);
-        Button submit = button("6 rəqəmli kodu təsdiqlə", Color.rgb(25, 121, 79), Color.WHITE);
-        LinearLayout.LayoutParams submitParams = new LinearLayout.LayoutParams(-1, dp(52));
-        submitParams.setMargins(0, dp(12), 0, 0);
-        body.addView(submit, submitParams);
-        if (canUseCentralAdminApproval()) {
-            Button remote = button("🌐  Bütün filiallar — uzaqdan təsdiqlər", Color.rgb(34, 86, 157), Color.WHITE);
-            LinearLayout.LayoutParams rlp = new LinearLayout.LayoutParams(-1, dp(52));
-            rlp.setMargins(0, dp(12), 0, 0);
-            body.addView(remote, rlp);
-            remote.setOnClickListener(v -> showRemoteAdminApprovals());
-        }
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Admin QR təsdiqi")
-                .setView(body)
-                .setNegativeButton("Bağla", null)
-                .create();
-        scan.setOnClickListener(v -> {
-            dialog.dismiss();
-            startAdminApprovalQrScanner();
-        });
-        submit.setOnClickListener(v -> {
-            String code = codeField.getText().toString().trim();
-            if (!code.matches("[0-9]{6}")) {
-                codeField.setError("6 rəqəmli kod daxil edin.");
-                return;
-            }
-            dialog.dismiss();
-            approveAdminManualCode(code);
-        });
-        dialog.show();
-    }
-
-    // v165: Central Filiallar remote Admin approvals. Master Token lives in
-    // Android Keystore-backed storage; filial tokens can NEVER approve globally.
+    // v166: One Admin QR screen for local and all-branch approval; no separate
+    // remote dashboard tile or second dialog. Master permission is still
+    // required to view/decide global requests. Local QR permission is unchanged.
     private static final String BRANCH_APPROVAL_API = "/wp-json/marakana-branches/v1/admin-approvals";
+    private LinearLayout centralAdminQueueContainer;
 
     private boolean canUseCentralAdminApproval() {
         String token = loadRemoteTokenSecurely();
@@ -1877,64 +1818,147 @@ public class MainActivity extends Activity {
                 && token != null && token.startsWith("MFM-");
     }
 
-    private void showRemoteAdminApprovals() {
-        if (!canUseCentralAdminApproval()) {
-            toast("Uzaqdan təsdiq üçün Online Super Admin hesabı tələb olunur.");
+    private void showAdminApprovalOptions() {
+        if (!requireMobileFeature("admin_qr")) return;
+        if (sessionToken == null || sessionToken.trim().isEmpty()) {
+            toast("Admin təsdiqi üçün əvvəlcə serverə daxil olun.");
             return;
         }
+        final boolean global = canUseCentralAdminApproval();
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(18), dp(12), dp(18), dp(16));
+        body.addView(text("PC ekranındakı QR-ni oxut və ya 6 rəqəmli kodu daxil et.", 14, TEXT, false));
+        Button scan = button("▣  Daxili kamera ilə QR oxut", Color.rgb(36, 118, 218), Color.WHITE);
+        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(-1, dp(54));
+        scanParams.setMargins(0, dp(14), 0, dp(12));
+        body.addView(scan, scanParams);
+        body.addView(text("6 rəqəmli təsdiq kodu", 15, TEXT, true));
+        EditText codeField = new EditText(this);
+        codeField.setSingleLine(true);
+        codeField.setHint("638-592");
+        codeField.setTextSize(25);
+        codeField.setGravity(Gravity.CENTER);
+        codeField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        codeField.setFilters(new InputFilter[]{new InputFilter.LengthFilter(7)});
+        body.addView(codeField, new LinearLayout.LayoutParams(-1, dp(58)));
+        body.addView(text("Kod PC ekranında hər 60 saniyədən bir dəyişir.", 12, MUTED, false));
+
+        Button local = button(global ? "Seçilmiş filialda lokal təsdiqlə" : "6 rəqəmli kodu təsdiqlə",
+                Color.rgb(25, 121, 79), Color.WHITE);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(52));
+        lp.setMargins(0, dp(12), 0, 0);
+        body.addView(local, lp);
+
+        Button globalCode = null;
+        Button refresh = null;
+        LinearLayout queue = null;
+        if (global) {
+            globalCode = button("Bütün filiallarda bu kodu axtar", Color.rgb(34, 86, 157), Color.WHITE);
+            LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(-1, dp(52));
+            gp.setMargins(0, dp(9), 0, dp(18));
+            body.addView(globalCode, gp);
+            body.addView(text("Bütün filiallardan gələn Admin sorğuları", 16, TEXT, true));
+            body.addView(text("Filial seçmədən gözləyən sorğunu təsdiqlə və ya rədd et.", 12, MUTED, false));
+            refresh = button("↻  Sorğuları yenilə", Color.rgb(36, 118, 218), Color.WHITE);
+            LinearLayout.LayoutParams rp = new LinearLayout.LayoutParams(-1, dp(45));
+            rp.setMargins(0, dp(10), 0, 0);
+            body.addView(refresh, rp);
+            queue = new LinearLayout(this);
+            queue.setOrientation(LinearLayout.VERTICAL);
+            body.addView(queue, new LinearLayout.LayoutParams(-1, -2));
+        }
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(false);
+        scroll.addView(body);
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Admin QR · Lokal və filiallar")
+                .setView(scroll)
+                .setNegativeButton("Bağla", null)
+                .create();
+        scan.setOnClickListener(v -> { dialog.dismiss(); startAdminApprovalQrScanner(); });
+        local.setOnClickListener(v -> {
+            String code = codeField.getText().toString().replaceAll("[^0-9]", "");
+            if (!code.matches("[0-9]{6}")) {
+                codeField.setError("6 rəqəmli kod daxil edin.");
+                return;
+            }
+            // Online: the selected filial's live PC relay; Local IP: directly.
+            dialog.dismiss();
+            approveAdminManualCode(code);
+        });
+        if (global && globalCode != null && refresh != null && queue != null) {
+            final LinearLayout list = queue;
+            centralAdminQueueContainer = list;
+            globalCode.setOnClickListener(v -> {
+                String code = codeField.getText().toString().replaceAll("[^0-9]", "");
+                if (!code.matches("[0-9]{6}")) {
+                    codeField.setError("6 rəqəmli kod daxil edin.");
+                    return;
+                }
+                lookupRemoteAdminCode(code);
+            });
+            refresh.setOnClickListener(v -> loadCentralAdminRequests(list));
+            dialog.setOnDismissListener(d -> {
+                if (centralAdminQueueContainer == list) centralAdminQueueContainer = null;
+            });
+        }
+        dialog.show();
+        if (global && queue != null) loadCentralAdminRequests(queue);
+    }
+
+    private void loadCentralAdminRequests(LinearLayout list) {
+        if (!canUseCentralAdminApproval() || list == null) return;
+        list.removeAllViews();
+        list.addView(text("Filial sorğuları yoxlanılır...", 13, MUTED, false));
         final String master = loadRemoteTokenSecurely();
-        setBusy(true);
         io.execute(() -> {
             try {
                 JSONObject response = remoteGatewayCall("GET", BRANCH_APPROVAL_API + "/pending", null, master, 10000);
-                JSONArray queue = response.optJSONArray("requests");
-                final JSONArray items = queue == null ? new JSONArray() : queue;
-                runOnUiThread(() -> drawRemoteAdminApprovals(items));
+                JSONArray found = response.optJSONArray("requests");
+                final JSONArray requests = found == null ? new JSONArray() : found;
+                runOnUiThread(() -> {
+                    if (centralAdminQueueContainer == list) renderCentralAdminRequests(list, requests);
+                });
             } catch (Exception ex) {
-                showError(ex);
-            } finally {
-                setBusy(false);
+                runOnUiThread(() -> {
+                    if (centralAdminQueueContainer == list) {
+                        list.removeAllViews();
+                        list.addView(text("Mərkəzi sorğular alınmadı. Filiallar serverini və interneti yoxlayın. "
+                                + String.valueOf(ex.getMessage()), 12, MUTED, false));
+                    }
+                });
             }
         });
     }
 
-    private void drawRemoteAdminApprovals(JSONArray requests) {
-        if (!canUseCentralAdminApproval()) return;
-        LinearLayout body = new LinearLayout(this);
-        body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(dp(16), dp(10), dp(16), dp(12));
-        TextView info = text("Bütün filialların aktiv sorğuları. Təsdiq yalnız göstərilən əməliyyat üçündür.", 13, TEXT, false);
-        body.addView(info);
-        EditText code = new EditText(this);
-        code.setHint("6 rəqəmli kod: 638-592");
-        code.setSingleLine(true);
-        code.setInputType(InputType.TYPE_CLASS_NUMBER);
-        code.setFilters(new InputFilter[]{new InputFilter.LengthFilter(6)});
-        body.addView(code, new LinearLayout.LayoutParams(-1, dp(55)));
-        Button lookUp = button("Kodu axtar", Color.rgb(36, 118, 218), Color.WHITE);
-        body.addView(lookUp, new LinearLayout.LayoutParams(-1, dp(46)));
+    private void renderCentralAdminRequests(LinearLayout list, JSONArray requests) {
+        if (list == null || !canUseCentralAdminApproval()) return;
+        list.removeAllViews();
         if (requests.length() == 0) {
-            TextView empty = text("Hazırda gözləyən Admin sorğusu yoxdur.", 14, MUTED, false);
-            empty.setPadding(0, dp(24), 0, dp(12));
-            body.addView(empty);
+            TextView empty = text("Mərkəzə göndərilmiş aktiv sorğu yoxdur. Filial PC-də QR altında "
+                    + "'Uzaqdan təsdiq aktivdir' yazısı görünməlidir.", 13, MUTED, false);
+            empty.setPadding(0, dp(12), 0, dp(12));
+            list.addView(empty);
+            return;
         }
         for (int i = 0; i < requests.length(); i++) {
             JSONObject item = requests.optJSONObject(i);
             if (item == null) continue;
             final String requestId = item.optString("request_id", "");
-            final String branchName = item.optString("branch_name", "Filial #" + item.optInt("branch_id", 0));
+            final String branch = item.optString("branch_name", "Filial #" + item.optInt("branch_id", 0));
             final String title = item.optString("title", "Admin təsdiqi");
             final String prompt = item.optString("prompt", "");
-            final long expires = item.optLong("expires_at", 0);
-            final long seconds = Math.max(0L, expires - System.currentTimeMillis() / 1000L);
+            long seconds = Math.max(0L, item.optLong("expires_at", 0) - System.currentTimeMillis() / 1000L);
             LinearLayout card = new LinearLayout(this);
             card.setOrientation(LinearLayout.VERTICAL);
             card.setPadding(dp(12), dp(13), dp(12), dp(13));
             card.setBackground(bg(CARD, 12, BORDER));
             LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(-1, -2);
             cp.setMargins(0, dp(12), 0, 0);
-            body.addView(card, cp);
-            card.addView(text(branchName + " · " + Math.max(0L, seconds) + " san.", 15, TEXT, true));
+            list.addView(card, cp);
+            card.addView(text(branch + " · " + seconds + " san.", 15, TEXT, true));
             card.addView(text(title, 14, TEXT, true));
             if (!prompt.trim().isEmpty()) card.addView(text(prompt, 12, MUTED, false));
             LinearLayout actions = new LinearLayout(this);
@@ -1944,53 +1968,43 @@ public class MainActivity extends Activity {
             card.addView(actions, ap);
             Button accept = button("Təsdiqlə", Color.rgb(25, 121, 79), Color.WHITE);
             Button decline = button("Rədd et", Color.rgb(167, 41, 45), Color.WHITE);
+            actions.addView(accept, new LinearLayout.LayoutParams(0, -1, 1f));
             LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, -1, 1f);
-            actions.addView(accept, half);
-            LinearLayout.LayoutParams half2 = new LinearLayout.LayoutParams(0, -1, 1f);
-            half2.leftMargin = dp(8);
-            actions.addView(decline, half2);
-            accept.setOnClickListener(v -> confirmRemoteAdminDecision(requestId, branchName, title, "approved"));
-            decline.setOnClickListener(v -> confirmRemoteAdminDecision(requestId, branchName, title, "rejected"));
+            half.leftMargin = dp(8);
+            actions.addView(decline, half);
+            accept.setOnClickListener(v -> confirmRemoteAdminDecision(requestId, branch, title, "approved"));
+            decline.setOnClickListener(v -> confirmRemoteAdminDecision(requestId, branch, title, "rejected"));
         }
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(body);
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Bütün filiallar · Admin təsdiqləri")
-                .setView(scroll)
-                .setPositiveButton("Yenilə", (d,which) -> showRemoteAdminApprovals())
-                .setNegativeButton("Bağla", null)
-                .create();
-        lookUp.setOnClickListener(v -> {
-            String numeric = code.getText().toString().replaceAll("[^0-9]", "");
-            if (!numeric.matches("[0-9]{6}")) {
-                code.setError("6 rəqəmli kod daxil edin.");
-                return;
-            }
-            dialog.dismiss();
-            lookupRemoteAdminCode(numeric);
-        });
-        dialog.show();
     }
 
     private void lookupRemoteAdminCode(String sixDigits) {
         if (!canUseCentralAdminApproval()) return;
         final String master = loadRemoteTokenSecurely();
-        setBusy(true);
         io.execute(() -> {
             try {
                 JSONObject payload = new JSONObject();
                 payload.put("manual_code", sixDigits);
                 JSONObject result = remoteGatewayCall("POST", BRANCH_APPROVAL_API + "/lookup", payload, master, 10000);
                 JSONObject found = result.optJSONObject("request");
-                if (found == null) throw new Exception("Aktiv təsdiq sorğusu tapılmadı.");
+                if (found == null) throw new Exception("Mərkəzdə aktiv sorğu tapılmadı.");
                 final String id = found.optString("request_id", "");
                 final String branch = found.optString("branch_name", "Filial");
                 final String title = found.optString("title", "Admin təsdiqi");
                 runOnUiThread(() -> confirmRemoteAdminDecision(id, branch, title, "approved"));
             } catch (Exception ex) {
-                showError(ex);
-            } finally {
-                setBusy(false);
+                final String message = String.valueOf(ex.getMessage());
+                runOnUiThread(() -> {
+                    if (message.contains("404") || message.contains("tapılmadı")) {
+                        new AlertDialog.Builder(this)
+                                .setTitle("Kod mərkəzdə yoxdur")
+                                .setMessage("Filial PC-də QR altında 'Uzaqdan təsdiq aktivdir' yazısı olmalıdır. "
+                                        + "Əgər 'göndərilmədi' görünürsə PC-də Filiallar bağlantısını yoxlayın. "
+                                        + "Kodun yenilənməsindən sonra yeni kodu daxil edin.")
+                                .setPositiveButton("Bağla", null).show();
+                    } else {
+                        toast("Admin sorğusu yoxlanmadı: " + message);
+                    }
+                });
             }
         });
     }
@@ -2004,7 +2018,6 @@ public class MainActivity extends Activity {
                 .setNegativeButton("Ləğv et", null)
                 .setPositiveButton(approve ? "Təsdiqlə" : "Rədd et", (d,which) -> {
                     final String master = loadRemoteTokenSecurely();
-                    setBusy(true);
                     io.execute(() -> {
                         try {
                             JSONObject payload = new JSONObject();
@@ -2014,16 +2027,13 @@ public class MainActivity extends Activity {
                             if (!result.optBoolean("ok", false)) throw new Exception("Təsdiq cavabı alınmadı.");
                             runOnUiThread(() -> {
                                 toast(approve ? "Uzaqdan icazə verildi." : "Sorğu rədd edildi.");
-                                showRemoteAdminApprovals();
+                                if (centralAdminQueueContainer != null) loadCentralAdminRequests(centralAdminQueueContainer);
                             });
                         } catch (Exception ex) {
                             showError(ex);
-                        } finally {
-                            setBusy(false);
                         }
                     });
-                })
-                .show();
+                }).show();
     }
 
     private void approveAdminManualCode(String manualCode) {
@@ -3088,9 +3098,6 @@ public class MainActivity extends Activity {
                         if ("admin".equals(role)) showAdminApprovalOptions();
                         else switchMobileRole("admin", false, this::showAdminApprovalOptions);
                     }));
-        }
-        if (canUseCentralAdminApproval()) {
-            tiles.add(dashboardTile("🌐", "Uzaqdan Admin", "Bütün filiallar", this::showRemoteAdminApprovals));
         }
         if (!cashierOrLocalRestricted() && "kitchen".equals(role)) {
             tiles.add(dashboardTile("♫", "Bildiriş səsi", "Səs seçimi",
