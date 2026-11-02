@@ -1558,8 +1558,9 @@ public class MainActivity extends Activity {
                     canHall = "hall".equals(role);
                     canKitchen = "kitchen".equals(role);
                     canAdmin = false;
-                    // Local rejimdə eyni kassir kodu ilə admin rolunu yoxlamırıq.
+                    // Legacy role probe is not a permission grant.
                 }
+                acceptMobileFeatures(result.optJSONObject("features"));
                 SharedPreferences.Editor editor = prefs.edit()
                         .putString(KEY_USERNAME, username)
                         .putString(KEY_ROLE, role)
@@ -1630,55 +1631,72 @@ public class MainActivity extends Activity {
     private void refreshAllowedMobileRolesOnlineAsync(String loginUser, String activeRole) {
         io.execute(() -> {
             try {
-                JSONObject usersResult = request(serverBase, "/api/mobile/users", "GET", null, "");
-                cacheAllowedRolesFromUsers(usersResult.optJSONArray("users"));
+                JSONObject current = request(serverBase, "/api/mobile/permissions", "GET", null, sessionToken);
                 runOnUiThread(() -> {
-                    boolean oldHall = canHall, oldKitchen = canKitchen, oldAdmin = canAdmin;
-                    if (applyCachedAllowedMobileRoles(loginUser, activeRole)
-                            && dashboardVisible && (oldHall != canHall || oldKitchen != canKitchen || oldAdmin != canAdmin)) {
-                        showDashboard();
+                    acceptMobileFeatures(current.optJSONObject("features"));
+                    if (dashboardVisible) showDashboard();
+                });
+            } catch (Exception ignored) { }
+        });
+    }
+
+    // v163: permissions are supplied by the authenticated PC server.
+    private JSONObject mobileFeatures = new JSONObject();
+
+    private void acceptMobileFeatures(JSONObject features) {
+        mobileFeatures = features == null ? new JSONObject() : features;
+        canHall = mobileFeatures.optBoolean("terminals", false);
+        canKitchen = mobileFeatures.optBoolean("kitchen", false);
+        canAdmin = mobileFeatures.optBoolean("debt", false)
+                || mobileFeatures.optBoolean("rental", false)
+                || mobileFeatures.optBoolean("account_sales", false)
+                || mobileFeatures.optBoolean("messages", false)
+                || mobileFeatures.optBoolean("admin_qr", false);
+    }
+
+    private boolean allowedMobileFeature(String feature) {
+        return sessionToken != null && !sessionToken.trim().isEmpty()
+                && mobileFeatures.optBoolean(feature, false);
+    }
+
+    private boolean requireMobileFeature(String feature) {
+        if (allowedMobileFeature(feature)) return true;
+        toast("Səlahiyyətiniz yoxdur");
+        return false;
+    }
+
+    private void refreshMobilePermissionsAsync() {
+        final String requestServer = serverBase;
+        final String requestToken = sessionToken;
+        if (requestToken == null || requestToken.trim().isEmpty()) return;
+        io.execute(() -> {
+            try {
+                JSONObject result = request(requestServer, "/api/mobile/permissions", "GET", null, requestToken);
+                JSONObject fresh = result.optJSONObject("features");
+                if (fresh == null) return;
+                runOnUiThread(() -> {
+                    if (!requestToken.equals(sessionToken)) return;
+                    if (!fresh.toString().equals(mobileFeatures.toString())) {
+                        acceptMobileFeatures(fresh);
+                        if (dashboardVisible) showDashboard();
                     }
                 });
-            } catch (Exception ignored) {
-                // Aktiv rol işləyirsə giriş dayandırılmır; siyahı növbəti girişdə yenilənəcək.
-            }
+            } catch (Exception ignored) { }
         });
     }
 
     // v160: Kassir (Zal/Mətbəx) və Local IP rejimində admin modulları gizlidir.
     // Bu yalnız UI qaydasıdır; hər API sorğusunda server icazəsi qüvvədə qalır.
     private boolean cashierOrLocalRestricted() {
-        return !isOnlineMode() || !"admin".equalsIgnoreCase(role);
+        return !canAdmin;
     }
 
     private void refreshAllowedMobileRoles(String loginUser, String password, String activeRole) {
-        canHall = "hall".equals(activeRole);
-        canKitchen = "kitchen".equals(activeRole);
-        canAdmin = "admin".equals(activeRole);
-        String[] candidates = {"hall", "kitchen", "admin"};
-        for (String candidate : candidates) {
-            if (candidate.equals(activeRole)) continue;
-            String probeToken = "";
-            try {
-                JSONObject probePayload = new JSONObject();
-                probePayload.put("username", loginUser);
-                probePayload.put("password", password);
-                probePayload.put("role", candidate);
-                JSONObject probeResult = request(serverBase, "/api/mobile/login", "POST", probePayload, "");
-                probeToken = probeResult.optString("token", "");
-                if ("hall".equals(candidate)) canHall = true;
-                else if ("kitchen".equals(candidate)) canKitchen = true;
-                else if ("admin".equals(candidate)) canAdmin = true;
-            } catch (Exception ignored) {
-                if ("hall".equals(candidate)) canHall = false;
-                else if ("kitchen".equals(candidate)) canKitchen = false;
-                else if ("admin".equals(candidate)) canAdmin = false;
-            } finally {
-                if (!probeToken.isEmpty()) {
-                    try { request(serverBase, "/api/mobile/logout", "POST", new JSONObject(), probeToken); }
-                    catch (Exception ignored) {}
-                }
-            }
+        try {
+            JSONObject grants = request(serverBase, "/api/mobile/permissions", "GET", null, sessionToken);
+            acceptMobileFeatures(grants.optJSONObject("features"));
+        } catch (Exception ignored) {
+            acceptMobileFeatures(null); // no authenticated grants -> deny access
         }
     }
 
@@ -1686,15 +1704,8 @@ public class MainActivity extends Activity {
     // yaratmaq lazım deyil. İstifadəçinin login zamanı alınmış canAdmin icazəsi UI gate-dir,
     // server auth isə Master Token + filial scope-dur. Local rejim köhnə rol-switch axınını saxlayır.
     private void openAdminPluginModule(boolean debtOnly, Runnable openTarget) {
-        if (cashierOrLocalRestricted()) {
-            toast("Kassir/Local girişdə yalnız Terminallar və Mətbəx mövcuddur.");
-            return;
-        }
+        if (!canAdmin) { toast("Səlahiyyətiniz yoxdur"); return; }
         if (isOnlineMode()) {
-            if (!canAdmin && !"admin".equals(role)) {
-                toast("Bu bölmə üçün Admin icazəsi yoxdur.");
-                return;
-            }
             adminDebtOnly = debtOnly;
             if (openTarget != null) openTarget.run();
             return;
@@ -1705,8 +1716,8 @@ public class MainActivity extends Activity {
     private void switchMobileRole(String targetRole, boolean debtOnly, Runnable openTarget) {
         String normalizedTarget = targetRole == null ? "hall" : targetRole.trim().toLowerCase(Locale.ROOT);
         if (normalizedTarget.isEmpty()) normalizedTarget = "hall";
-        if ("admin".equals(normalizedTarget) && cashierOrLocalRestricted()) {
-            toast("Kassir/Local rejimdə Admin bölmələrinə keçid yoxdur.");
+        if ("admin".equals(normalizedTarget) && !canAdmin) {
+            toast("Səlahiyyətiniz yoxdur");
             return;
         }
         if (normalizedTarget.equals(role)) {
@@ -1745,7 +1756,7 @@ public class MainActivity extends Activity {
                 roleLabel = result.optString("role_label", role);
                 adminDebtOnly = "admin".equals(role) && debtOnly;
                 prefs.edit().putString(KEY_ROLE, role).putBoolean(KEY_ADMIN_DEBT_ONLY, adminDebtOnly).apply();
-                if (isOnlineMode()) applyCachedAllowedMobileRoles(username, role);
+                acceptMobileFeatures(result.optJSONObject("features"));
                 if (!oldToken.isEmpty() && !oldToken.equals(newToken)) {
                     if (isOnlineMode()) {
                         final String tokenToLogout = oldToken;
@@ -1795,6 +1806,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAdminApprovalOptions() {
+        if (!requireMobileFeature("admin_qr")) return;
         if (sessionToken == null || sessionToken.trim().isEmpty()) {
             toast("Admin təsdiqi üçün əvvəlcə serverə daxil olun.");
             return;
@@ -1848,6 +1860,7 @@ public class MainActivity extends Activity {
     }
 
     private void approveAdminManualCode(String manualCode) {
+        if (!requireMobileFeature("admin_qr")) return;
         if (!manualCode.matches("[0-9]{6}")) {
             toast("Kod 6 rəqəm olmalıdır.");
             return;
@@ -2047,7 +2060,7 @@ public class MainActivity extends Activity {
                 String approvedBy = result.optString("approved_by", "").trim();
 
                 // Təsdiqdən sonra yeni filialın menyu icazələrini yenilə.
-                refreshAllowedMobileRoles(username, loginPassword, role);
+                acceptMobileFeatures(request(target, "/api/mobile/permissions", "GET", null, sessionToken).optJSONObject("features"));
 
                 if (!oldToken.isEmpty() && !oldServer.isEmpty() && !oldServer.equalsIgnoreCase(target)) {
                     try { request(oldServer, "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
@@ -2064,7 +2077,7 @@ public class MainActivity extends Activity {
             } catch (Exception approvalError) {
                 // Server keçidi uğurludur; təsdiq rədd olunsa belə yeni filialın real
                 // icazələrini yenilə ki menyu köhnə filialdan qalmasın.
-                refreshAllowedMobileRoles(username, loginPassword, role);
+                acceptMobileFeatures(request(target, "/api/mobile/permissions", "GET", null, sessionToken).optJSONObject("features"));
                 if (!oldToken.isEmpty() && !oldServer.isEmpty() && !oldServer.equalsIgnoreCase(target)) {
                     try { request(oldServer, "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
                     catch (Exception ignored) {}
@@ -2785,6 +2798,7 @@ public class MainActivity extends Activity {
         currentBackAction = null;
         clear();
         dashboardVisible = true;
+        refreshMobilePermissionsAsync();
         // Dashboard-un öz alt paneli var; v153 universal panel burada ikinci dəfə göstərilmir.
         persistentBottomNavigationHost.setVisibility(View.GONE);
 
@@ -2874,19 +2888,27 @@ public class MainActivity extends Activity {
         body.addView(sections, sectionsLp);
 
         List<View> tiles = new ArrayList<>();
-        if (cashierOrLocalRestricted() || canHall) tiles.add(dashboardTile("🎮", "Terminallar", "Zal və sifarişlər",
+        if (allowedMobileFeature("terminals")) tiles.add(dashboardTile("🎮", "Terminallar", "Zal və sifarişlər",
                 () -> switchMobileRole("hall", false, this::showTerminals)));
-        if (cashierOrLocalRestricted() || canKitchen) tiles.add(dashboardTile("🍳", "Mətbəx", "Sifarişlər",
+        if (allowedMobileFeature("kitchen")) tiles.add(dashboardTile("🍳", "Mətbəx", "Sifarişlər",
                 () -> switchMobileRole("kitchen", false, this::showKitchen)));
-        if (!cashierOrLocalRestricted() && canAdmin) {
+        if (allowedMobileFeature("debt")) {
             tiles.add(dashboardTile("📒", "Borc Dəftəri", "Borclar",
                     () -> openAdminPluginModule(true, () -> showDebt("İşçi"))));
+        }
+        if (allowedMobileFeature("rental")) {
             tiles.add(dashboardTile("🗓", "İcarə Paneli", "İcarələr",
                     () -> openAdminPluginModule(false, () -> showRental("active"))));
+        }
+        if (allowedMobileFeature("account_sales")) {
             tiles.add(dashboardTile("🎫", "Hesab Satışı", "Hesablar",
                     () -> openAdminPluginModule(false, () -> showAccountSales("accounts"))));
+        }
+        if (allowedMobileFeature("messages")) {
             tiles.add(dashboardTile("✉", "Mesaj qutusu", "Filial mesajları",
                     () -> openAdminPluginModule(false, this::showBranchMessages)));
+        }
+        if (allowedMobileFeature("admin_qr")) {
             tiles.add(dashboardTile("▦", "Admin QR", "Təsdiq",
                     () -> {
                         if ("admin".equals(role)) showAdminApprovalOptions();
@@ -2927,9 +2949,9 @@ public class MainActivity extends Activity {
         navLp.setMargins(dp(12), 0, dp(12), dp(9));
         shell.addView(nav, navLp);
         addDashboardNav(nav, "⌂", "Əsas", true, this::showDashboard);
-        if (cashierOrLocalRestricted() || canHall) addDashboardNav(nav, "🎮", "Zal", false,
+        if (allowedMobileFeature("terminals")) addDashboardNav(nav, "🎮", "Zal", false,
                 () -> switchMobileRole("hall", false, this::showTerminals));
-        if (cashierOrLocalRestricted() || canKitchen) addDashboardNav(nav, "🍳", "Mətbəx", false,
+        if (allowedMobileFeature("kitchen")) addDashboardNav(nav, "🍳", "Mətbəx", false,
                 () -> switchMobileRole("kitchen", false, this::showKitchen));
         addDashboardNav(nav, "👤", "Profil", false, this::showDashboardProfile);
     }
@@ -3043,6 +3065,7 @@ public class MainActivity extends Activity {
     }
 
     private void showTerminals() {
+        if (!requireMobileFeature("terminals")) return;
         ScrollView sv = screenWithBody("Terminallar", false, null, this::showTerminals);
         LinearLayout body = scrollBody(sv);
         TextView status = text("Yüklənir…", 14, MUTED, false);
@@ -3098,6 +3121,7 @@ public class MainActivity extends Activity {
     }
 
     private void showStation(String name) {
+        if (!requireMobileFeature("terminals")) return;
         ScrollView sv = screenWithBody(name, true, this::showTerminals, () -> showStation(name));
         LinearLayout body = scrollBody(sv);
         loadJson("/api/mobile/station?name=" + urlEncode(name), result -> {
@@ -3473,6 +3497,7 @@ public class MainActivity extends Activity {
     private static final String[] RENTAL_TABS = {"active", "customers", "history"};
 
     private void showRental(String section) {
+        if (!requireMobileFeature("rental")) return;
         String activeSection = normalizeRentalSection(section);
         currentBackAction = null;
         clear();
@@ -4556,6 +4581,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAccountSalesConnection() {
+        if (!requireMobileFeature("account_sales")) return;
         ScrollView sv = screenWithBody("Hesab Satışı • Bağlantı", false, null);
         LinearLayout body = scrollBody(sv);
 
@@ -4622,10 +4648,7 @@ public class MainActivity extends Activity {
     }
 
     private void showBranchMessages() {
-        if (!canAdmin && !"admin".equals(role)) {
-            toast("Mesaj qutusu yalnız Admin üçün açıqdır.");
-            return;
-        }
+        if (!requireMobileFeature("messages")) return;
         currentBackAction = null;
         clear();
 
@@ -4846,10 +4869,7 @@ public class MainActivity extends Activity {
     }
 
     private void showAccountSales(String requestedSection) {
-        if (!canAdmin && !"admin".equals(role)) {
-            toast("Hesab Satışı yalnız Admin üçün açıqdır.");
-            return;
-        }
+        if (!requireMobileFeature("account_sales")) return;
         if (!hasAccountSalesConnection()) {
             showAccountSalesConnection();
             return;
@@ -8522,6 +8542,7 @@ public class MainActivity extends Activity {
     }
 
     private void showDebt(String category) {
+        if (!requireMobileFeature("debt")) return;
         currentBackAction = null;
         clear();
 
@@ -9139,6 +9160,7 @@ public class MainActivity extends Activity {
     private void showKitchen() { showKitchen("Hazırlanır"); }
 
     private void showKitchen(String category) {
+        if (!requireMobileFeature("kitchen")) return;
         currentBackAction = null;
         loadKitchenClearedTicketIds();
         requestKitchenNotificationPermissionIfNeeded();
