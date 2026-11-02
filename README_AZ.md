@@ -246,3 +246,18 @@ v134-də əlavə edilmiş sol paneldəki filial keçidi saxlanılıb. Filial də
 - Opening asset updated to provided 1001204689.mp4 (720x1280, 10s, H264/AAC).
 - Existing no-loop muted video overlay, completion flow and cold/warm launch behavior retained.
 - MainActivity logic unchanged; video asset replaced only.
+
+
+## v171 — Ana səhifədən sonra səssiz yeniləmə yoxlaması
+- Əvvəlki yeniləmə yoxlaması proqram açılışını, login-i və splash-i saxlamır.
+- İstifadəçi normal daxil olub Əsas ekranı gördükdən və splash bitdikdən sonra server manifesti arxa planda yoxlanılır.
+- Yeniləmə yoxdursa heç bir popup göstərilmir; fon xətaları səssizdir.
+- Yeni daha yüksək versionCode aşkarlandıqda bağlanmayan **məcburi yeniləmə** pəncərəsi çıxır.
+- Proqramdan istifadə yeniləmə quraşdırılana qədər modal pəncərə ilə bloklanır.
+- Aşkar edilmiş yeniləmə tətbiq bağlanıb-açılanda belə saxlanılır, yeni APK quraşdırıldıqda təmizlənir.
+- Əsas səhifəyə təkrar keçid yoxlamanı 5 dəqiqədən tez başlatmır.
+- Profil > Yeniləməni yoxla manual seçimi saxlanılır.
+- GitHub APK: versionCode **171**, versionName **3.5.32-native-v171**, signed release.
+- WordPress Mobil Yeniləmələr v1.0.0 plugini dəyişmir. Hər yayımlanan APK üçün versionCode və versiya adı APK-nın app/build.gradle sahələrinə uyğun yazılmalıdır.
+
+Qeyd: Şəbəkə əlçatan deyilsə yeni versiya olub-olmadığını yoxlamaq mümkün deyil və normal istifadə davam edir. Bir dəfə məcburi yeniləmə aşkar edildikdən sonra internet itkisi onu keçmir. Android sisteminin APK quraşdırma icazəsi mütləqdir.

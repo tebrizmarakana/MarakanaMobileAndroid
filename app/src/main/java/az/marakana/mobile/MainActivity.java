@@ -283,29 +283,27 @@ public class MainActivity extends Activity {
         boolean openKitchenFromNotification = getIntent() != null && getIntent().getBooleanExtra("open_kitchen", false);
         openKitchenAfterNotificationLogin = openKitchenFromNotification;
         buildRoot();
-        // v170: Hər açılışda serverdəki məcburi APK yeniləməsini login/auto-login-dən əvvəl yoxla.
-        // Lokal IP və online filial girişləri eyni update gate-dən keçir.
+        // v171: Tətbiq əvvəlki kimi normal açılır. Yeniləmə yoxlaması girişdən
+        // və ana dashboard tam render olunandan, splash video bağlanandan SONRA
+        // arxa planda aparılır. Yoxlama gedişində popup göstərilmir.
         mobileUpdateManager = new MarakanaUpdateManager(this);
-        mobileUpdateManager.checkOnLaunch(() -> {
-            if (isFinishing() || isDestroyed()) return;
-            if ("kitchen".equals(role) && hasKitchenBackgroundPassword()) {
-                startKitchenBackgroundService();
-            }
-            if (!hasConfiguredConnection()) {
-                showServerSetup();
-            } else if (openKitchenFromNotification && "kitchen".equals(role) && !username.isEmpty()) {
-                String kitchenPassword = loadKitchenBackgroundPassword();
-                if (!kitchenPassword.isEmpty()) autoLogin(username, kitchenPassword, "kitchen", false);
-                else showLogin();
-            } else if (prefs.getBoolean(KEY_AUTO_LOGIN, false) && !username.isEmpty()) {
-                String savedPassword = loadSavedPassword();
-                if (!savedPassword.isEmpty()) autoLogin(username, savedPassword, role, adminDebtOnly);
-                else showLogin();
-            } else {
-                showLogin();
-            }
-            showOpeningVideoOnce();
-        });
+        if ("kitchen".equals(role) && hasKitchenBackgroundPassword()) {
+            startKitchenBackgroundService();
+        }
+        if (!hasConfiguredConnection()) {
+            showServerSetup();
+        } else if (openKitchenFromNotification && "kitchen".equals(role) && !username.isEmpty()) {
+            String kitchenPassword = loadKitchenBackgroundPassword();
+            if (!kitchenPassword.isEmpty()) autoLogin(username, kitchenPassword, "kitchen", false);
+            else showLogin();
+        } else if (prefs.getBoolean(KEY_AUTO_LOGIN, false) && !username.isEmpty()) {
+            String savedPassword = loadSavedPassword();
+            if (!savedPassword.isEmpty()) autoLogin(username, savedPassword, role, adminDebtOnly);
+            else showLogin();
+        } else {
+            showLogin();
+        }
+        showOpeningVideoOnce();
     }
 
     private void showOpeningVideoOnce() {
@@ -355,12 +353,23 @@ public class MainActivity extends Activity {
         }
         openingVideoView = null;
         openingVideoOverlay = null;
+        // Əsas ekran artıq açılıbsa, yalnız splash bağlandıqdan sonra səssiz yoxla.
+        if (dashboardVisible && content != null) content.post(this::maybeCheckMobileUpdates);
+    }
+
+    private void maybeCheckMobileUpdates() {
+        if (mobileUpdateManager != null && dashboardVisible && openingVideoClosed
+                && sessionToken != null && !sessionToken.trim().isEmpty()) {
+            mobileUpdateManager.checkAfterDashboardShown();
+        }
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
+        // Məcburi yeniləmə təsdiqi açıqdırsa kənar QR/deep-link keçidləri icra edilmir.
+        if (mobileUpdateManager != null && mobileUpdateManager.isUpdateRequired()) return;
         // Tətbiqin ikonu ilə yenidən açılış (singleTask warm launch) da splash göstərir.
         // Bildiriş və deep link isə splash-i təkrar işə salmır.
         if (intent != null && Intent.ACTION_MAIN.equals(intent.getAction())
@@ -448,6 +457,10 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (mobileUpdateManager != null) mobileUpdateManager.onHostResume();
+        // Eyni activity launcher-dən yenidən açıldıqda (singleTask) köhnə manifestlə
+        // sonsuza qədər qalmasın, lakin tez-tez tab dəyişmək serveri yükləməsin.
+        if (dashboardVisible && openingVideoClosed && content != null)
+            content.post(this::maybeCheckMobileUpdates);
         // v50: Chrome-dan tətbiqə keçid zamanı intent artıq tutulubsa, sessiya hazır olan
         // kimi pending Admin QR təsdiqini yenidən işlət.
         handlePendingAdminApprovalDeepLink();
@@ -486,6 +499,7 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
+        if (mobileUpdateManager != null && mobileUpdateManager.isUpdateRequired()) return;
         if (dashboardBranchesDialog != null && dashboardBranchesDialog.isShowing()) {
             dashboardBranchesDialog.dismiss();
             dashboardBranchesDialog = null;
@@ -3187,6 +3201,8 @@ public class MainActivity extends Activity {
         if (allowedMobileFeature("kitchen")) addDashboardNav(nav, "🍳", "Mətbəx", false,
                 () -> switchMobileRole("kitchen", false, this::showKitchen));
         addDashboardNav(nav, "👤", "Profil", false, this::showDashboardProfile);
+        // Yalnız layout hazır olanda + splash örtüyü bağlananda yeniləməni yoxla.
+        shell.post(this::maybeCheckMobileUpdates);
     }
 
     private View dashboardTile(String symbol, String title, String caption, Runnable onClick) {
