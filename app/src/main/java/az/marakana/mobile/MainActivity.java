@@ -32,6 +32,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.text.Editable;
 import android.text.InputType;
+import android.text.InputFilter;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.util.Base64;
@@ -55,10 +56,6 @@ import android.widget.TextView;
 import android.widget.Toast;
 import android.widget.VideoView;
 
-import com.google.mlkit.vision.codescanner.GmsBarcodeScanner;
-import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
-import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
-import com.google.mlkit.vision.barcode.common.Barcode;
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import org.json.JSONArray;
@@ -1775,70 +1772,109 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void startQrServerScanner() {
+    // v161: Entirely embedded CameraX QR reader (no external QR scanner app).
+    private static final int REQUEST_SCAN_SERVER_QR = 6901;
+    private static final int REQUEST_SCAN_ADMIN_QR = 6902;
+
+    private void startEmbeddedQrScanner(boolean forAdmin) {
         try {
-            GmsBarcodeScannerOptions options = new GmsBarcodeScannerOptions.Builder()
-                    .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-                    .enableAutoZoom()
-                    .build();
-
-            GmsBarcodeScanner scanner = GmsBarcodeScanning.getClient(this, options);
-            toast("QR oxuyucu açılır…");
-
-            scanner.startScan()
-                    .addOnSuccessListener(barcode -> {
-                        String scanned = barcode == null ? "" : barcode.getRawValue();
-                        if (scanned == null || scanned.trim().isEmpty()) {
-                            toast("QR kodda məlumat tapılmadı.");
-                            return;
-                        }
-                        connectToScannedServer(scanned);
-                    })
-                    .addOnCanceledListener(() -> toast("QR kod oxunması ləğv edildi."))
-                    .addOnFailureListener(error -> {
-                        String detail = error == null || error.getMessage() == null
-                                ? ""
-                                : error.getMessage().trim();
-                        if (detail.isEmpty()) {
-                            toast("QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın.");
-                        } else {
-                            toast("QR oxuyucu açıla bilmədi: " + detail);
-                        }
-                    });
-        } catch (Throwable error) {
-            toast("QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın.");
+            Intent scannerIntent = new Intent(this, EmbeddedQrScannerActivity.class);
+            scannerIntent.putExtra("admin_mode", forAdmin);
+            startActivityForResult(scannerIntent, forAdmin ? REQUEST_SCAN_ADMIN_QR : REQUEST_SCAN_SERVER_QR);
+        } catch (Exception ex) {
+            toast("Daxili kamera oxuyucusu açıla bilmədi: " + ex.getMessage());
         }
     }
 
+    private void startQrServerScanner() {
+        startEmbeddedQrScanner(false);
+    }
+
     private void startAdminApprovalQrScanner() {
-        // v50: QR başqa filiala aid ola bilər. Buna görə skan etməzdən əvvəl cari
-        // filialın canAdmin nəticəsi ilə bloklamırıq; real icazə QR serverində yoxlanılır.
-        try {
-            GmsBarcodeScannerOptions options = new GmsBarcodeScannerOptions.Builder()
-                    .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
-                    .enableAutoZoom()
-                    .build();
-            GmsBarcodeScanner scanner = GmsBarcodeScanning.getClient(this, options);
-            toast("Admin QR kodunu oxudun…");
-            scanner.startScan()
-                    .addOnSuccessListener(barcode -> {
-                        String scanned = barcode == null ? "" : barcode.getRawValue();
-                        if (scanned == null || scanned.trim().isEmpty()) {
-                            toast("QR kodda məlumat tapılmadı.");
-                            return;
-                        }
-                        approveAdminQrChallenge(scanned);
-                    })
-                    .addOnCanceledListener(() -> toast("Admin QR oxunması ləğv edildi."))
-                    .addOnFailureListener(error -> {
-                        String detail = error == null || error.getMessage() == null ? "" : error.getMessage().trim();
-                        toast(detail.isEmpty()
-                                ? "QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın."
-                                : "QR oxuyucu açıla bilmədi: " + detail);
-                    });
-        } catch (Throwable error) {
-            toast("QR oxuyucu açıla bilmədi. Google Play xidmətlərini yoxlayın.");
+        startEmbeddedQrScanner(true);
+    }
+
+    private void showAdminApprovalOptions() {
+        if (sessionToken == null || sessionToken.trim().isEmpty()) {
+            toast("Admin təsdiqi üçün əvvəlcə serverə daxil olun.");
+            return;
         }
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(18), dp(12), dp(18), dp(10));
+        TextView title = text("PC ekranındakı QR kodu oxudun və ya altındakı 6 rəqəmli kodu yazın.",
+                14, TEXT, false);
+        body.addView(title);
+        Button scan = button("▣  Daxili kamera ilə QR oxut", Color.rgb(36, 118, 218), Color.WHITE);
+        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(-1, dp(54));
+        scanParams.setMargins(0, dp(16), 0, dp(16));
+        body.addView(scan, scanParams);
+        TextView manualLabel = text("6 rəqəmli kodu əl ilə daxil et", 15, TEXT, true);
+        body.addView(manualLabel);
+        EditText codeField = new EditText(this);
+        codeField.setSingleLine(true);
+        codeField.setHint("000000");
+        codeField.setTextSize(25);
+        codeField.setGravity(Gravity.CENTER);
+        codeField.setInputType(InputType.TYPE_CLASS_NUMBER);
+        codeField.setFilters(new InputFilter[]{new InputFilter.LengthFilter(6)});
+        body.addView(codeField, new LinearLayout.LayoutParams(-1, dp(60)));
+        TextView notice = text("Kod 60 saniyə etibarlıdır və yalnız bir dəfə istifadə olunur.",
+                12, MUTED, false);
+        body.addView(notice);
+        Button submit = button("6 rəqəmli kodu təsdiqlə", Color.rgb(25, 121, 79), Color.WHITE);
+        LinearLayout.LayoutParams submitParams = new LinearLayout.LayoutParams(-1, dp(52));
+        submitParams.setMargins(0, dp(12), 0, 0);
+        body.addView(submit, submitParams);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Admin QR təsdiqi")
+                .setView(body)
+                .setNegativeButton("Bağla", null)
+                .create();
+        scan.setOnClickListener(v -> {
+            dialog.dismiss();
+            startAdminApprovalQrScanner();
+        });
+        submit.setOnClickListener(v -> {
+            String code = codeField.getText().toString().trim();
+            if (!code.matches("[0-9]{6}")) {
+                codeField.setError("6 rəqəmli kod daxil edin.");
+                return;
+            }
+            dialog.dismiss();
+            approveAdminManualCode(code);
+        });
+        dialog.show();
+    }
+
+    private void approveAdminManualCode(String manualCode) {
+        if (!manualCode.matches("[0-9]{6}")) {
+            toast("Kod 6 rəqəm olmalıdır.");
+            return;
+        }
+        if (serverBase == null || serverBase.trim().isEmpty()
+                || sessionToken == null || sessionToken.trim().isEmpty()) {
+            toast("Əvvəlcə PC serverinə Admin hesabı ilə daxil olun.");
+            return;
+        }
+        final String base = serverBase;
+        final String token = sessionToken;
+        setBusy(true);
+        io.execute(() -> {
+            try {
+                JSONObject payload = new JSONObject();
+                payload.put("manual_code", manualCode);
+                JSONObject result = request(base, "/api/mobile/admin/qr/approve", "POST", payload, token);
+                if (!result.optBoolean("approved", false)) {
+                    throw new RuntimeException("6 rəqəmli təsdiq qəbul edilmədi.");
+                }
+                runOnUiThread(() -> toast("Admin təsdiqi uğurla göndərildi."));
+            } catch (Exception ex) {
+                showError(ex);
+            } finally {
+                setBusy(false);
+            }
+        });
     }
 
     private void approveAdminQrChallenge(String scannedValue) {
@@ -2853,8 +2889,8 @@ public class MainActivity extends Activity {
                     () -> openAdminPluginModule(false, this::showBranchMessages)));
             tiles.add(dashboardTile("▦", "Admin QR", "Təsdiq",
                     () -> {
-                        if ("admin".equals(role)) startAdminApprovalQrScanner();
-                        else switchMobileRole("admin", false, this::startAdminApprovalQrScanner);
+                        if ("admin".equals(role)) showAdminApprovalOptions();
+                        else switchMobileRole("admin", false, this::showAdminApprovalOptions);
                     }));
         }
         if (!cashierOrLocalRestricted() && "kitchen".equals(role)) {
@@ -9292,6 +9328,18 @@ public class MainActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_SCAN_SERVER_QR || requestCode == REQUEST_SCAN_ADMIN_QR) {
+            if (resultCode == RESULT_OK && data != null) {
+                String scanned = data.getStringExtra(EmbeddedQrScannerActivity.RESULT_QR);
+                if (scanned != null && !scanned.trim().isEmpty()) {
+                    if (requestCode == REQUEST_SCAN_ADMIN_QR) approveAdminQrChallenge(scanned);
+                    else connectToScannedServer(scanned);
+                } else {
+                    toast("QR kodda məlumat tapılmadı.");
+                }
+            }
+            return;
+        }
         if (requestCode != REQUEST_KITCHEN_SOUND || resultCode != RESULT_OK || data == null) return;
         Uri picked = data.getParcelableExtra(RingtoneManager.EXTRA_RINGTONE_PICKED_URI);
         if (picked == null) {
