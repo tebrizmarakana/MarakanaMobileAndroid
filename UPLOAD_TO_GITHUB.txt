@@ -1,3 +1,12 @@
+Marakana Mobile v169 — GitHub quruluşu
+1. ZIP-i aç; içindəki layihə fayllarını MarakanaMobileAndroid repository kökünə yüklə (mövcud faylların üzərinə yaz).
+2. GitHub Actions -> Build Marakana Mobile Native v169 RELEASE APK -> Run workflow.
+3. Artifact: MarakanaMobile-v169-permanent-update-apk.
+4. Daimi release signing secrets-i saxla; keystore-u dəyişmə.
+5. PC v1662, Filiallar WordPress plugin v1.0.5.
+
+---
+
 Marakana Mobile v142 GitHub upload
 
 1) Daimi signing üçün mövcud GitHub Secret-lər olduğu kimi qalır.

@@ -1810,6 +1810,8 @@ public class MainActivity extends Activity {
     // Local IP (or branch-scoped online session) -> current PC approval.
     private static final String BRANCH_APPROVAL_API = "/wp-json/marakana-branches/v1/admin-approvals";
     private LinearLayout centralAdminQueueContainer;
+    // v169: UI-thread only, one in-flight decision per central approval request.
+    private final Set<String> centralAdminDecisionsInFlight = new HashSet<>();
 
     private boolean isOnlineMasterApprovalMode() {
         String token = loadRemoteTokenSecurely();
@@ -1882,33 +1884,111 @@ public class MainActivity extends Activity {
                 .setNegativeButton("Bağla", null)
                 .create();
         scan.setOnClickListener(v -> { dialog.dismiss(); startAdminApprovalQrScanner(); });
-        confirm.setOnClickListener(v -> {
-            String code = codeField.getText().toString().replaceAll("[^0-9]", "");
+
+        // v169: Exactly six digits triggers approval automatically. The short
+        // debounce is for typing/paste; only one lookup/approval can be active.
+        final Handler codeHandler = new Handler(Looper.getMainLooper());
+        final Runnable[] pendingAutoSubmit = {null};
+        final Runnable[] submitAction = {null};
+        final boolean[] submitting = {false};
+        submitAction[0] = () -> {
+            if (pendingAutoSubmit[0] != null) {
+                codeHandler.removeCallbacks(pendingAutoSubmit[0]);
+                pendingAutoSubmit[0] = null;
+            }
+            if (submitting[0] || !dialog.isShowing()) return;
+            final String code = codeField.getText().toString().replaceAll("[^0-9]", "");
             if (!code.matches("[0-9]{6}")) {
                 codeField.setError("6 rəqəmli kod daxil edin.");
                 return;
             }
-            // Recheck the connection mode at click time, too: a stale Master
-            // token may never issue a local admin approval by accident.
-            if (isOnlineMasterApprovalMode()) {
-                if (!canUseCentralAdminApproval()) {
-                    toast("Səlahiyyətiniz yoxdur");
-                    return;
+            // Do not fall back to local mode when a Master session loses rights.
+            if (isOnlineMasterApprovalMode() && !canUseCentralAdminApproval()) {
+                toast("Səlahiyyətiniz yoxdur");
+                return;
+            }
+            submitting[0] = true;
+            codeField.setEnabled(false);
+            confirm.setEnabled(false);
+            final boolean remote = isOnlineMasterApprovalMode();
+            final String targetBase = serverBase;
+            final String targetToken = sessionToken;
+            final String master = remote ? loadRemoteTokenSecurely() : "";
+            io.execute(() -> {
+                try {
+                    if (remote) {
+                        JSONObject lookup = new JSONObject();
+                        lookup.put("manual_code", code);
+                        JSONObject response = remoteGatewayCall("POST", BRANCH_APPROVAL_API + "/lookup", lookup, master, 10000);
+                        JSONObject found = response.optJSONObject("request");
+                        if (found == null) throw new Exception("Mərkəzdə aktiv sorğu tapılmadı.");
+                        String requestId = found.optString("request_id", "");
+                        if (!requestId.matches("[a-f0-9]{48}")) throw new Exception("Sorğu identifikatoru yanlışdır.");
+                        JSONObject payload = new JSONObject();
+                        payload.put("request_id", requestId);
+                        payload.put("decision", "approved");
+                        JSONObject result = remoteGatewayCall("POST", BRANCH_APPROVAL_API + "/decide", payload, master, 10000);
+                        if (!result.optBoolean("ok", false)) throw new Exception("Təsdiq cavabı alınmadı.");
+                    } else {
+                        JSONObject payload = new JSONObject();
+                        payload.put("manual_code", code);
+                        JSONObject result = request(targetBase, "/api/mobile/admin/qr/approve", "POST", payload, targetToken);
+                        if (!result.optBoolean("approved", false)) throw new Exception("6 rəqəmli təsdiq qəbul edilmədi.");
+                    }
+                    runOnUiThread(() -> {
+                        submitting[0] = false;
+                        if (dialog.isShowing()) dialog.dismiss();
+                        toast(remote ? "Uzaqdan Admin icazəsi verildi." : "Admin təsdiqi uğurla göndərildi.");
+                    });
+                } catch (Exception ex) {
+                    final String error = String.valueOf(ex.getMessage());
+                    runOnUiThread(() -> {
+                        submitting[0] = false;
+                        if (!dialog.isShowing()) return;
+                        codeField.setEnabled(true);
+                        confirm.setEnabled(true);
+                        // Force an explicit re-entry after an unsuccessful code.
+                        codeField.setText("");
+                        if (remote && (error.contains("404") || error.contains("tapılmadı"))) {
+                            toast("Kod mərkəzdə tapılmadı. Filial PC-də 'Uzaqdan təsdiq aktivdir' yazısını yoxlayın.");
+                        } else {
+                            toast("Admin təsdiqi alınmadı: " + error);
+                        }
+                    });
                 }
-                lookupRemoteAdminCode(code);
-            } else {
-                dialog.dismiss();
-                approveAdminManualCode(code);
+            });
+        };
+        confirm.setOnClickListener(v -> submitAction[0].run());
+        codeField.addTextChangedListener(new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+            @Override public void afterTextChanged(Editable editable) {
+                if (pendingAutoSubmit[0] != null) {
+                    codeHandler.removeCallbacks(pendingAutoSubmit[0]);
+                    pendingAutoSubmit[0] = null;
+                }
+                if (submitting[0]) return;
+                final String snapshot = editable.toString();
+                if (!snapshot.matches("[0-9]{6}")) return;
+                pendingAutoSubmit[0] = () -> {
+                    pendingAutoSubmit[0] = null;
+                    if (dialog.isShowing() && snapshot.equals(codeField.getText().toString()) && !submitting[0]) {
+                        submitAction[0].run();
+                    }
+                };
+                codeHandler.postDelayed(pendingAutoSubmit[0], 350);
             }
         });
         if (global && refresh != null && queue != null) {
             final LinearLayout list = queue;
             centralAdminQueueContainer = list;
             refresh.setOnClickListener(v -> loadCentralAdminRequests(list));
-            dialog.setOnDismissListener(d -> {
-                if (centralAdminQueueContainer == list) centralAdminQueueContainer = null;
-            });
         }
+        final LinearLayout dialogQueue = queue;
+        dialog.setOnDismissListener(d -> {
+            if (pendingAutoSubmit[0] != null) codeHandler.removeCallbacks(pendingAutoSubmit[0]);
+            if (dialogQueue != null && centralAdminQueueContainer == dialogQueue) centralAdminQueueContainer = null;
+        });
         dialog.show();
         if (global && queue != null) loadCentralAdminRequests(queue);
     }
@@ -1977,97 +2057,56 @@ public class MainActivity extends Activity {
             LinearLayout.LayoutParams half = new LinearLayout.LayoutParams(0, -1, 1f);
             half.leftMargin = dp(8);
             actions.addView(decline, half);
-            accept.setOnClickListener(v -> confirmRemoteAdminDecision(requestId, branch, title, "approved"));
-            decline.setOnClickListener(v -> confirmRemoteAdminDecision(requestId, branch, title, "rejected"));
+            if (centralAdminDecisionsInFlight.contains(requestId)) {
+                accept.setEnabled(false);
+                decline.setEnabled(false);
+            }
+            accept.setOnClickListener(v -> {
+                accept.setEnabled(false);
+                decline.setEnabled(false);
+                confirmRemoteAdminDecision(requestId, "approved", accept, decline);
+            });
+            decline.setOnClickListener(v -> {
+                accept.setEnabled(false);
+                decline.setEnabled(false);
+                confirmRemoteAdminDecision(requestId, "rejected", accept, decline);
+            });
         }
     }
 
-    private void lookupRemoteAdminCode(String sixDigits) {
-        if (!canUseCentralAdminApproval()) return;
+    // v169: No second confirmation popup. A tap on a request action is the
+    // explicit approval/rejection decision; duplicate taps cannot send twice.
+    private void confirmRemoteAdminDecision(String id, String decision, Button accept, Button decline) {
+        if (!canUseCentralAdminApproval() || !id.matches("[a-f0-9]{48}")) {
+            accept.setEnabled(true);
+            decline.setEnabled(true);
+            toast("Səlahiyyətiniz yoxdur");
+            return;
+        }
+        if (centralAdminDecisionsInFlight.contains(id)) return;
+        centralAdminDecisionsInFlight.add(id);
+        final boolean approve = "approved".equals(decision);
         final String master = loadRemoteTokenSecurely();
         io.execute(() -> {
             try {
                 JSONObject payload = new JSONObject();
-                payload.put("manual_code", sixDigits);
-                JSONObject result = remoteGatewayCall("POST", BRANCH_APPROVAL_API + "/lookup", payload, master, 10000);
-                JSONObject found = result.optJSONObject("request");
-                if (found == null) throw new Exception("Mərkəzdə aktiv sorğu tapılmadı.");
-                final String id = found.optString("request_id", "");
-                final String branch = found.optString("branch_name", "Filial");
-                final String title = found.optString("title", "Admin təsdiqi");
-                runOnUiThread(() -> confirmRemoteAdminDecision(id, branch, title, "approved"));
-            } catch (Exception ex) {
-                final String message = String.valueOf(ex.getMessage());
+                payload.put("request_id", id);
+                payload.put("decision", decision);
+                JSONObject result = remoteGatewayCall("POST", BRANCH_APPROVAL_API + "/decide", payload, master, 10000);
+                if (!result.optBoolean("ok", false)) throw new Exception("Təsdiq cavabı alınmadı.");
                 runOnUiThread(() -> {
-                    if (message.contains("404") || message.contains("tapılmadı")) {
-                        new AlertDialog.Builder(this)
-                                .setTitle("Kod mərkəzdə yoxdur")
-                                .setMessage("Filial PC-də QR altında 'Uzaqdan təsdiq aktivdir' yazısı olmalıdır. "
-                                        + "Əgər 'göndərilmədi' görünürsə PC-də Filiallar bağlantısını yoxlayın. "
-                                        + "Kodun yenilənməsindən sonra yeni kodu daxil edin.")
-                                .setPositiveButton("Bağla", null).show();
-                    } else {
-                        toast("Admin sorğusu yoxlanmadı: " + message);
-                    }
+                    centralAdminDecisionsInFlight.remove(id);
+                    toast(approve ? "Uzaqdan icazə verildi." : "Sorğu rədd edildi.");
+                    if (centralAdminQueueContainer != null) loadCentralAdminRequests(centralAdminQueueContainer);
                 });
-            }
-        });
-    }
-
-    private void confirmRemoteAdminDecision(String id, String branch, String title, String decision) {
-        if (!canUseCentralAdminApproval() || !id.matches("[a-f0-9]{48}")) return;
-        final boolean approve = "approved".equals(decision);
-        new AlertDialog.Builder(this)
-                .setTitle(approve ? "Admin icazəsi verilsin?" : "Sorğu rədd edilsin?")
-                .setMessage(branch + "\n" + title + "\n\nBu qərar yalnız həmin birdəfəlik sorğuya aiddir.")
-                .setNegativeButton("Ləğv et", null)
-                .setPositiveButton(approve ? "Təsdiqlə" : "Rədd et", (d,which) -> {
-                    final String master = loadRemoteTokenSecurely();
-                    io.execute(() -> {
-                        try {
-                            JSONObject payload = new JSONObject();
-                            payload.put("request_id", id);
-                            payload.put("decision", decision);
-                            JSONObject result = remoteGatewayCall("POST", BRANCH_APPROVAL_API + "/decide", payload, master, 10000);
-                            if (!result.optBoolean("ok", false)) throw new Exception("Təsdiq cavabı alınmadı.");
-                            runOnUiThread(() -> {
-                                toast(approve ? "Uzaqdan icazə verildi." : "Sorğu rədd edildi.");
-                                if (centralAdminQueueContainer != null) loadCentralAdminRequests(centralAdminQueueContainer);
-                            });
-                        } catch (Exception ex) {
-                            showError(ex);
-                        }
-                    });
-                }).show();
-    }
-
-    private void approveAdminManualCode(String manualCode) {
-        if (!requireMobileFeature("admin_qr")) return;
-        if (!manualCode.matches("[0-9]{6}")) {
-            toast("Kod 6 rəqəm olmalıdır.");
-            return;
-        }
-        if (serverBase == null || serverBase.trim().isEmpty()
-                || sessionToken == null || sessionToken.trim().isEmpty()) {
-            toast("Əvvəlcə PC serverinə Admin hesabı ilə daxil olun.");
-            return;
-        }
-        final String base = serverBase;
-        final String token = sessionToken;
-        setBusy(true);
-        io.execute(() -> {
-            try {
-                JSONObject payload = new JSONObject();
-                payload.put("manual_code", manualCode);
-                JSONObject result = request(base, "/api/mobile/admin/qr/approve", "POST", payload, token);
-                if (!result.optBoolean("approved", false)) {
-                    throw new RuntimeException("6 rəqəmli təsdiq qəbul edilmədi.");
-                }
-                runOnUiThread(() -> toast("Admin təsdiqi uğurla göndərildi."));
             } catch (Exception ex) {
-                showError(ex);
-            } finally {
-                setBusy(false);
+                final String error = String.valueOf(ex.getMessage());
+                runOnUiThread(() -> {
+                    centralAdminDecisionsInFlight.remove(id);
+                    accept.setEnabled(true);
+                    decline.setEnabled(true);
+                    toast("Admin sorğusu icra olunmadı: " + error);
+                });
             }
         });
     }

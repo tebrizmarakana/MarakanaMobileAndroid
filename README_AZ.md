@@ -1,3 +1,17 @@
+Marakana Mobile v169 — Admin QR: bir klik və 6 rəqəmdə avtomatik təsdiq.
+
+- Filialdan gələn sorğudakı Təsdiqlə/Rədd et artıq ikinci təsdiq dialoqunu açmır; qərar dərhal mərkəzi serverə göndərilir.
+- Eyni request_id üçün paralel qərar çağırışı bloklanır və düymələr göndərmə bitənədək deaktiv olur.
+- Admin QR sahəsində 6 rəqəm tamamlandıqdan 350 ms sonra (əlavə düymə basmadan) təsdiq avtomatik göndərilir.
+- Master Token + Online rejimində kod əvvəl mərkəzdə axtarılır, sonra birdəfəlik təsdiq edilir; Local IP və adi filial rejimində PC təsdiq API-si istifadə olunur.
+- Kodu əl ilə Təsdiqlə vurmaq hələ də mümkündür; eyni kodun iki dəfə göndərilməsi UI-da bloklanır.
+- Uğurlu kod təsdiqində pəncərə bağlanır, xəta olduqda yeni kod daxil etmək üçün xana boşaldılır.
+- Kodun 6 rəqəmdən az olması, səlahiyyət yoxlaması, daxili kamera və Admin QR səlahiyyəti əvvəlki kimi qalır.
+- PC v1662, Filiallar plugin v1.0.5 ilə uyğundur; bu paket yalnız Android mənbə layihəsidir.
+- Android versionCode=169, versionName=3.5.30-native-v169; signed GitHub Actions yoxlaması və APK adı yeniləndi.
+
+---
+
 Marakana Mobile v168 — Admin QR: Tək düymə və avtomatik Local / Master rejimi.
 
 - Admin QR bölməsində QR oxuyucusu, 6 rəqəmli kod sahəsi və bir ədəd “Təsdiqlə” düyməsi.
