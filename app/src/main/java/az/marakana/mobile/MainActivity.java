@@ -2077,7 +2077,14 @@ public class MainActivity extends Activity {
             } catch (Exception approvalError) {
                 // Server keçidi uğurludur; təsdiq rədd olunsa belə yeni filialın real
                 // icazələrini yenilə ki menyu köhnə filialdan qalmasın.
-                acceptMobileFeatures(request(target, "/api/mobile/permissions", "GET", null, sessionToken).optJSONObject("features"));
+                try {
+                    JSONObject grants = request(target, "/api/mobile/permissions", "GET", null, sessionToken);
+                    acceptMobileFeatures(grants.optJSONObject("features"));
+                } catch (Exception permissionError) {
+                    // Deny all modules if the new branch cannot verify permissions.
+                    // Never fall back to rights cached from the previous branch.
+                    acceptMobileFeatures(null);
+                }
                 if (!oldToken.isEmpty() && !oldServer.isEmpty() && !oldServer.equalsIgnoreCase(target)) {
                     try { request(oldServer, "/api/mobile/logout", "POST", new JSONObject(), oldToken); }
                     catch (Exception ignored) {}
