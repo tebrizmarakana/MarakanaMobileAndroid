@@ -1,3 +1,22 @@
+Marakana Mobile v168 — Admin QR: Tək düymə və avtomatik Local / Master rejimi.
+
+- Admin QR bölməsində QR oxuyucusu, 6 rəqəmli kod sahəsi və bir ədəd “Təsdiqlə” düyməsi.
+- Master Token (MFM-) ilə Online + Admin hesabı -> kod bütün filiallar üzrə mərkəzi API-da yoxlanır.
+- Local IP -> kod qoşulmuş PC-də yoxlanır. Online adi filial tokeni -> seçilmiş filialın PC-sinə relay edilir.
+- Master rejimində gözləyən filial sorğuları siyahısı və Təsdiqlə/Rədd et qalır.
+- Kod sahəsi yalnız rəqəmdir; maksimum 6 simvol.
+- versionCode=168, versionName=3.5.29-native-v168.
+- Android release üçün daimi signing məlumatları və GitHub Actions workflow-u tələb olunur.
+
+Marakana Mobile v167 — Admin QR təsdiq kodu üçün yalnız rəqəm klaviaturası.
+
+- Admin QR ekranında lokal təsdiq və bütün filiallarda kod axtarışı üçün ortaq 6-rəqəmli EditText TYPE_CLASS_NUMBER istifadə edir.
+- Telefon klaviaturasında hərf rejimi açılmır; maksimum 6 rəqəm daxil edilə bilər.
+- Kod sahəsi 638592 nümunə formatındadır, serverə əvvəlki kimi yalnız 6 rəqəm ötürülür.
+- v166 vahid Admin QR ekranı və təhlükəsizlik qaydaları qorunub.
+- APK versionCode 167, versionName 3.5.28-native-v167.
+- GitHub Actions APK adları və versiya yoxlaması v167-dir.
+
 Marakana Mobile v166: Admin QR: lokal və uzaqdan təsdiq eyni ekranda.
 
 MARAKANA MOBILE v166 — Uzaqdan Admin təsdiqləri

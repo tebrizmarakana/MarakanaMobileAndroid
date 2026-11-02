@@ -1805,23 +1805,32 @@ public class MainActivity extends Activity {
         startEmbeddedQrScanner(true);
     }
 
-    // v166: One Admin QR screen for local and all-branch approval; no separate
-    // remote dashboard tile or second dialog. Master permission is still
-    // required to view/decide global requests. Local QR permission is unchanged.
+    // v168: A single confirmation action chooses the route from the authenticated
+    // connection mode. Online + Master Token -> central WordPress approval;
+    // Local IP (or branch-scoped online session) -> current PC approval.
     private static final String BRANCH_APPROVAL_API = "/wp-json/marakana-branches/v1/admin-approvals";
     private LinearLayout centralAdminQueueContainer;
 
-    private boolean canUseCentralAdminApproval() {
+    private boolean isOnlineMasterApprovalMode() {
         String token = loadRemoteTokenSecurely();
-        return isOnlineMode() && "admin".equals(role)
-                && allowedMobileFeature("admin_qr")
-                && token != null && token.startsWith("MFM-");
+        return isOnlineMode() && token != null && token.startsWith("MFM-");
+    }
+
+    private boolean canUseCentralAdminApproval() {
+        return isOnlineMasterApprovalMode() && "admin".equals(role)
+                && allowedMobileFeature("admin_qr");
     }
 
     private void showAdminApprovalOptions() {
         if (!requireMobileFeature("admin_qr")) return;
         if (sessionToken == null || sessionToken.trim().isEmpty()) {
             toast("Admin təsdiqi üçün əvvəlcə serverə daxil olun.");
+            return;
+        }
+        // Master Token can never silently fall back to branch-local approval
+        // if the current account lacks central administrator permissions.
+        if (isOnlineMasterApprovalMode() && !canUseCentralAdminApproval()) {
+            toast("Səlahiyyətiniz yoxdur");
             return;
         }
         final boolean global = canUseCentralAdminApproval();
@@ -1836,28 +1845,23 @@ public class MainActivity extends Activity {
         body.addView(text("6 rəqəmli təsdiq kodu", 15, TEXT, true));
         EditText codeField = new EditText(this);
         codeField.setSingleLine(true);
-        codeField.setHint("638-592");
+        codeField.setHint("638592");
         codeField.setTextSize(25);
         codeField.setGravity(Gravity.CENTER);
-        codeField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        codeField.setFilters(new InputFilter[]{new InputFilter.LengthFilter(7)});
+        // v167: Digits-only keyboard and six-character input length retained.
+        codeField.setInputType(InputType.TYPE_CLASS_NUMBER);
+        codeField.setFilters(new InputFilter[]{new InputFilter.LengthFilter(6)});
         body.addView(codeField, new LinearLayout.LayoutParams(-1, dp(58)));
         body.addView(text("Kod PC ekranında hər 60 saniyədən bir dəyişir.", 12, MUTED, false));
-
-        Button local = button(global ? "Seçilmiş filialda lokal təsdiqlə" : "6 rəqəmli kodu təsdiqlə",
-                Color.rgb(25, 121, 79), Color.WHITE);
+        // One action for both modes; no manual local-vs-remote choice.
+        Button confirm = button("Təsdiqlə", Color.rgb(25, 121, 79), Color.WHITE);
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(52));
         lp.setMargins(0, dp(12), 0, 0);
-        body.addView(local, lp);
+        body.addView(confirm, lp);
 
-        Button globalCode = null;
         Button refresh = null;
         LinearLayout queue = null;
         if (global) {
-            globalCode = button("Bütün filiallarda bu kodu axtar", Color.rgb(34, 86, 157), Color.WHITE);
-            LinearLayout.LayoutParams gp = new LinearLayout.LayoutParams(-1, dp(52));
-            gp.setMargins(0, dp(9), 0, dp(18));
-            body.addView(globalCode, gp);
             body.addView(text("Bütün filiallardan gələn Admin sorğuları", 16, TEXT, true));
             body.addView(text("Filial seçmədən gözləyən sorğunu təsdiqlə və ya rədd et.", 12, MUTED, false));
             refresh = button("↻  Sorğuları yenilə", Color.rgb(36, 118, 218), Color.WHITE);
@@ -1873,32 +1877,33 @@ public class MainActivity extends Activity {
         scroll.setFillViewport(false);
         scroll.addView(body);
         final AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("Admin QR · Lokal və filiallar")
+                .setTitle("Admin QR")
                 .setView(scroll)
                 .setNegativeButton("Bağla", null)
                 .create();
         scan.setOnClickListener(v -> { dialog.dismiss(); startAdminApprovalQrScanner(); });
-        local.setOnClickListener(v -> {
+        confirm.setOnClickListener(v -> {
             String code = codeField.getText().toString().replaceAll("[^0-9]", "");
             if (!code.matches("[0-9]{6}")) {
                 codeField.setError("6 rəqəmli kod daxil edin.");
                 return;
             }
-            // Online: the selected filial's live PC relay; Local IP: directly.
-            dialog.dismiss();
-            approveAdminManualCode(code);
-        });
-        if (global && globalCode != null && refresh != null && queue != null) {
-            final LinearLayout list = queue;
-            centralAdminQueueContainer = list;
-            globalCode.setOnClickListener(v -> {
-                String code = codeField.getText().toString().replaceAll("[^0-9]", "");
-                if (!code.matches("[0-9]{6}")) {
-                    codeField.setError("6 rəqəmli kod daxil edin.");
+            // Recheck the connection mode at click time, too: a stale Master
+            // token may never issue a local admin approval by accident.
+            if (isOnlineMasterApprovalMode()) {
+                if (!canUseCentralAdminApproval()) {
+                    toast("Səlahiyyətiniz yoxdur");
                     return;
                 }
                 lookupRemoteAdminCode(code);
-            });
+            } else {
+                dialog.dismiss();
+                approveAdminManualCode(code);
+            }
+        });
+        if (global && refresh != null && queue != null) {
+            final LinearLayout list = queue;
+            centralAdminQueueContainer = list;
             refresh.setOnClickListener(v -> loadCentralAdminRequests(list));
             dialog.setOnDismissListener(d -> {
                 if (centralAdminQueueContainer == list) centralAdminQueueContainer = null;
