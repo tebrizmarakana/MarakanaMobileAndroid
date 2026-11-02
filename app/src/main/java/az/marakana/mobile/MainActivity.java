@@ -203,6 +203,7 @@ public class MainActivity extends Activity {
 
     private final ExecutorService io = Executors.newCachedThreadPool();
     private SharedPreferences prefs;
+    private MarakanaUpdateManager mobileUpdateManager;
     private LinearLayout root;
     private LinearLayout content;
     // v153: bütün giriş edilmiş ekranlar üçün sabit alt naviqasiya sahəsi.
@@ -281,28 +282,30 @@ public class MainActivity extends Activity {
         preparePendingAdminApprovalServerForLogin();
         boolean openKitchenFromNotification = getIntent() != null && getIntent().getBooleanExtra("open_kitchen", false);
         openKitchenAfterNotificationLogin = openKitchenFromNotification;
-        if ("kitchen".equals(role) && hasKitchenBackgroundPassword()) {
-            startKitchenBackgroundService();
-        }
         buildRoot();
-        if (!hasConfiguredConnection()) {
-            showServerSetup();
-        } else if (openKitchenFromNotification && "kitchen".equals(role) && !username.isEmpty()) {
-            String kitchenPassword = loadKitchenBackgroundPassword();
-            if (!kitchenPassword.isEmpty()) autoLogin(username, kitchenPassword, "kitchen", false);
-            else showLogin();
-        } else if (prefs.getBoolean(KEY_AUTO_LOGIN, false) && !username.isEmpty()) {
-            String savedPassword = loadSavedPassword();
-            if (!savedPassword.isEmpty()) {
-                autoLogin(username, savedPassword, role, adminDebtOnly);
+        // v170: Hər açılışda serverdəki məcburi APK yeniləməsini login/auto-login-dən əvvəl yoxla.
+        // Lokal IP və online filial girişləri eyni update gate-dən keçir.
+        mobileUpdateManager = new MarakanaUpdateManager(this);
+        mobileUpdateManager.checkOnLaunch(() -> {
+            if (isFinishing() || isDestroyed()) return;
+            if ("kitchen".equals(role) && hasKitchenBackgroundPassword()) {
+                startKitchenBackgroundService();
+            }
+            if (!hasConfiguredConnection()) {
+                showServerSetup();
+            } else if (openKitchenFromNotification && "kitchen".equals(role) && !username.isEmpty()) {
+                String kitchenPassword = loadKitchenBackgroundPassword();
+                if (!kitchenPassword.isEmpty()) autoLogin(username, kitchenPassword, "kitchen", false);
+                else showLogin();
+            } else if (prefs.getBoolean(KEY_AUTO_LOGIN, false) && !username.isEmpty()) {
+                String savedPassword = loadSavedPassword();
+                if (!savedPassword.isEmpty()) autoLogin(username, savedPassword, role, adminDebtOnly);
+                else showLogin();
             } else {
                 showLogin();
             }
-        } else {
-            showLogin();
-        }
-        // İlk açılışda (hər cold start) mövcud login/dashboard axınının üstündə video.
-        showOpeningVideoOnce();
+            showOpeningVideoOnce();
+        });
     }
 
     private void showOpeningVideoOnce() {
@@ -444,6 +447,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
+        if (mobileUpdateManager != null) mobileUpdateManager.onHostResume();
         // v50: Chrome-dan tətbiqə keçid zamanı intent artıq tutulubsa, sessiya hazır olan
         // kimi pending Admin QR təsdiqini yenidən işlət.
         handlePendingAdminApprovalDeepLink();
@@ -475,6 +479,7 @@ public class MainActivity extends Activity {
         APP_FOREGROUND = false;
         KITCHEN_FOREGROUND_ACTIVE = false;
         stopKitchenAutoRefresh();
+        if (mobileUpdateManager != null) mobileUpdateManager.destroy();
         super.onDestroy();
         io.shutdownNow();
     }
@@ -3255,6 +3260,15 @@ public class MainActivity extends Activity {
             profileBody.addView(branches, lp);
             branches.setOnClickListener(v -> { dialog.dismiss(); showDashboardBranches(); });
         }
+        Button updates = button("⬇ Yeniləməni yoxla", CARD, TEXT);
+        LinearLayout.LayoutParams updatesLayout = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        updatesLayout.bottomMargin = dp(8);
+        profileBody.addView(updates, updatesLayout);
+        updates.setOnClickListener(v -> {
+            dialog.dismiss();
+            if (mobileUpdateManager != null) mobileUpdateManager.checkManually();
+        });
         if ("kitchen".equals(role)) {
             Button sound = button("Bildiriş səsi", CARD, TEXT);
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(

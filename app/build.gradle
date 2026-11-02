@@ -17,8 +17,8 @@ android {
         applicationId 'az.marakana.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 169
-        versionName '3.5.30-native-v169'
+        versionCode 170
+        versionName '3.5.31-native-v170'
     }
 
     signingConfigs {
@@ -55,6 +55,7 @@ dependencies {
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
     // Fully embedded QR camera, bundled/offline recognition model (no external app).
     implementation 'androidx.activity:activity:1.10.1'
+    implementation 'androidx.core:core:1.15.0'
     implementation 'androidx.camera:camera-camera2:1.4.2'
     implementation 'androidx.camera:camera-lifecycle:1.4.2'
     implementation 'androidx.camera:camera-view:1.4.2'
