@@ -90,7 +90,7 @@ final class MarakanaUpdateManager {
                 .putString("notes", r.notes).apply();
     }
 
-    // Yalnız login sonrası dashboard real olaraq render edilib splash bağlandıqda çağırılır.
+    // Yalnız login sonrası dashboard real olaraq render edildikdə çağırılır; açılış videosu yoxdur.
     // 5 dəqiqəlik limit ana səhifəyə təkrar keçidlərin hostingə əlavə yükünü azaldır.
     void checkAfterDashboardShown() {
         if (releaseEnforced) {
@@ -208,7 +208,7 @@ final class MarakanaUpdateManager {
         try {
             PackageInfo info = host.getPackageManager().getPackageInfo(host.getPackageName(), 0);
             return Build.VERSION.SDK_INT >= 28 ? (int) info.getLongVersionCode() : info.versionCode;
-        } catch (Exception ignored) { return 176; }
+        } catch (Exception ignored) { return 177; }
     }
 
     private void showRelease(Release r) {

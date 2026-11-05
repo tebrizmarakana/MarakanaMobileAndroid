@@ -54,7 +54,6 @@ import android.widget.ScrollView;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.widget.VideoView;
 
 import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
@@ -241,12 +240,7 @@ public class MainActivity extends Activity {
     private static final long KITCHEN_LIVE_REFRESH_MS = 750L;
     private static final long ONLINE_KITCHEN_LIVE_REFRESH_MS = 2500L;
     private final Handler kitchenRefreshHandler = new Handler(Looper.getMainLooper());
-    // v155: Bir tətbiq açılışında bir dəfə görünən, səssiz video splash.
-    private FrameLayout openingVideoOverlay = null;
-    private VideoView openingVideoView = null;
-    private final Handler openingVideoHandler = new Handler(Looper.getMainLooper());
-    private Runnable openingVideoTimeout = null;
-    private boolean openingVideoClosed = false;
+    // v177: Açılış videosu çıxarılıb; login və dashboard gecikmədən göstərilir.
     private Runnable kitchenRefreshRunnable = null;
     private boolean kitchenAutoRefreshActive = false;
     private boolean activityVisible = false;
@@ -283,9 +277,8 @@ public class MainActivity extends Activity {
         boolean openKitchenFromNotification = getIntent() != null && getIntent().getBooleanExtra("open_kitchen", false);
         openKitchenAfterNotificationLogin = openKitchenFromNotification;
         buildRoot();
-        // v171: Tətbiq əvvəlki kimi normal açılır. Yeniləmə yoxlaması girişdən
-        // və ana dashboard tam render olunandan, splash video bağlanandan SONRA
-        // arxa planda aparılır. Yoxlama gedişində popup göstərilmir.
+        // v177: Açılış videosu yoxdur. Yeniləmə yoxlaması girişdən və ana dashboard
+        // tam render olunandan sonra arxa planda aparılır; yoxlama zamanı popup açılmır.
         mobileUpdateManager = new MarakanaUpdateManager(this);
         if ("kitchen".equals(role) && hasKitchenBackgroundPassword()) {
             startKitchenBackgroundService();
@@ -303,62 +296,10 @@ public class MainActivity extends Activity {
         } else {
             showLogin();
         }
-        showOpeningVideoOnce();
-    }
-
-    private void showOpeningVideoOnce() {
-        if (openingVideoOverlay != null) return;
-        openingVideoClosed = false;
-        FrameLayout overlay = new FrameLayout(this);
-        overlay.setBackgroundColor(Color.BLACK);
-        overlay.setClickable(true);
-        overlay.setFocusable(true);
-        VideoView video = new VideoView(this);
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER);
-        overlay.addView(video, lp);
-        openingVideoOverlay = overlay;
-        openingVideoView = video;
-        // Decor content üst qatında saxlanılır: login/dashboard yeniləmələri onu silmir.
-        addContentView(overlay, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        video.setOnPreparedListener(mp -> {
-            mp.setLooping(false);
-            mp.setVolume(1f, 1f); // Splash videosunun orijinal sesi: telefonun media ses seviyyesine uygun
-            video.start();
-        });
-        video.setOnCompletionListener(mp -> closeOpeningVideo());
-        video.setOnErrorListener((mp, what, extra) -> { closeOpeningVideo(); return true; });
-        // Dekoder / fayl problemi olsa UI bağlı qalmasın.
-        openingVideoTimeout = this::closeOpeningVideo;
-        openingVideoHandler.postDelayed(openingVideoTimeout, 9000L);
-        try {
-            video.setVideoURI(Uri.parse("android.resource://" + getPackageName() + "/" + R.raw.marakana_opening));
-        } catch (Exception ignored) {
-            closeOpeningVideo();
-        }
-    }
-
-    private void closeOpeningVideo() {
-        if (openingVideoClosed) return;
-        openingVideoClosed = true;
-        if (openingVideoTimeout != null) openingVideoHandler.removeCallbacks(openingVideoTimeout);
-        openingVideoTimeout = null;
-        if (openingVideoView != null) {
-            try { openingVideoView.stopPlayback(); } catch (Exception ignored) {}
-        }
-        if (openingVideoOverlay != null) {
-            ViewGroup parent = (ViewGroup) openingVideoOverlay.getParent();
-            if (parent != null) parent.removeView(openingVideoOverlay);
-        }
-        openingVideoView = null;
-        openingVideoOverlay = null;
-        // Əsas ekran artıq açılıbsa, yalnız splash bağlandıqdan sonra səssiz yoxla.
-        if (dashboardVisible && content != null) content.post(this::maybeCheckMobileUpdates);
     }
 
     private void maybeCheckMobileUpdates() {
-        if (mobileUpdateManager != null && dashboardVisible && openingVideoClosed
+        if (mobileUpdateManager != null && dashboardVisible
                 && sessionToken != null && !sessionToken.trim().isEmpty()) {
             mobileUpdateManager.checkAfterDashboardShown();
         }
@@ -370,12 +311,8 @@ public class MainActivity extends Activity {
         setIntent(intent);
         // Məcburi yeniləmə təsdiqi açıqdırsa kənar QR/deep-link keçidləri icra edilmir.
         if (mobileUpdateManager != null && mobileUpdateManager.isUpdateRequired()) return;
-        // Tətbiqin ikonu ilə yenidən açılış (singleTask warm launch) da splash göstərir.
-        // Bildiriş və deep link isə splash-i təkrar işə salmır.
-        if (intent != null && Intent.ACTION_MAIN.equals(intent.getAction())
-                && intent.hasCategory(Intent.CATEGORY_LAUNCHER)) {
-            showOpeningVideoOnce();
-        }
+        // v177: Launcher-dən yenidən önə gətirildikdə video açılmır.
+        // Mövcud QR/deep-link marşrutlaşdırması dəyişmir.
         if (captureAdminApprovalDeepLink(intent)) {
             String previousServer = normalizeServerBase(serverBase);
             preparePendingAdminApprovalServerForLogin();
@@ -459,7 +396,7 @@ public class MainActivity extends Activity {
         if (mobileUpdateManager != null) mobileUpdateManager.onHostResume();
         // Eyni activity launcher-dən yenidən açıldıqda (singleTask) köhnə manifestlə
         // sonsuza qədər qalmasın, lakin tez-tez tab dəyişmək serveri yükləməsin.
-        if (dashboardVisible && openingVideoClosed && content != null)
+        if (dashboardVisible && content != null)
             content.post(this::maybeCheckMobileUpdates);
         // v50: Chrome-dan tətbiqə keçid zamanı intent artıq tutulubsa, sessiya hazır olan
         // kimi pending Admin QR təsdiqini yenidən işlət.
@@ -3201,7 +3138,7 @@ public class MainActivity extends Activity {
         if (allowedMobileFeature("kitchen")) addDashboardNav(nav, "🍳", "Mətbəx", false,
                 () -> switchMobileRole("kitchen", false, this::showKitchen));
         addDashboardNav(nav, "👤", "Profil", false, this::showDashboardProfile);
-        // Yalnız layout hazır olanda + splash örtüyü bağlananda yeniləməni yoxla.
+        // Dashboard hazır olduqda yeniləməni səssiz arxa planda yoxla (video gözlənilmir).
         shell.post(this::maybeCheckMobileUpdates);
     }
 
