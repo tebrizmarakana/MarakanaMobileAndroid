@@ -1,3 +1,16 @@
+# v177 — Açılış videosu ləğv edildi (v176 bazasında)
+
+- Açılışdakı `marakana_opening.mp4` və onu göstərən `VideoView`/overlay/timeout kodu tamamilə silindi.
+- Proqram açılan kimi Local IP qurulması və ya giriş ekranı, avtomatik giriş varsa dashboard göstərilir.
+- App ikonu ilə yenidən önə gətirildikdə də video açılmır.
+- Login sonrası səssiz WordPress yeniləmə yoxlaması və yeni versiya aşkar edildikdə məcburi yeniləmə qorunur.
+- `versionCode=177`, `versionName=3.5.38-native-v177`, tətbiq ID `az.marakana.mobile`.
+- GitHub Actions release APK-si əvvəlki proqramla eyni daimi keystore ilə imzalanmalıdır.
+- v176 v171 bazasından hazırlandığı üçün orada olmayan v172–v175 ayrıca dəyişiklikləri v177-yə əlavə edilmir.
+- Bu ZIP **Android mənbə layihəsidir**, quraşdırıla bilən APK deyil; imzalı APK GitHub Actions-da yığılır.
+
+---
+
 ## v176 — v175 sayt yayımından yuxarı versiya (v171 bazası üzərində)
 
 - `applicationId` **az.marakana.mobile** (dəyişməyib).
